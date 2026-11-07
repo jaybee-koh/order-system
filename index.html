@@ -997,7 +997,7 @@ function route(){
   if(ROUTES[cur]===pgConfirm)drawConfirmTable();
   if(ROUTES[cur]===pgCheck)drawCheckTable();
 }
-window.addEventListener('hashchange',()=>{if(location.hash==='#/suppliers/new'){if(SF.edit)SF.edit=false;else SF=blankSF();}route();window.scrollTo(0,0);});
+window.addEventListener('hashchange',()=>{CF.keep.clear();if(location.hash==='#/suppliers/new'){if(SF.edit)SF.edit=false;else SF=blankSF();}route();window.scrollTo(0,0);});
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&A[el.dataset.act]){A[el.dataset.act](el,e);}});
 document.addEventListener('change',e=>{const el=e.target.closest('[data-chg]');if(el&&C[el.dataset.chg])C[el.dataset.chg](el,e);});
 document.addEventListener('input',e=>{const el=e.target.closest('[data-inp]');if(el&&I[el.dataset.inp])I[el.dataset.inp](el,e);});
@@ -1652,23 +1652,22 @@ A.collectSave=async()=>{
 /* =====================================================================
    주문 확정 관리
 ===================================================================== */
-const CF={status:'all',q:'',date:'',page:0,incDone:false,sel:new Set()};
+const CF={status:'all',q:'',date:'',page:0,incDone:false,sel:new Set(),keep:new Set()};
 const PAGE_O=100;
 const scoped=()=>S.orders.filter(o=>!o.confirmed&&(!CF.date||o.collectedDate===CF.date));
 function confirmList(){
   const q=norm(CF.q);
   return scoped().filter(o=>{
-    if(CF.status!=='all'&&stOf(o)!==CF.status)return false;
+    if(CF.status!=='all'&&stOf(o)!==CF.status&&!CF.keep.has(o.id))return false;
     if(q){const {p,s}=orderInfo(o);const h=norm([o.orderNo,o.orderer,o.receiver,o.tel1,o.tel2,o.addr,o.itemName,o.itemOption,p?p.name:'',s?s.name:''].join(' '));if(!h.includes(q))return false;}
     return true;
   });
 }
 function pgConfirm(){
   const sc=scoped();
-  const cnt={all:sc.length,none:0,matched:0,done:0};sc.forEach(o=>cnt[stOf(o)]++);
-  const dates=[...new Set(S.orders.map(o=>o.collectedDate))].sort().reverse();
+    const dates=[...new Set(S.orders.map(o=>o.collectedDate))].sort().reverse();
   return '<h1>주문 확정 관리</h1><p class="sub">각 주문에 [매칭하기]로 상품을 연결하면 매입처가 표시됩니다. 매칭이 끝난 주문은 [주문확인처리]에서 조회·다운로드·상태변경을 할 수 있습니다.</p>'+
-  '<div class="card row"><div class="chips">'+[['all','전체'],['none','미매칭'],['matched','매칭완료']].map(([k,l])=>'<button class="chip'+(CF.status===k?' on':'')+'" data-act="cstat" data-s="'+k+'">'+l+' '+cnt[k]+'</button>').join('')+'</div><span class="grow"></span>'+
+  '<div class="card row"><div class="chips">'+[['all','전체'],['none','미매칭'],['matched','매칭완료']].map(([k,l])=>'<button class="chip'+(CF.status===k?' on':'')+'" data-act="cstat" data-s="'+k+'">'+l+'</button>').join('')+'</div><span class="grow"></span>'+
   '<select data-chg="cdate"><option value="">전체 수집일</option>'+dates.map(d=>'<option value="'+d+'"'+(CF.date===d?' selected':'')+'>'+d+'</option>').join('')+'</select>'+
   '<input type="text" placeholder="주문번호 · 수취인 · 상품명 검색" style="width:240px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
   '<div id="ctbl"></div>';
@@ -1682,7 +1681,7 @@ function drawConfirmTable(){
   const allSel=list.length&&list.every(o=>CF.sel.has(o.id));
   if(!S.orders.length){box.innerHTML='<div class="card mute">수집된 주문이 없습니다. <a href="#/orders/collect">주문 수집</a>에서 주문내역 파일을 올려주세요.</div>';return;}
   if(!list.length){box.innerHTML='<div class="card mute">조건에 맞는 주문이 없습니다.</div>';return;}
-  box.innerHTML='<div class="mute small" style="margin-bottom:6px">'+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</div>'+
+  box.innerHTML='<div class="mute small" style="margin-bottom:6px">자료수 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</div>'+
   fitTable('confirm',[{t:'<input type="checkbox" data-chg="csall"'+(allSel?' checked':'')+'>'},{t:'쇼핑몰 / 주문번호'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메세지'},{t:'주문 상품'},{t:'수량',c:'num'},{t:'매칭'},{t:'매입처'}],
   cur.map(o=>{
     const {p,s}=orderInfo(o),st=stOf(o);
@@ -1700,8 +1699,8 @@ function drawConfirmTable(){
   }).join(''))+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="cpage" data-d="-1"'+(CF.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="cpage" data-d="1"'+(CF.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
-A.cstat=el=>{CF.status=el.dataset.s;CF.page=0;route();};
-C.cdate=el=>{CF.date=el.value;CF.page=0;route();};
+A.cstat=el=>{CF.status=el.dataset.s;CF.page=0;CF.keep.clear();route();};
+C.cdate=el=>{CF.date=el.value;CF.page=0;CF.keep.clear();route();};
 C.incdone=el=>{CF.incDone=el.checked;route();};
 I.cq=el=>{CF.q=el.value;CF.page=0;drawConfirmTable();};
 A.cpage=el=>{CF.page+=+el.dataset.d;drawConfirmTable();$('#ctbl').scrollIntoView({block:'start'});};
@@ -1715,6 +1714,7 @@ A.cdel=async()=>{
 };
 
 /* ===== 매칭 팝업 ===== */
+function redrawConfirm(){const cur=(location.hash||'#/home').slice(1);if(ROUTES[cur]===pgConfirm)drawConfirmTable();else route();}
 let MT=null;
 A.match=el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;
@@ -1758,16 +1758,17 @@ A.pick=async el=>{
     S.orders.forEach(x=>{if(x.id!==o.id&&ruleKey(x)===k&&stOf(x)==='none'){x.productId=pid;x.matchedAuto=true;x.exportedAt=null;changed.push(x);extra++;}});
   }
   await putMany('orders',changed);
+  changed.forEach(x=>CF.keep.add(x.id));
   closeModal();MT=null;
   toast('매칭 완료: '+p.name+(extra?' (같은 상품 주문 '+extra+'건도 함께 매칭)':''));
-  route();
+  redrawConfirm();
 };
 A.unmatch=async el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;
   const k=ruleKey(o);
   if(o.itemName&&S.rules[k]===o.productId){delete S.rules[k];await delMany('rules',[k]);}
   o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
-  await putOne('orders',o);route();
+  await putOne('orders',o);CF.keep.add(o.id);redrawConfirm();
 };
 
 /* ===== 매입처별 발주 엑셀 다운로드 ===== */

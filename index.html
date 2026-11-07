@@ -334,9 +334,48 @@ input[type=radio]:checked::after{content:"";width:9px;height:9px;border-radius:5
 .rad{flex:1;min-width:200px;display:flex;align-items:center;gap:10px;padding:13px 15px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-weight:600;transition:all .12s}
 .rad:hover{border-color:#bfc5d2}
 .rad:has(input:checked){border-color:var(--pri);background:var(--pri-soft)}
+
+/* ---------- 로그인 ---------- */
+#login{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;
+  background:linear-gradient(160deg,#0e1424 0%,#1b2650 100%)}
+#login.show{display:flex}
+#login .box{width:100%;max-width:380px;background:#fff;border-radius:16px;padding:34px 30px 28px;box-shadow:0 24px 48px -12px rgba(0,0,0,.45)}
+#login .lg{display:flex;align-items:center;gap:11px;margin-bottom:22px}
+#login .lg .mk{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,#5c7cfa,#3b5bdb)}
+#login .lg .mk svg{width:22px;height:22px}
+#login h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.02em;color:#111827}
+#login .lg small{display:block;font-size:12px;color:#6b7280;margin-top:2px}
+#login label.f{display:block;font-size:12.5px;font-weight:600;color:#374151;margin:14px 0 6px}
+#login input[type=text],#login input[type=password]{width:100%;height:42px;padding:0 12px;border:1px solid #d9dde6;border-radius:9px;font:inherit;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s}
+#login input[type=text]:focus,#login input[type=password]:focus{border-color:#3b5bdb;box-shadow:0 0 0 3px rgba(59,91,219,.18)}
+#login .chk{display:flex;align-items:center;gap:7px;margin:14px 0 4px;font-size:13px;color:#374151;cursor:pointer;user-select:none}
+#login .chk input{width:16px;height:16px;margin:0;accent-color:#3b5bdb}
+#login .lerr{min-height:20px;margin:8px 0 0;font-size:12.5px;color:#e03131}
+#login button.go{width:100%;height:44px;margin-top:6px;border:0;border-radius:9px;background:#3b5bdb;color:#fff;font:inherit;font-size:14.5px;font-weight:700;cursor:pointer;transition:background .15s}
+#login button.go:hover{background:#2f4ac0}
+#login button.go:disabled{opacity:.6;cursor:default}
+#login .note{margin:16px 0 0;text-align:center;font-size:11.5px;color:#9ca3af}
+#nav .logout{display:block;width:100%;margin-top:10px;padding:7px 0;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:transparent;color:#8b95ad;font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+#nav .logout:hover{background:rgba(255,255,255,.08);color:#fff}
 </style>
 </head>
 <body>
+<div id="login">
+  <div class="box">
+    <div class="lg">
+      <span class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg></span>
+      <div><h2>발주 관리 시스템</h2><small>직원 전용 · 로그인이 필요합니다</small></div>
+    </div>
+    <label class="f" for="lg-id">아이디</label>
+    <input type="text" id="lg-id" autocomplete="username" autocapitalize="off" spellcheck="false">
+    <label class="f" for="lg-pw">비밀번호</label>
+    <input type="password" id="lg-pw" autocomplete="current-password">
+    <label class="chk"><input type="checkbox" id="lg-save"> 아이디 저장</label>
+    <div class="lerr" id="lg-err"></div>
+    <button class="go" id="lg-go" type="button">로그인</button>
+    <p class="note">허가된 직원만 이용할 수 있습니다.</p>
+  </div>
+</div>
 <div id="app">
   <nav id="nav"></nav>
   <main id="view"></main>
@@ -344,7 +383,7 @@ input[type=radio]:checked::after{content:"";width:9px;height:9px;border-radius:5
 <div id="modal"></div>
 <div id="toast"></div>
 
-<script>
+<script type="text/plain" id="appcode">
 (function(){
 'use strict';
 
@@ -798,7 +837,7 @@ const ICONS={
 function drawNav(cur){
   $('#nav').innerHTML='<div class="logo"><span class="mark">'+IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/>')+'</span><div>발주 관리<small>Order Management</small></div></div>'+
   NAV.map(n=>n.parent?'<div class="nparent">'+(ICONS['p_'+n.parent]||ICONS.parent)+n.parent+'</div>':n.g?'<div class="grp">'+n.g+'</div>':'<a href="#'+n.h+'" class="'+(n.sub?'nsub ':'')+(n.h===cur?'on':'')+'">'+(n.sub?'':(ICONS[n.h]||''))+n.t+'</a>').join('')+
-  '<div class="navfoot"><b>내 PC 전용</b><br>데이터는 이 브라우저에 저장됩니다.</div>';
+  '<div class="navfoot"><b>내 PC 전용</b><br>데이터는 이 브라우저에 저장됩니다.<button type="button" class="logout" onclick="zianLogout()">로그아웃</button></div>';
 }
 const ROUTES={};
 function route(){
@@ -1860,6 +1899,73 @@ document.addEventListener('dblclick',e=>{
     $('#view').innerHTML='<div class="card err"><b>데이터 저장소를 열 수 없습니다.</b><br>'+esc(e.message)+'<br>Chrome 또는 Edge 브라우저에서 일반 창(시크릿 모드 아님)으로 열어주세요.</div>';
   }
 })();
+})();
+</script>
+
+<script>
+(function(){
+  var HASH='29dc2290686c142760017a40f64e5fa90a99d3f0b3f0d1fe0ba87237e0da89ea';
+  var K_AUTH='zian_auth',K_ID='zian_saved_id';
+  var $=function(id){return document.getElementById(id)};
+  var started=false;
+
+  function store(kind){try{return window[kind]}catch(e){return null}}
+  function get(s,k){try{return s&&s.getItem(k)}catch(e){return null}}
+  function set(s,k,v){try{s&&s.setItem(k,v)}catch(e){}}
+  function del(s,k){try{s&&s.removeItem(k)}catch(e){}}
+
+  async function sha256(t){
+    var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));
+    return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0')}).join('');
+  }
+
+  function startApp(){
+    if(started)return;started=true;
+    $('login').classList.remove('show');
+    var s=document.createElement('script');
+    s.textContent=$('appcode').textContent;
+    document.body.appendChild(s);
+  }
+
+  function showLogin(){
+    $('login').classList.add('show');
+    var saved=get(store('localStorage'),K_ID);
+    if(saved){$('lg-id').value=saved;$('lg-save').checked=true;$('lg-pw').focus();}
+    else $('lg-id').focus();
+  }
+
+  async function tryLogin(){
+    var id=$('lg-id').value.trim(),pw=$('lg-pw').value,err=$('lg-err'),btn=$('lg-go');
+    err.textContent='';
+    if(!id||!pw){err.textContent='아이디와 비밀번호를 입력해주세요.';return;}
+    if(!(window.crypto&&crypto.subtle)){err.textContent='보안 연결(https)에서만 로그인할 수 있습니다.';return;}
+    btn.disabled=true;
+    try{
+      var h=await sha256(id+':'+pw);
+      if(h===HASH){
+        if($('lg-save').checked)set(store('localStorage'),K_ID,id);else del(store('localStorage'),K_ID);
+        set(store('sessionStorage'),K_AUTH,'1');
+        $('lg-pw').value='';
+        startApp();
+      }else{
+        err.textContent='아이디 또는 비밀번호가 올바르지 않습니다.';
+        $('lg-pw').value='';$('lg-pw').focus();
+      }
+    }catch(e){err.textContent='로그인 처리 중 오류가 발생했습니다.';}
+    btn.disabled=false;
+  }
+
+  window.zianLogout=function(){
+    del(store('sessionStorage'),K_AUTH);
+    location.hash='';location.reload();
+  };
+
+  $('lg-go').addEventListener('click',tryLogin);
+  ['lg-id','lg-pw'].forEach(function(id){
+    $(id).addEventListener('keydown',function(e){if(e.key==='Enter')tryLogin();});
+  });
+
+  if(get(store('sessionStorage'),K_AUTH)==='1')startApp();else showLogin();
 })();
 </script>
 </body>

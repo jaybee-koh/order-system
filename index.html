@@ -339,41 +339,61 @@ input[type=radio]:checked::after{content:"";width:9px;height:9px;border-radius:5
 #login{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;
   background:linear-gradient(160deg,#0e1424 0%,#1b2650 100%)}
 #login.show{display:flex}
-#login .box{width:100%;max-width:380px;background:#fff;border-radius:16px;padding:34px 30px 28px;box-shadow:0 24px 48px -12px rgba(0,0,0,.45)}
-#login .lg{display:flex;align-items:center;gap:11px;margin-bottom:22px}
+#login [hidden]{display:none!important}
+#login .box{width:100%;max-width:380px;background:#fff;border-radius:16px;padding:30px 30px 26px;box-shadow:0 24px 48px -12px rgba(0,0,0,.45)}
+#login .lg{display:flex;align-items:center;gap:11px;margin-bottom:18px}
 #login .lg .mk{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,#5c7cfa,#3b5bdb)}
 #login .lg .mk svg{width:22px;height:22px}
 #login h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.02em;color:#111827}
 #login .lg small{display:block;font-size:12px;color:#6b7280;margin-top:2px}
+#login .tabs{display:flex;background:#f1f3f8;border-radius:10px;padding:4px;margin-bottom:4px}
+#login .tab{flex:1;height:34px;border:0;border-radius:7px;background:transparent;color:#6b7280;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer}
+#login .tab.on{background:#fff;color:#111827;box-shadow:0 1px 3px rgba(16,24,40,.12)}
 #login label.f{display:block;font-size:12.5px;font-weight:600;color:#374151;margin:14px 0 6px}
 #login input[type=text],#login input[type=password]{width:100%;height:42px;padding:0 12px;border:1px solid #d9dde6;border-radius:9px;font:inherit;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s}
 #login input[type=text]:focus,#login input[type=password]:focus{border-color:#3b5bdb;box-shadow:0 0 0 3px rgba(59,91,219,.18)}
+#login .hint{margin-top:5px;font-size:11.5px;color:#9ca3af}
 #login .chk{display:flex;align-items:center;gap:7px;margin:14px 0 4px;font-size:13px;color:#374151;cursor:pointer;user-select:none}
 #login .chk input{width:16px;height:16px;margin:0;accent-color:#3b5bdb}
 #login .lerr{min-height:20px;margin:8px 0 0;font-size:12.5px;color:#e03131}
 #login button.go{width:100%;height:44px;margin-top:6px;border:0;border-radius:9px;background:#3b5bdb;color:#fff;font:inherit;font-size:14.5px;font-weight:700;cursor:pointer;transition:background .15s}
 #login button.go:hover{background:#2f4ac0}
 #login button.go:disabled{opacity:.6;cursor:default}
-#login .note{margin:16px 0 0;text-align:center;font-size:11.5px;color:#9ca3af}
+#nav .acct{margin-top:8px;color:#c9d0e4;font-weight:600}
+#nav #syncst{margin-top:4px;font-size:11.5px}
+#nav #syncst.ok{color:#51cf66}
+#nav #syncst.saving{color:#fcc419}
+#nav #syncst.err{color:#ff8787}
 #nav .logout{display:block;width:100%;margin-top:10px;padding:7px 0;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:transparent;color:#8b95ad;font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
 #nav .logout:hover{background:rgba(255,255,255,.08);color:#fff}
 </style>
 </head>
 <body>
 <div id="login">
-  <div class="box">
+  <div class="box" id="lg-box" style="visibility:hidden">
     <div class="lg">
       <span class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg></span>
-      <div><h2>발주 관리 시스템</h2><small>직원 전용 · 로그인이 필요합니다</small></div>
+      <div><h2>발주 관리 시스템</h2><small>내 아이디로 로그인하면 내 데이터가 열립니다</small></div>
     </div>
-    <label class="f" for="lg-id">아이디</label>
-    <input type="text" id="lg-id" autocomplete="username" autocapitalize="off" spellcheck="false">
-    <label class="f" for="lg-pw">비밀번호</label>
-    <input type="password" id="lg-pw" autocomplete="current-password">
-    <label class="chk"><input type="checkbox" id="lg-save"> 아이디 저장</label>
-    <div class="lerr" id="lg-err"></div>
-    <button class="go" id="lg-go" type="button">로그인</button>
-    <p class="note">허가된 직원만 이용할 수 있습니다.</p>
+    <div class="tabs">
+      <button type="button" class="tab on" data-m="login">로그인</button>
+      <button type="button" class="tab" data-m="signup">회원가입</button>
+    </div>
+    <form id="lg-form" novalidate>
+      <label class="f" for="lg-id">아이디</label>
+      <input type="text" id="lg-id" autocomplete="username" autocapitalize="off" spellcheck="false">
+      <div class="hint" id="lg-hint" hidden>영문 소문자·숫자·밑줄(_) 4~20자</div>
+      <label class="f" for="lg-pw">비밀번호</label>
+      <input type="password" id="lg-pw" autocomplete="current-password">
+      <div id="lg-pw2-wrap" hidden>
+        <label class="f" for="lg-pw2">비밀번호 확인</label>
+        <input type="password" id="lg-pw2" autocomplete="new-password">
+        <div class="hint">6자 이상</div>
+      </div>
+      <label class="chk"><input type="checkbox" id="lg-save"> 아이디 저장</label>
+      <div class="lerr" id="lg-err"></div>
+      <button class="go" id="lg-go" type="submit">로그인</button>
+    </form>
   </div>
 </div>
 <div id="app">
@@ -634,7 +654,7 @@ const ID_STORES=['suppliers','products','orders'];
 function openDB(){
   return new Promise((res,rej)=>{
     if(!window.indexedDB)return rej(new Error('이 브라우저는 데이터 저장을 지원하지 않습니다.'));
-    const r=indexedDB.open('baljuDB',1);
+    const r=indexedDB.open('baljuDB_'+window.__USER,1);
     r.onupgradeneeded=()=>{
       const d=r.result;
       ID_STORES.forEach(n=>d.createObjectStore(n,{keyPath:'id',autoIncrement:true}));
@@ -655,10 +675,138 @@ function run(stores,mode,fn){
   });
 }
 const getAll=store=>new Promise((res,rej)=>{const r=db.transaction(store).objectStore(store).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
-const putMany=(store,arr)=>arr.length?run(store,'readwrite',t=>{const os=t.objectStore(store);arr.forEach(o=>{const rq=os.put(o);if(ID_STORES.includes(store))rq.onsuccess=()=>{o.id=rq.result;};});}):Promise.resolve();
+const putMany=(store,arr)=>arr.length?run(store,'readwrite',t=>{const os=t.objectStore(store);arr.forEach(o=>{const rq=os.put(o);if(ID_STORES.includes(store))rq.onsuccess=()=>{o.id=rq.result;};});}).then(()=>SYNC.put(store,arr)):Promise.resolve();
 const putOne=(store,obj)=>putMany(store,[obj]);
-const delMany=(store,keys)=>keys.length?run(store,'readwrite',t=>{const os=t.objectStore(store);keys.forEach(k=>os.delete(k));}):Promise.resolve();
-const clearStore=store=>run(store,'readwrite',t=>{t.objectStore(store).clear();});
+const delMany=(store,keys)=>keys.length?run(store,'readwrite',t=>{const os=t.objectStore(store);keys.forEach(k=>os.delete(k));}).then(()=>SYNC.del(store,keys)):Promise.resolve();
+const clearStore=store=>run(store,'readwrite',t=>{t.objectStore(store).clear();}).then(()=>SYNC.clear(store));
+/* ===== 서버 동기화 (Cloudflare D1) : 이 계정의 데이터는 서버에 저장되고, 이 브라우저는 작업용 사본만 가집니다 ===== */
+const STORE_NAMES=['suppliers','products','orders','rules','meta'];
+function wireOut(store,o){
+  if(store==='suppliers'&&o&&(o.pl||o.tpl)){
+    const c={...o};
+    ['pl','tpl'].forEach(k=>{if(o[k]&&o[k].buf&&typeof o[k].buf!=='string')c[k]={...o[k],buf:toB64(o[k].buf)};});
+    return JSON.stringify(c);
+  }
+  return JSON.stringify(o);
+}
+function wireIn(store,o){
+  if(store==='suppliers'&&o){['pl','tpl'].forEach(k=>{if(o[k]&&typeof o[k].buf==='string')o[k].buf=fromB64(o[k].buf);});}
+  return o;
+}
+async function api(path){
+  let r;
+  try{r=await fetch(path,{credentials:'same-origin'});}catch(e){throw new Error('서버에 연결할 수 없습니다.');}
+  if(r.status===401){alert('로그인이 만료되었습니다. 다시 로그인해 주세요.');location.reload();throw new Error('로그인이 만료되었습니다.');}
+  let j=null;try{j=await r.json();}catch(e){throw new Error('서버 응답 오류 ('+r.status+')');}
+  if(!r.ok)throw new Error((j&&j.error)||'서버 오류 ('+r.status+')');
+  return j;
+}
+const SYNC={
+  q:[],busy:false,timer:null,state:'ok',
+  put(store,arr){if(!arr.length)return;this.q.push({op:'put',store,rows:arr.map(o=>wireOut(store,o))});this.kick();},
+  del(store,keys){if(!keys.length)return;this.q.push({op:'del',store,keys:keys.slice()});this.kick();},
+  clear(store){this.q=this.q.filter(x=>x.store!==store);this.q.push({op:'clear',store});this.kick();},
+  kick(ms){this.paint('saving');clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush(),ms==null?600:ms);},
+  paint(s){
+    if(s)this.state=s;
+    const el=document.getElementById('syncst');if(!el)return;
+    el.className=this.state;
+    el.textContent=this.state==='ok'?'✓ 서버에 저장됨':this.state==='saving'?'저장 중…':'⚠ 저장 실패 · 다시 시도 중';
+  },
+  restore(parts){
+    for(let i=parts.length-1;i>=0;i--){const p=parts[i];this.q.unshift(p.op==='put'?{op:'put',store:p.store,rows:p.rows}:p);}
+  },
+  async flush(){
+    if(this.busy)return;
+    this.busy=true;this.paint('saving');
+    try{
+      while(this.q.length){
+        const parts=[];let size=0;
+        while(this.q.length&&size<240000){
+          const op=this.q[0];
+          if(op.op==='put'){
+            const take=[];
+            while(op.rows.length&&(!take.length||size<240000)){const r=op.rows.shift();take.push(r);size+=r.length+1;}
+            parts.push({op:'put',store:op.store,rows:take});
+            if(!op.rows.length)this.q.shift();
+          }else{size+=(op.keys?op.keys.length*8:0)+30;parts.push(op);this.q.shift();}
+        }
+        const body='{"ops":['+parts.map(p=>p.op==='put'?'{"op":"put","store":"'+p.store+'","rows":['+p.rows.join(',')+']}':JSON.stringify(p)).join(',')+']}';
+        let r=null;
+        try{r=await fetch('/api/sync',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body});}catch(e){r=null;}
+        if(r&&r.status===401){this.busy=false;alert('로그인이 만료되었습니다. 다시 로그인해 주세요.');location.reload();return;}
+        if(r&&r.status===400){continue;}
+        if(!r||!r.ok){this.restore(parts);this.busy=false;this.paint('err');this.kick(5000);return;}
+      }
+      this.busy=false;this.paint('ok');
+    }catch(e){this.busy=false;this.paint('err');this.kick(5000);}
+  },
+  async drain(){
+    for(let i=0;i<1200;i++){
+      if(!this.q.length&&!this.busy)return true;
+      if(!this.busy){clearTimeout(this.timer);await this.flush();}else await new Promise(r=>setTimeout(r,100));
+      if(this.state==='err')return false;
+    }
+    return false;
+  }
+};
+window.__drain=()=>SYNC.drain();
+window.addEventListener('beforeunload',e=>{if(SYNC.q.length||SYNC.busy){e.preventDefault();e.returnValue='';}});
+function replaceLocal(store,rows){
+  return new Promise((res,rej)=>{
+    const t=db.transaction(store,'readwrite'),os=t.objectStore(store);
+    os.clear();rows.forEach(o=>os.put(o));
+    t.oncomplete=()=>res();t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error('저장 실패'));
+  });
+}
+async function readLegacy(){
+  if(!window.indexedDB)return null;
+  try{if(indexedDB.databases){const l=await indexedDB.databases();if(!l.some(d=>d.name==='baljuDB'))return null;}}catch(e){}
+  return new Promise(res=>{
+    const r=indexedDB.open('baljuDB',1);
+    r.onupgradeneeded=()=>{try{r.transaction.abort();}catch(e){}};
+    r.onerror=()=>res(null);r.onblocked=()=>res(null);
+    r.onsuccess=async()=>{
+      const d=r.result;
+      try{
+        const out={};
+        for(const n of STORE_NAMES){
+          if(!d.objectStoreNames.contains(n)){out[n]=[];continue;}
+          out[n]=await new Promise((a,b)=>{const q=d.transaction(n).objectStore(n).getAll();q.onsuccess=()=>a(q.result);q.onerror=()=>b(q.error);});
+        }
+        d.close();res(out);
+      }catch(e){try{d.close();}catch(x){}res(null);}
+    };
+  });
+}
+async function pullFromServer(){
+  const view=document.getElementById('view');
+  if(view)view.innerHTML='<div class="card">서버에서 데이터를 불러오는 중…</div>';
+  const data={};
+  for(const s of STORE_NAMES){
+    const rows=[];let after=0;
+    for(;;){
+      const r=await api('/api/data?store='+s+'&after='+after);
+      for(const o of r.rows)rows.push(wireIn(s,o));
+      if(r.done)break;after=r.last;
+    }
+    data[s]=rows;
+  }
+  if(STORE_NAMES.every(s=>!data[s].length)){
+    const leg=await readLegacy();
+    if(leg&&(leg.suppliers.length||leg.products.length||leg.orders.length)){
+      const msg='이 브라우저에 저장되어 있던 기존 발주 데이터가 있습니다.\n\n거래처 '+leg.suppliers.length+'개 · 상품 '+leg.products.length+'개 · 주문 '+leg.orders.length+'건\n\n이 데이터를 "'+window.__USER+'" 계정의 서버로 옮길까요?\n[확인] 옮기기\n[취소] 빈 상태로 시작 (다음 로그인 때 다시 물어봅니다)';
+      if(confirm(msg)){
+        if(view)view.innerHTML='<div class="card">기존 데이터를 서버로 옮기는 중입니다. 창을 닫지 말고 기다려 주세요…</div>';
+        for(const s of STORE_NAMES){const rows=leg[s]||[];await replaceLocal(s,rows);SYNC.put(s,rows);}
+        if(!await SYNC.drain())throw new Error('서버로 옮기지 못했습니다. 새로고침하여 다시 시도해 주세요.');
+        return;
+      }
+    }
+  }
+  for(const s of STORE_NAMES)await replaceLocal(s,data[s]);
+}
+
 async function loadAll(){
   S.suppliers=await getAll('suppliers');
   S.products=await getAll('products');
@@ -837,7 +985,8 @@ const ICONS={
 function drawNav(cur){
   $('#nav').innerHTML='<div class="logo"><span class="mark">'+IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/>')+'</span><div>발주 관리<small>Order Management</small></div></div>'+
   NAV.map(n=>n.parent?'<div class="nparent">'+(ICONS['p_'+n.parent]||ICONS.parent)+n.parent+'</div>':n.g?'<div class="grp">'+n.g+'</div>':'<a href="#'+n.h+'" class="'+(n.sub?'nsub ':'')+(n.h===cur?'on':'')+'">'+(n.sub?'':(ICONS[n.h]||''))+n.t+'</a>').join('')+
-  '<div class="navfoot"><b>내 PC 전용</b><br>데이터는 이 브라우저에 저장됩니다.<button type="button" class="logout" onclick="zianLogout()">로그아웃</button></div>';
+  '<div class="navfoot"><div class="acct">'+esc(window.__USER)+'</div>데이터는 서버에 계정별로 저장됩니다.<div id="syncst"></div><button type="button" class="logout" onclick="zianLogout()">로그아웃</button></div>';
+  SYNC.paint();
 }
 const ROUTES={};
 function route(){
@@ -878,12 +1027,9 @@ function previewTable(cols,rows){
 function pgHome(){
   const un=S.orders.filter(o=>stOf(o)==='none').length;
   const wait=S.orders.filter(o=>stOf(o)==='matched'&&!o.confirmed).length;
-  const lb=S.meta.lastBackup;
-  return '<h1>홈</h1><p class="sub">매입처 · 상품 · 주문을 한 곳에서 관리합니다. 모든 데이터는 이 PC의 브라우저에 저장됩니다.</p>'+
+  return '<h1>홈</h1><p class="sub">매입처 · 상품 · 주문을 한 곳에서 관리합니다. 모든 데이터는 로그인한 계정의 서버에 저장됩니다.</p>'+
   '<div class="stats"><div class="stat"><span>매입처</span><b>'+S.suppliers.length+'</b></div><div class="stat"><span>등록 상품</span><b>'+S.products.length.toLocaleString()+'</b></div><div class="stat"><span>매칭이 필요한 주문</span><b style="color:'+(un?'var(--warn)':'inherit')+'">'+un+'</b></div><div class="stat"><span>신규주문(확인 대기)</span><b>'+wait+'</b></div></div>'+
-  '<div class="card"><h3>사용 순서</h3><ol class="steps"><li><a href="#/suppliers/new">매입처 등록</a> — 거래하는 매입처(업체명 등)를 등록합니다.</li><li><a href="#/products/bulk">매입 상품 등록</a> — 매입처를 고르고 상품 파일을 올려 저장합니다.</li><li><a href="#/orders/collect">주문 수집</a> — 쇼핑몰에서 받은 주문 엑셀을 올려 저장합니다.</li><li><a href="#/orders/confirm">주문 확정 관리</a> — [매칭하기]로 상품을 연결합니다. 한 번 매칭한 상품은 다음 주문부터 자동 매칭됩니다.</li><li><a href="#/orders/check">주문확인처리</a> — 매칭된 주문을 조회하고, 선택해서 엑셀로 내려받거나 [주문상태변경]으로 신규주문 → 주문확인 처리를 합니다.</li></ol></div>'+
-  asCard()+
-  '<div class="card"><h3>데이터 백업</h3><p class="mute" style="margin-top:0">데이터는 이 브라우저 안에 저장됩니다. <b>이 HTML 파일의 위치를 옮기거나, 브라우저 방문기록·사이트 데이터를 지우면 데이터가 사라질 수 있으니</b> 주기적으로 백업 파일을 저장해 두세요.'+(lb?' (마지막 백업: '+fmtDT(lb)+')':' (아직 백업한 적이 없습니다)')+'</p><div class="row"><button class="btn pri" data-act="backup">백업 파일 저장</button><label class="btn" style="cursor:pointer">백업 파일 불러오기<input type="file" accept=".json" data-chg="restore" hidden></label></div></div>';
+  '<div class="card"><h3>사용 순서</h3><ol class="steps"><li><a href="#/suppliers/new">매입처 등록</a> — 거래하는 매입처(업체명 등)를 등록합니다.</li><li><a href="#/products/bulk">매입 상품 등록</a> — 매입처를 고르고 상품 파일을 올려 저장합니다.</li><li><a href="#/orders/collect">주문 수집</a> — 쇼핑몰에서 받은 주문 엑셀을 올려 저장합니다.</li><li><a href="#/orders/confirm">주문 확정 관리</a> — [매칭하기]로 상품을 연결합니다. 한 번 매칭한 상품은 다음 주문부터 자동 매칭됩니다.</li><li><a href="#/orders/check">주문확인처리</a> — 매칭된 주문을 조회하고, 선택해서 엑셀로 내려받거나 [주문상태변경]으로 신규주문 → 주문확인 처리를 합니다.</li></ol></div>';
 }
 ROUTES['/home']=pgHome;
 async function buildDumpDB(){
@@ -920,7 +1066,7 @@ A.backup=async()=>{
 const AS_FILE='발주관리_자동저장.json';
 const AS={handle:null,ok:false,checked:false,paused:false,saving:false,again:false,timer:null,last:null,err:''};
 const asSupported=()=>typeof window.showDirectoryPicker==='function';
-function hdb(){return new Promise((res,rej)=>{const r=indexedDB.open('baljuFS',1);r.onupgradeneeded=()=>r.result.createObjectStore('h');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function hdb(){return new Promise((res,rej)=>{const r=indexedDB.open('baljuFS_'+window.__USER,1);r.onupgradeneeded=()=>r.result.createObjectStore('h');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
 async function hget(){const d=await hdb();return new Promise((res,rej)=>{const q=d.transaction('h').objectStore('h').get('dir');q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error);});}
 async function hset(v){const d=await hdb();return new Promise((res,rej)=>{const t=d.transaction('h','readwrite');if(v)t.objectStore('h').put(v,'dir');else t.objectStore('h').delete('dir');t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
 async function asPerm(ask){
@@ -1872,7 +2018,7 @@ document.addEventListener('dblclick',e=>{
 ===================================================================== */
 (async function init(){
   try{
-    db=await openDB();await loadAll();
+    db=await openDB();await pullFromServer();await loadAll();
     const oc=S.meta.orderFields;
     if(oc&&Array.isArray(oc.order)&&!oc.v2){
       if(!oc.order.includes('payAmount')){const i=oc.order.indexOf('itemOption');oc.order.splice(i>=0?i+1:oc.order.length,0,'payAmount');}
@@ -1892,11 +2038,10 @@ document.addEventListener('dblclick',e=>{
     const oldPl=S.suppliers.filter(x=>x.pl);
     if(oldPl.length){oldPl.forEach(x=>{x.pl=null;});await putMany('suppliers',oldPl);}
     if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
-    try{AS.handle=await hget();if(AS.handle&&await asPerm(false))await asCheck();}catch(e){AS.handle=null;}
     if(!location.hash)location.hash='#/home';
     route();asBar();
   }catch(e){
-    $('#view').innerHTML='<div class="card err"><b>데이터 저장소를 열 수 없습니다.</b><br>'+esc(e.message)+'<br>Chrome 또는 Edge 브라우저에서 일반 창(시크릿 모드 아님)으로 열어주세요.</div>';
+    $('#view').innerHTML='<div class="card err"><b>데이터를 불러올 수 없습니다.</b><br>'+esc(e.message)+'<br>인터넷 연결을 확인하고 새로고침해 주세요. 시크릿 모드가 아닌 일반 창에서 열어야 합니다.</div>';
   }
 })();
 })();
@@ -1904,68 +2049,89 @@ document.addEventListener('dblclick',e=>{
 
 <script>
 (function(){
-  var HASH='29dc2290686c142760017a40f64e5fa90a99d3f0b3f0d1fe0ba87237e0da89ea';
-  var K_AUTH='zian_auth',K_ID='zian_saved_id';
+  var K_ID='zian_saved_id';
   var $=function(id){return document.getElementById(id)};
-  var started=false;
+  var started=false,mode='login';
+  function ls(){try{return window.localStorage}catch(e){return null}}
+  function lget(k){try{return ls()&&ls().getItem(k)}catch(e){return null}}
+  function lset(k,v){try{ls()&&ls().setItem(k,v)}catch(e){}}
+  function ldel(k){try{ls()&&ls().removeItem(k)}catch(e){}}
 
-  function store(kind){try{return window[kind]}catch(e){return null}}
-  function get(s,k){try{return s&&s.getItem(k)}catch(e){return null}}
-  function set(s,k,v){try{s&&s.setItem(k,v)}catch(e){}}
-  function del(s,k){try{s&&s.removeItem(k)}catch(e){}}
-
-  async function sha256(t){
-    var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));
-    return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0')}).join('');
+  async function post(path,body){
+    var r;
+    try{r=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(body||{})});}
+    catch(e){throw new Error('서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.');}
+    var j=null;try{j=await r.json();}catch(e){}
+    if(!r.ok)throw new Error((j&&j.error)||'서버 오류가 발생했습니다. ('+r.status+')');
+    return j;
   }
 
-  function startApp(){
+  function startApp(user){
     if(started)return;started=true;
+    window.__USER=user;
     $('login').classList.remove('show');
     var s=document.createElement('script');
     s.textContent=$('appcode').textContent;
     document.body.appendChild(s);
   }
 
+  function setMode(m){
+    mode=m;
+    document.querySelectorAll('#login .tab').forEach(function(b){b.classList.toggle('on',b.dataset.m===m)});
+    var su=m==='signup';
+    $('lg-pw2-wrap').hidden=!su;$('lg-hint').hidden=!su;
+    $('lg-go').textContent=su?'가입하고 시작하기':'로그인';
+    $('lg-pw').autocomplete=su?'new-password':'current-password';
+    $('lg-err').textContent='';
+  }
+
   function showLogin(){
-    $('login').classList.add('show');
-    var saved=get(store('localStorage'),K_ID);
+    $('login').classList.add('show');$('lg-box').style.visibility='visible';
+    var saved=lget(K_ID);
     if(saved){$('lg-id').value=saved;$('lg-save').checked=true;$('lg-pw').focus();}
     else $('lg-id').focus();
   }
 
-  async function tryLogin(){
-    var id=$('lg-id').value.trim(),pw=$('lg-pw').value,err=$('lg-err'),btn=$('lg-go');
+  async function submit(e){
+    e.preventDefault();
+    var id=$('lg-id').value.trim().toLowerCase(),pw=$('lg-pw').value,err=$('lg-err'),btn=$('lg-go');
     err.textContent='';
-    if(!id||!pw){err.textContent='아이디와 비밀번호를 입력해주세요.';return;}
-    if(!(window.crypto&&crypto.subtle)){err.textContent='보안 연결(https)에서만 로그인할 수 있습니다.';return;}
+    if(!id||!pw){err.textContent='아이디와 비밀번호를 입력해 주세요.';return;}
+    if(mode==='signup'){
+      if(!/^[a-z0-9_]{4,20}$/.test(id)){err.textContent='아이디는 영문 소문자·숫자·밑줄(_) 4~20자로 입력해 주세요.';return;}
+      if(pw.length<6){err.textContent='비밀번호는 6자 이상으로 입력해 주세요.';return;}
+      if(pw!==$('lg-pw2').value){err.textContent='비밀번호 확인이 일치하지 않습니다.';return;}
+    }
     btn.disabled=true;
     try{
-      var h=await sha256(id+':'+pw);
-      if(h===HASH){
-        if($('lg-save').checked)set(store('localStorage'),K_ID,id);else del(store('localStorage'),K_ID);
-        set(store('sessionStorage'),K_AUTH,'1');
-        $('lg-pw').value='';
-        startApp();
-      }else{
-        err.textContent='아이디 또는 비밀번호가 올바르지 않습니다.';
-        $('lg-pw').value='';$('lg-pw').focus();
-      }
-    }catch(e){err.textContent='로그인 처리 중 오류가 발생했습니다.';}
+      var r=await post(mode==='signup'?'/api/signup':'/api/login',{username:id,password:pw});
+      if($('lg-save').checked)lset(K_ID,r.username);else ldel(K_ID);
+      $('lg-pw').value='';$('lg-pw2').value='';
+      startApp(r.username);
+    }catch(ex){
+      err.textContent=ex.message;
+      $('lg-pw').value='';
+    }
     btn.disabled=false;
   }
 
-  window.zianLogout=function(){
-    del(store('sessionStorage'),K_AUTH);
+  window.zianLogout=async function(){
+    try{if(window.__drain){var ok=await window.__drain();if(!ok&&!confirm('서버에 저장되지 않은 변경이 있습니다. 그래도 로그아웃할까요?'))return;}}catch(e){}
+    try{await post('/api/logout');}catch(e){}
     location.hash='';location.reload();
   };
 
-  $('lg-go').addEventListener('click',tryLogin);
-  ['lg-id','lg-pw'].forEach(function(id){
-    $(id).addEventListener('keydown',function(e){if(e.key==='Enter')tryLogin();});
-  });
+  document.querySelectorAll('#login .tab').forEach(function(b){b.addEventListener('click',function(){setMode(b.dataset.m)})});
+  $('lg-form').addEventListener('submit',submit);
 
-  if(get(store('sessionStorage'),K_AUTH)==='1')startApp();else showLogin();
+  (async function boot(){
+    $('login').classList.add('show');
+    try{
+      var r=await fetch('/api/me',{credentials:'same-origin'});
+      if(r.ok){var j=await r.json();if(j&&j.username){startApp(j.username);return;}}
+    }catch(e){}
+    showLogin();
+  })();
 })();
 </script>
 </body>

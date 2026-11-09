@@ -1801,6 +1801,42 @@ C.csheet=el=>{CL.sheetIdx=+el.value;clRecalc(true);route();};
 C.chdr=el=>{CL.headerRow=Math.max(1,parseInt(el.value,10)||1);clRecalc(false);route();};
 /* 이미 수집된 주문 판별: 주문번호가 같으면 중복. 주문번호가 없으면 수취인·연락처·주소·상품·옵션·수량이 모두 같을 때 중복 */
 const altSig=o=>[o.receiver,o.tel1,o.addr,o.itemName,o.itemOption,o.qty].map(norm).join('|');
+/* ===== 자체주문번호: 쇼핑몰 주문번호마다 10자리 무작위 번호. 같은 주문번호=같은 번호, 다른 주문번호끼리는 절대 겹치지 않음.
+   한 번 쓴 번호는 주문을 삭제해도 'ownno:' 기록에 남아 다시 쓰이지 않습니다. ===== */
+const OWN_PFX='ownno:';
+function ownNoGen(used){
+  const a=new Uint32Array(2);
+  for(let i=0;i<5000;i++){
+    crypto.getRandomValues(a);
+    const c=String(1000000000+(a[0]%90000)*100000+(a[1]%100000));
+    if(!used.has(c)){used.add(c);return c;}
+  }
+  throw new Error('자체주문번호를 만들지 못했습니다. 다시 시도해 주세요.');
+}
+function ownNoAssign(list){
+  const used=new Set();
+  S.orders.forEach(o=>{if(o.ownNo)used.add(o.ownNo);});
+  Object.keys(S.meta).forEach(k=>{if(k.startsWith(OWN_PFX))used.add(S.meta[k]);});
+  const fresh=[];
+  for(const o of list){
+    if(o.ownNo)continue;
+    const nk=o.orderNo?OWN_PFX+norm(o.orderNo):'';
+    let code=nk?S.meta[nk]:'';
+    if(!code){
+      code=ownNoGen(used);
+      if(nk){S.meta[nk]=code;fresh.push({key:nk,value:code});}
+    }
+    o.ownNo=code;
+  }
+  return fresh;
+}
+async function ownNoBackfill(){
+  const miss=S.orders.filter(o=>!o.ownNo);
+  if(!miss.length)return;
+  const fresh=ownNoAssign(miss);
+  await putMany('orders',miss);
+  if(fresh.length)await putMany('meta',fresh);
+}
 function collectedSets(){
   return {no:new Set(S.orders.map(o=>o.orderNo?norm(o.orderNo):'').filter(Boolean)),alt:new Set(S.orders.filter(o=>!o.orderNo).map(altSig))};
 }
@@ -1827,7 +1863,9 @@ A.collectSave=async()=>{
   }
   if(!adds.length){toast('이미 수집된 주문입니다. (같은 주문번호 '+dup.toLocaleString()+'건은 수집되지 않았습니다)','err',6000);return;}
   try{
+    const freshOwn=ownNoAssign(adds);
     await putMany('orders',adds);S.orders.push(...adds);rebuild();
+    if(freshOwn.length)await putMany('meta',freshOwn);
     await setMeta(sigOf(clHeaders()),CL.map);await setMeta(mallKey(clHeaders()),CL.mall);
     toast('주문 '+adds.length+'건 저장 (자동 매핑 '+auto+'건'+(dup?', 중복 제외 '+dup+'건':'')+')',adds.length?'ok':'err',6000);
     CL.sheets=null;CL.fileName='';
@@ -1846,7 +1884,7 @@ function confirmList(){
   const q=norm(CF.q);
   return scoped().filter(o=>{
     if(CF.status!=='all'&&stOf(o)!==CF.status&&!CF.keep.has(o.id))return false;
-    if(q){const {p,s}=orderInfo(o);const h=norm([o.orderNo,o.orderer,o.receiver,o.tel1,o.tel2,o.addr,o.itemName,o.itemOption,p?p.name:'',s?s.name:''].join(' '));if(!h.includes(q))return false;}
+    if(q){const {p,s}=orderInfo(o);const h=norm([o.orderNo,o.ownNo,o.orderer,o.receiver,o.tel1,o.tel2,o.addr,o.itemName,o.itemOption,p?p.name:'',s?s.name:''].join(' '));if(!h.includes(q))return false;}
     return true;
   });
 }
@@ -1856,7 +1894,7 @@ function pgConfirm(){
   return '<h1>주문 확정 관리</h1><p class="sub">각 주문에 [매핑하기]로 상품을 연결하면 매입처가 표시됩니다. 매핑이 끝난 주문은 [주문확인처리]에서 조회·다운로드·상태변경을 할 수 있습니다.</p>'+
   '<div class="card row"><div class="chips">'+[['all','전체'],['none','미매핑'],['matched','매핑완료']].map(([k,l])=>'<button class="chip'+(CF.status===k?' on':'')+'" data-act="cstat" data-s="'+k+'">'+l+'</button>').join('')+'</div><span class="grow"></span>'+
   '<select data-chg="cdate"><option value="">전체 수집일</option>'+dates.map(d=>'<option value="'+d+'"'+(CF.date===d?' selected':'')+'>'+d+'</option>').join('')+'</select>'+
-  '<input type="text" placeholder="주문번호 · 수취인 · 상품명 검색" style="width:240px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
+  '<input type="text" placeholder="자체주문번호 · 주문번호 · 수취인 · 상품명 검색" style="width:240px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
   '<div id="ctbl"></div>';
 }
 ROUTES['/orders/confirm']=pgConfirm;
@@ -1869,12 +1907,12 @@ function drawConfirmTable(){
   if(!S.orders.length){box.innerHTML='<div class="card mute">수집된 주문이 없습니다. <a href="#/orders/collect">주문 수집</a>에서 주문내역 파일을 올려주세요.</div>';return;}
   if(!list.length){box.innerHTML='<div class="card mute">조건에 맞는 주문이 없습니다.</div>';return;}
   box.innerHTML='<div class="mute small" style="margin-bottom:6px">자료수 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</div>'+
-  fitTable('confirm',[{t:'<input type="checkbox" data-chg="csall"'+(allSel?' checked':'')+'>'},{t:'쇼핑몰 / 주문번호'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메세지'},{t:'주문 상품'},{t:'수량',c:'num'},{t:'매핑'},{t:'매입처'}],
+  fitTable('confirm',[{t:'<input type="checkbox" data-chg="csall"'+(allSel?' checked':'')+'>'},{t:'쇼핑몰 / 주문번호 <span style="color:#1c7ed6">자체주문번호</span>'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메세지'},{t:'주문 상품'},{t:'수량',c:'num'},{t:'매핑'},{t:'매입처'}],
   cur.map(o=>{
     const {p,s}=orderInfo(o),st=stOf(o);
     const mc=p?'<div class="pn">'+esc(p.name)+(p.option?' <span class="mute" style="font-weight:400">/ '+esc(p.option)+'</span>':'')+'</div><div class="mini"><button class="btn sm" data-act="match" data-id="'+o.id+'">변경</button><button class="btn sm" data-act="unmatch" data-id="'+o.id+'">해제</button>'+(o.matchedAuto?'<span class="tag">자동</span>':'')+'</div>':'<button class="btn sm pri" data-act="match" data-id="'+o.id+'">매핑하기</button>';
     return '<tr class="'+(st==='matched'?'m':st==='done'?'d':'u')+'"><td><input type="checkbox" data-chg="crow" data-id="'+o.id+'"'+(CF.sel.has(o.id)?' checked':'')+'></td>'+
-      '<td>'+(o.mall?'<span class="tag gray">'+esc(o.mall)+'</span>':'')+'<div class="sm2 brk">'+esc(o.orderNo)+'</div></td>'+
+      '<td>'+(o.mall?'<span class="tag gray">'+esc(o.mall)+'</span>':'')+'<div class="sm2 brk">'+esc(o.orderNo)+'</div>'+(o.ownNo?'<div class="sm2 brk" style="color:#1c7ed6" title="자체주문번호">'+esc(o.ownNo)+'</div>':'')+'</td>'+
       '<td><b>'+esc(o.receiver)+'</b><div class="sm2">'+esc(o.orderer)+'</div></td>'+
       '<td>'+esc(o.tel1)+(o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'+
       '<td>'+(o.zip?'<span class="mute small">['+esc(o.zip)+']</span> ':'')+esc(o.addr)+'</td>'+
@@ -2034,7 +2072,7 @@ function pgCheck(){
   '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="ckf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+
   '<div class="row" style="margin-bottom:10px">'+lb('수집일자')+'<input type="date" id="ckfrom" data-chg="ckf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ckto" data-chg="ckf" data-k="to" value="'+esc(d.to)+'">'+
   [['today','오늘'],['yesterday','어제'],['7','7일'],['30','30일'],['month','당월'],['prev','전월']].map(x=>'<button class="btn sm" '+sm+' data-act="ckrange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>'+
-  '<div class="row">'+lb('검색')+'<select data-chg="ckf" data-k="field"><option value="orderNo"'+(d.field==='orderNo'?' selected':'')+'>주문번호</option><option value="orderer"'+(d.field==='orderer'?' selected':'')+'>주문자명</option><option value="receiver"'+(d.field==='receiver'?' selected':'')+'>수취인명</option></select>'+
+  '<div class="row">'+lb('검색')+'<select data-chg="ckf" data-k="field"><option value="orderNo"'+(d.field==='orderNo'?' selected':'')+'>쇼핑몰주문번호</option><option value="ownNo"'+(d.field==='ownNo'?' selected':'')+'>자체주문번호</option><option value="orderer"'+(d.field==='orderer'?' selected':'')+'>주문자명</option><option value="receiver"'+(d.field==='receiver'?' selected':'')+'>수취인명</option></select>'+
   '<input type="text" placeholder="검색어 입력" style="width:240px" data-inp="ckq" value="'+esc(d.q)+'"><button class="btn" data-act="cksearch">검색</button><button class="btn pri" data-act="cksearch">조회</button></div>'+
   '</div><div id="kcnt" style="margin-bottom:14px"></div><div id="ktbl"></div>';
 }
@@ -2056,12 +2094,12 @@ function drawCheckTable(){
     '<button class="btn danger" data-act="ckdel">선택 삭제</button><button class="btn ok" data-act="ckdl">선택 다운로드(엑셀)</button><button class="btn ok" data-act="ckdlall">전체 다운로드(엑셀)</button><button class="btn pri" data-act="ckstatus">주문상태변경</button></div>';
   if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 매핑 주문이 없습니다. 수집일자·주문상태를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
   box.innerHTML=bar+
-  fitTable('check',[{t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>'},{t:'주문상태'},{t:'수집일'},{t:'쇼핑몰'},{t:'주문번호'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메모'},{t:'상품명'},{t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>'},{t:'수량',c:'num'},{t:'거래선'}],
+  fitTable('check',[{t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>'},{t:'주문상태'},{t:'수집일'},{t:'쇼핑몰'},{t:'주문번호 <span style="color:#1c7ed6">자체주문번호</span>'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메모'},{t:'상품명'},{t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>'},{t:'수량',c:'num'},{t:'거래선'}],
   cur.map(o=>{
     const {p,s}=orderInfo(o);
     return '<tr class="m"><td><input type="checkbox" data-chg="ckrow" data-id="'+o.id+'"'+(CK.sel.has(o.id)?' checked':'')+'></td>'+
       '<td><div class="stcell">'+stTag(o)+'<button class="btn cs'+((o.csContent||o.csAction)?' on':'')+'" data-act="cs" data-id="'+o.id+'" title="'+((o.csContent||o.csAction)?'C/S 메모 있음 · 클릭하여 보기/수정':'C/S 메모 작성')+'">C/S</button></div></td>'+
-      '<td>'+esc(o.collectedDate)+'</td><td>'+esc(o.mall)+'</td><td class="brk">'+esc(o.orderNo)+'</td>'+
+      '<td>'+esc(o.collectedDate)+'</td><td>'+esc(o.mall)+'</td><td class="brk">'+esc(o.orderNo)+(o.ownNo?'<div class="sm2" style="color:#1c7ed6" title="자체주문번호">'+esc(o.ownNo)+'</div>':'')+'</td>'+
       '<td><b>'+esc(o.receiver)+'</b><div class="sm2">'+esc(o.orderer)+'</div></td>'+
       '<td>'+esc(o.tel1)+(o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'+
       '<td>'+(o.zip?'<span class="mute small">['+esc(o.zip)+']</span> ':'')+esc(o.addr)+'</td>'+
@@ -2208,6 +2246,7 @@ document.addEventListener('dblclick',e=>{
 (async function init(){
   try{
     db=await openDB();await pullFromServer();await loadAll();
+    try{await ownNoBackfill();}catch(e){console.warn('자체주문번호 생성 실패',e);}
     const oc=S.meta.orderFields;
     if(oc&&Array.isArray(oc.order)&&!oc.v2){
       if(!oc.order.includes('payAmount')){const i=oc.order.indexOf('itemOption');oc.order.splice(i>=0?i+1:oc.order.length,0,'payAmount');}

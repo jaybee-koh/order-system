@@ -2256,8 +2256,9 @@ A.ckdlall=()=>ckDownload(ckList(),'다운로드할 주문이 없습니다.');
 async function ckDownload(list,emptyMsg){
   if(!list.length){toast(emptyMsg,'err');return;}
   const tpl=DEFAULT_TPL;
-  const rows=[tpl.headers.slice()];
-  list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(tpl.mapping.map(m=>cellVal(o,p,s,i+1,m)));});
+  const withTrk=CK.a.status==='shipped';
+  const rows=[tpl.headers.slice().concat(withTrk?['택배사','운송장번호']:[])];
+  list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(tpl.mapping.map(m=>cellVal(o,p,s,i+1,m)).concat(withTrk?[o.carrier||'',o.trackingNo||'']:[]));});
   download(buildXlsx(rows,'발주서'),'주문확인_발주_'+localDate().replace(/-/g,'')+'.xlsx');
   const now=new Date().toISOString();
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});

@@ -366,6 +366,153 @@ input[type=radio]:checked::after{content:"";width:9px;height:9px;border-radius:5
 #nav #syncst.err{color:#ff8787}
 #nav .logout{display:block;width:100%;margin-top:10px;padding:7px 0;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:transparent;color:#8b95ad;font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
 #nav .logout:hover{background:rgba(255,255,255,.08);color:#fff}
+
+/* ===== 디자인 리뉴얼: 기능·DOM·스크립트는 유지 ===== */
+:root{
+  --bg:#f5f7fa;
+  --card:#fff;
+  --ink:#17212f;
+  --ink2:#344256;
+  --mute:#778397;
+  --line:#e4e9f0;
+  --line2:#edf1f5;
+  --pri:#256b68;
+  --pri-h:#1d5754;
+  --pri-soft:#e8f3f1;
+  --pri-ring:rgba(37,107,104,.16);
+  --ok:#23845b;
+  --ok-h:#196d49;
+  --ok-soft:#eaf6ef;
+  --warn:#c7832d;
+  --warn-soft:#fff5e7;
+  --err:#c94d55;
+  --err-soft:#fff0f0;
+  --nav-bg:#172a31;
+  --nav-bg2:#203940;
+  --nav-text:#a9bbc0;
+  --nav-hover:rgba(255,255,255,.075);
+  --sh-xs:0 1px 2px rgba(24,39,56,.035);
+  --sh-sm:0 2px 8px rgba(24,39,56,.055);
+  --sh-md:0 10px 28px rgba(24,39,56,.09);
+  --sh-lg:0 24px 60px rgba(14,29,38,.24);
+  --r-sm:9px;
+  --r:12px;
+  --r-lg:16px;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);letter-spacing:-.018em}
+#nav{
+  background:linear-gradient(180deg,#203940 0%,#172a31 100%);
+  padding:24px 14px 18px;border-right:1px solid rgba(255,255,255,.06);
+}
+#nav .logo{padding:5px 11px 23px;margin-bottom:10px;font-size:16px}
+#nav .logo .mark{
+  width:38px;height:38px;border-radius:12px;
+  background:linear-gradient(145deg,#58a69a,#26736d);
+  box-shadow:0 7px 18px rgba(23,115,106,.3)
+}
+#nav .grp{padding:23px 13px 9px;color:#789198;font-size:10px;letter-spacing:.13em}
+#nav a{padding:10px 13px;margin:3px 0;border-radius:10px;font-size:13.5px}
+#nav a:hover{background:rgba(255,255,255,.08);color:#fff}
+#nav a.on{
+  background:linear-gradient(100deg,rgba(91,174,160,.24),rgba(91,174,160,.09));
+  color:#fff;box-shadow:inset 0 0 0 1px rgba(139,207,195,.10)
+}
+#nav a.on::before{left:-14px;background:#72b9aa;width:3px}
+#nav a.on svg{color:#9bd5c9}
+#nav .nparent{color:#d0dcde}
+#nav .navfoot{color:#71888e}
+#view{padding:38px 44px 76px;max-width:1720px}
+h1{font-size:25px;letter-spacing:-.045em;font-weight:750;margin-bottom:7px}
+.sub{font-size:13.5px;color:#7a8798;margin-bottom:25px}
+h3{font-size:15.5px;letter-spacing:-.03em}
+.card{
+  border:1px solid #e7ebf0;border-radius:16px;padding:22px 24px;
+  margin-bottom:18px;box-shadow:0 2px 8px rgba(24,39,56,.035);
+  transition:border-color .18s,box-shadow .18s
+}
+.card:hover{border-color:#dce4e8}
+.btn{
+  height:38px;padding:0 16px;border-radius:9px;font-size:13px;
+  box-shadow:none;border-color:#e0e6ec;transition:all .16s ease
+}
+.btn:hover{background:#f5f8f8;border-color:#cbd8d8}
+.btn.pri{background:var(--pri);border-color:var(--pri);box-shadow:0 2px 5px rgba(37,107,104,.16)}
+.btn.pri:hover{background:var(--pri-h);border-color:var(--pri-h)}
+.btn.ok{box-shadow:0 2px 5px rgba(35,132,91,.14)}
+.btn.sm{height:29px;border-radius:7px}
+input[type=text],input[type=number],input[type=date],select,textarea{
+  min-height:38px;border:1px solid #dfe5eb;border-radius:9px;
+  padding:0 12px;font-size:13.5px;box-shadow:none;background:#fff
+}
+input[type=text]:hover,input[type=number]:hover,input[type=date]:hover,select:hover{border-color:#b9c9c9}
+input[type=text]:focus,input[type=number]:focus,input[type=date]:focus,select:focus,textarea:focus{
+  border-color:#4b9188;box-shadow:0 0 0 3px rgba(37,107,104,.12)
+}
+label.f{font-size:12.5px;color:#465568;margin:17px 0 8px}
+.tblwrap{border:1px solid #e4e9ef;border-radius:14px;box-shadow:none}
+table.tbl{font-size:13px}
+table.tbl th{
+  background:#f5f8f8;color:#657681;font-size:11.5px;font-weight:700;
+  padding:13px 14px;border-bottom:1px solid #e3e9e9
+}
+table.tbl td{padding:12px 14px;color:#3b4a5a;border-bottom-color:#edf1f3}
+table.tbl tbody tr:hover td{background:#f7fbfa}
+.tag{padding:5px 9px;font-size:11px;background:#eaf3f2;color:#286d67}
+.tag.ok{background:#eaf6ef;color:#28784f}
+.tag.gray{background:#f0f3f6;color:#657184}
+.tag.warn{background:#fff4e5;color:#a86b20}
+.tag.ship{background:#f1edfb;color:#6952a0}
+.chips{background:#f0f3f5;border-radius:11px;padding:4px;gap:5px}
+.chip{height:32px;border-radius:8px}
+.chip.on{color:#246d67;box-shadow:0 1px 4px rgba(25,48,58,.10)}
+.stats{gap:16px;margin-bottom:22px}
+.stat{
+  border:1px solid #e5eaef;border-radius:15px;padding:20px 21px;
+  box-shadow:0 2px 8px rgba(24,39,56,.035)
+}
+.stat::before{width:3px;background:#3b8b80}
+.stat:nth-child(2)::before{background:#7b75b5}
+.stat:nth-child(3)::before{background:#d39a4b}
+.stat:nth-child(4)::before{background:#4a9a70}
+.stat span{font-size:12px;color:#7b8795}
+.stat b{font-size:29px;letter-spacing:-.045em;margin-top:9px}
+.steps li{padding-top:14px;padding-bottom:14px}
+.steps li::before{background:#e8f3f1;color:#28736b}
+.notice,.good{border-radius:11px;padding:13px 16px}
+.ov{background:rgba(18,35,42,.52);backdrop-filter:blur(7px)}
+.md{border-radius:19px;padding:30px;border:1px solid rgba(255,255,255,.75)}
+#toast{right:26px;bottom:26px}
+.toast{border-radius:12px;box-shadow:0 12px 32px rgba(14,29,38,.2)}
+.filebox{border:1.5px dashed #bdcecb;border-radius:14px;background:#f7faf9;padding:30px}
+.filebox:hover{border-color:#4b9188;background:#eef7f5}
+.rad{border-radius:11px}
+.rad:has(input:checked){border-color:#4b9188;background:#edf6f4}
+#login{background:radial-gradient(ellipse at 18% 12%,#315a5b 0%,transparent 42%),linear-gradient(145deg,#142a31 0%,#1d3b42 55%,#172b35 100%)}
+#login .box{border-radius:20px;padding:34px 32px 29px;box-shadow:0 28px 70px rgba(0,0,0,.28)}
+#login .lg .mk{width:43px;height:43px;border-radius:13px;background:linear-gradient(145deg,#58a69a,#26736d)}
+#login .tabs{border-radius:11px;background:#f0f4f4;padding:4px}
+#login .tab{border-radius:8px}
+#login .tab.on{color:#246b65}
+#login input[type=text],#login input[type=password]{height:44px;border-radius:10px}
+#login button.go{height:46px;border-radius:10px;background:#286f69}
+#login button.go:hover{background:#205c57}
+@media(max-width:1100px){
+  #view{padding:28px 24px 60px}
+}
+@media(max-width:800px){
+  #view{padding:22px 15px 48px}
+  h1{font-size:22px}
+  .card{padding:17px;border-radius:13px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .stat{padding:16px}
+  .stat b{font-size:24px}
+  .md{padding:22px 18px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+
 </style>
 </head>
 <body>

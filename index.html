@@ -1112,7 +1112,9 @@ const A={},C={},I={};
 const NAV=[
   {h:'/home',t:'홈'},
   {parent:'매입처관리'},
-  {h:'/suppliers/new',t:'매입처 등록',sub:1},{h:'/suppliers',t:'매입처 조회/수정',sub:1},{h:'/products/bulk',t:'매입 상품 등록',sub:1},{h:'/products',t:'매입 상품 조회',sub:1},
+  {h:'/suppliers/new',t:'매입처 등록',sub:1},{h:'/suppliers',t:'매입처 조회/수정',sub:1},
+  {parent:'상품관리'},
+  {h:'/products/bulk',t:'신규상품등록',sub:1},{h:'/products',t:'매입 상품 조회',sub:1},
   {parent:'주문관리'},
   {h:'/orders/collect',t:'주문 수집',sub:1},{h:'/orders/confirm',t:'주문 확정 관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1}
 ];
@@ -1120,6 +1122,7 @@ const IC=(p)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 const ICONS={
   '/home':IC('<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/>'),
   'p_주문관리':IC('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 12h6M9 16h4"/>'),
+  'p_상품관리':IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>'),
   'parent':IC('<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/><path d="M8 10h.01M12 10h.01M16 10h.01"/>'),
   '/suppliers/new':IC('<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>'),
   '/suppliers':IC('<path d="M4 6h16M4 12h16M4 18h10"/>'),
@@ -1176,7 +1179,7 @@ function pgHome(){
   const wait=S.orders.filter(o=>stOf(o)==='matched'&&!o.confirmed).length;
   return '<h1>홈</h1><p class="sub">매입처 · 상품 · 주문을 한 곳에서 관리합니다. 모든 데이터는 로그인한 계정의 서버에 저장됩니다.</p>'+
   '<div class="stats"><div class="stat"><span>매입처</span><b>'+S.suppliers.length+'</b></div><div class="stat"><span>등록 상품</span><b>'+S.products.length.toLocaleString()+'</b></div><div class="stat"><span>매칭이 필요한 주문</span><b style="color:'+(un?'var(--warn)':'inherit')+'">'+un+'</b></div><div class="stat"><span>신규주문(확인 대기)</span><b>'+wait+'</b></div></div>'+
-  '<div class="card"><h3>사용 순서</h3><ol class="steps"><li><a href="#/suppliers/new">매입처 등록</a> — 거래하는 매입처(업체명 등)를 등록합니다.</li><li><a href="#/products/bulk">매입 상품 등록</a> — 매입처를 고르고 상품 파일을 올려 저장합니다.</li><li><a href="#/orders/collect">주문 수집</a> — 쇼핑몰에서 받은 주문 엑셀을 올려 저장합니다.</li><li><a href="#/orders/confirm">주문 확정 관리</a> — [매칭하기]로 상품을 연결합니다. 한 번 매칭한 상품은 다음 주문부터 자동 매칭됩니다.</li><li><a href="#/orders/check">주문확인처리</a> — 매칭된 주문을 조회하고, 선택해서 엑셀로 내려받거나 [주문상태변경]으로 신규주문 → 주문확인 처리를 합니다.</li></ol></div>';
+  '<div class="card"><h3>사용 순서</h3><ol class="steps"><li><a href="#/suppliers/new">매입처 등록</a> — 거래하는 매입처(업체명 등)를 등록합니다.</li><li><a href="#/products/bulk">신규상품등록</a> — 매입처를 고르고 상품 파일을 올려 저장합니다.</li><li><a href="#/orders/collect">주문 수집</a> — 쇼핑몰에서 받은 주문 엑셀을 올려 저장합니다.</li><li><a href="#/orders/confirm">주문 확정 관리</a> — [매칭하기]로 상품을 연결합니다. 한 번 매칭한 상품은 다음 주문부터 자동 매칭됩니다.</li><li><a href="#/orders/check">주문확인처리</a> — 매칭된 주문을 조회하고, 선택해서 엑셀로 내려받거나 [주문상태변경]으로 신규주문 → 주문확인 처리를 합니다.</li></ol></div>';
 }
 ROUTES['/home']=pgHome;
 async function buildDumpDB(){
@@ -1392,15 +1395,23 @@ function drawSuppliers(){
   const q=norm(SL.q),cnt=supCounts();
   const list=S.suppliers.filter(s=>!q||norm([s.name,s.contact,s.phone,s.memo].join(' ')).includes(q));
   if(!list.length){box.innerHTML='<div class="card mute">검색 결과가 없습니다.</div>';return;}
-  box.innerHTML='<div class="tblwrap"><table class="tbl"><thead><tr><th>업체명</th><th>담당자</th><th>연락처</th><th>메모</th><th class="num">등록 상품수</th><th>등록일</th><th>관리</th></tr></thead><tbody>'+
-  list.map(s=>'<tr><td class="nw"><b>'+esc(s.name)+'</b></td><td class="nw">'+esc(s.contact)+'</td><td class="nw">'+esc(s.phone)+'</td><td>'+esc(s.memo)+'</td><td class="num">'+(cnt[s.id]||0).toLocaleString()+'</td><td class="nw">'+esc(s.createdAt?localDate(new Date(s.createdAt)):'')+'</td><td class="nw"><button class="btn sm" data-act="supEdit" data-id="'+s.id+'">수정</button> <button class="btn sm" data-act="supToList" data-id="'+s.id+'">상품 조회</button> <button class="btn sm pri" data-act="supToBulk" data-id="'+s.id+'">상품 등록</button> <button class="btn sm danger" data-act="supDel" data-id="'+s.id+'">삭제</button></td></tr>').join('')+'</tbody></table></div>';
+  box.innerHTML='<div class="tblwrap"><table class="tbl"><thead><tr><th>거래상태</th><th>업체명</th><th>담당자</th><th>연락처</th><th>메모</th><th class="num">등록 상품수</th><th>등록일</th><th>관리</th></tr></thead><tbody>'+
+  list.map(s=>{const stp=s.status==='stopped';return '<tr'+(stp?' style="background:#f4f4f6;color:#8a90a2"':'')+'><td class="nw"><select data-chg="supst" data-id="'+s.id+'" style="font-weight:600;color:'+(stp?'#e03131':'#2b8a3e')+'"><option value="active"'+(stp?'':' selected')+'>거래중</option><option value="stopped"'+(stp?' selected':'')+'>거래중지</option></select></td><td class="nw"><b>'+esc(s.name)+'</b></td><td class="nw">'+esc(s.contact)+'</td><td class="nw">'+esc(s.phone)+'</td><td>'+esc(s.memo)+'</td><td class="num">'+(cnt[s.id]||0).toLocaleString()+'</td><td class="nw">'+esc(s.createdAt?localDate(new Date(s.createdAt)):'')+'</td><td class="nw"><button class="btn sm" data-act="supEdit" data-id="'+s.id+'">수정</button> <button class="btn sm" data-act="supToList" data-id="'+s.id+'">상품 조회</button> <button class="btn sm pri" data-act="supToBulk" data-id="'+s.id+'">상품 등록</button> <button class="btn sm danger" data-act="supDel" data-id="'+s.id+'">삭제</button></td></tr>';}).join('')+'</tbody></table></div>';
 }
+C.supst=async el=>{
+  const s=M.sup.get(+el.dataset.id);if(!s)return;
+  const st=el.value==='stopped'?'stopped':'active';
+  const prev=s.status;s.status=st;
+  try{await putOne('suppliers',s);}catch(e){s.status=prev;toast('저장 실패: '+e.message,'err',6000);drawSuppliers();return;}
+  if(st==='stopped'){if(CK.d&&String(CK.d.sup)===String(s.id))CK.d.sup='';if(CK.a&&String(CK.a.sup)===String(s.id))CK.a.sup='';}
+  toast('"'+s.name+'" — '+(st==='stopped'?'거래중지':'거래중')+'로 변경했습니다.');drawSuppliers();
+};
 I.sq=el=>{SL.q=el.value;drawSuppliers();};
 
 /* ---- 매입처 등록 / 수정 (페이지) ---- */
 function pgSupForm(){
   const edit=!!SF.id;
-  return '<h1>'+(edit?'매입처 수정':'매입처 등록')+'</h1><p class="sub">'+(edit?'매입처 정보를 수정합니다.':'새 매입처를 등록합니다. 상품은 [매입 상품 등록]에서 올립니다.')+'</p>'+
+  return '<h1>'+(edit?'매입처 수정':'매입처 등록')+'</h1><p class="sub">'+(edit?'매입처 정보를 수정합니다.':'새 매입처를 등록합니다. 상품은 [신규상품등록]에서 올립니다.')+'</p>'+
   '<div class="card" style="max-width:640px">'+
   '<label class="f" style="margin-top:0">업체명<span class="req">*</span></label><input type="text" style="width:100%" data-inp="sf" data-f="name" value="'+esc(SF.name)+'" placeholder="예: OO도매">'+
   '<div class="row" style="align-items:flex-start;gap:14px"><div class="grow"><label class="f">담당자 (선택)</label><input type="text" style="width:100%" data-inp="sf" data-f="contact" value="'+esc(SF.contact)+'"></div><div class="grow"><label class="f">연락처 (선택)</label><input type="text" style="width:100%" data-inp="sf" data-f="phone" value="'+esc(SF.phone)+'" placeholder="010-0000-0000"></div></div>'+
@@ -1414,7 +1425,7 @@ A.sfSave=async el=>{
   if(!name){toast('업체명을 입력하세요.','err');return;}
   if(S.suppliers.some(s=>s.id!==SF.id&&s.name===name)){toast('같은 이름의 매입처가 이미 있습니다.','err');return;}
   const old=SF.id?M.sup.get(SF.id):null;
-  const obj={...(old||{}),name,contact:SF.contact.trim(),phone:SF.phone.trim(),memo:SF.memo.trim(),createdAt:old?old.createdAt:new Date().toISOString(),pl:null};
+  const obj={...(old||{}),status:(old&&old.status)||'active',name,contact:SF.contact.trim(),phone:SF.phone.trim(),memo:SF.memo.trim(),createdAt:old?old.createdAt:new Date().toISOString(),pl:null};
   try{
     await putOne('suppliers',obj);
     const i=S.suppliers.findIndex(x=>x.id===obj.id);
@@ -1449,16 +1460,42 @@ A.supToList=el=>{PL.sup=String(el.dataset.id);PL.q='';PL.page=0;location.hash='#
 /* =====================================================================
    상품 목록
 ===================================================================== */
-const PL={q:'',sup:'',page:0,sel:new Set()};
+const PL={q:'',sup:'',page:0,sel:new Set(),dtype:'created',from:'',to:''};
 const PAGE_P=200;
 function pgProducts(){
-  return '<div class="row"><div class="grow"><h1>매입 상품 조회</h1><p class="sub">매입처별로 등록된 매입 상품을 검색하고 관리합니다.</p></div><a class="btn pri" href="#/products/bulk" style="text-decoration:none">매입 상품 등록</a></div>'+
+  const sm='style="padding:2px 8px;font-size:12px"';
+  const dateRow='<div class="card row"><select data-chg="pdt"><option value="created"'+(PL.dtype==='created'?' selected':'')+'>상품등록일</option><option value="updated"'+(PL.dtype==='updated'?' selected':'')+'>상품수정일</option></select>'+
+  '<input type="date" id="pfrom" data-chg="pdfilter" data-k="from" value="'+esc(PL.from)+'"><span>~</span><input type="date" id="pto" data-chg="pdfilter" data-k="to" value="'+esc(PL.to)+'">'+
+  [['today','오늘'],['yesterday','어제'],['week','금주'],['month','당월'],['prev','전월'],['3','3개월'],['6','6개월'],['12','1년']].map(x=>'<button class="btn sm" '+sm+' data-act="prange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
+  return '<div class="row"><div class="grow"><h1>매입 상품 조회</h1><p class="sub">매입처별로 등록된 매입 상품을 검색하고 관리합니다.</p></div><a class="btn pri" href="#/products/bulk" style="text-decoration:none">신규상품등록</a></div>'+dateRow+
   '<div class="card row"><input type="text" id="pq" placeholder="상품명 · 코드 · 옵션 검색" style="width:280px" data-inp="pq" value="'+esc(PL.q)+'"><select data-chg="psup"><option value="">전체 매입처</option>'+S.suppliers.map(s=>'<option value="'+s.id+'"'+(String(PL.sup)===String(s.id)?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select><span class="grow"></span><button class="btn danger" data-act="pdel">선택 삭제</button></div><div id="ptbl"></div>';
 }
 ROUTES['/products']=()=>{setTimeout(drawProducts,0);return pgProducts();};
+function pRange(k){
+  const t=new Date(),y=t.getFullYear(),m=t.getMonth(),day=t.getDate();
+  const back=n=>{const dim=new Date(y,m-n+1,0).getDate();return new Date(y,m-n,Math.min(day,dim));};
+  switch(k){
+    case 'today':return [localDate(t),localDate(t)];
+    case 'yesterday':{const d=new Date(y,m,day-1);return [localDate(d),localDate(d)];}
+    case 'week':{const dow=(t.getDay()+6)%7;return [localDate(new Date(y,m,day-dow)),localDate(new Date(y,m,day-dow+6))];}
+    case 'month':return [localDate(new Date(y,m,1)),localDate(new Date(y,m+1,0))];
+    case 'prev':return [localDate(new Date(y,m-1,1)),localDate(new Date(y,m,0))];
+    case '3':case '6':case '12':return [localDate(back(+k)),localDate(t)];
+  }
+  return ['',''];
+}
+const pDay=iso=>iso?localDate(new Date(iso)):'';
 function filteredProducts(){
-  const q=norm(PL.q);
-  return S.products.filter(p=>(!PL.sup||p.supplierId===+PL.sup)&&(!q||(M.hay.get(p.id)||'').includes(q)));
+  const q=norm(PL.q),f=PL.from,t=PL.to;
+  return S.products.filter(p=>{
+    if(PL.sup&&p.supplierId!==+PL.sup)return false;
+    if(q&&!(M.hay.get(p.id)||'').includes(q))return false;
+    if(f||t){
+      const d=pDay(PL.dtype==='updated'?(p.updatedAt||p.createdAt):p.createdAt);
+      if(!d||(f&&d<f)||(t&&d>t))return false;
+    }
+    return true;
+  });
 }
 function drawProducts(){
   const box=$('#ptbl');if(!box)return;
@@ -1466,11 +1503,14 @@ function drawProducts(){
   const pages=Math.max(1,Math.ceil(list.length/PAGE_P));if(PL.page>=pages)PL.page=pages-1;
   const cur=list.slice(PL.page*PAGE_P,(PL.page+1)*PAGE_P);
   box.innerHTML='<div class="mute small" style="margin-bottom:6px">총 '+list.length.toLocaleString()+'개'+(pages>1?' · '+(PL.page+1)+'/'+pages+' 페이지':'')+'</div>'+
-  (list.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th><input type="checkbox" data-chg="pselall"></th><th>자체 상품코드</th><th>상품명</th><th>옵션</th><th class="num">매입가</th><th>매입처</th><th>관리</th></tr></thead><tbody>'+
-  cur.map(p=>{const s=M.sup.get(p.supplierId);return '<tr><td><input type="checkbox" data-chg="prow" data-id="'+p.id+'"'+(PL.sel.has(p.id)?' checked':'')+'></td><td class="nw">'+esc(p.code)+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.option)+'</td><td class="num">'+won(p.price)+'</td><td class="nw">'+esc(s?s.name:'')+'</td><td class="nw"><button class="btn sm" data-act="pEdit" data-id="'+p.id+'">수정</button> <button class="btn sm danger" data-act="pdelOne" data-id="'+p.id+'">삭제</button></td></tr>';}).join('')+'</tbody></table></div>':'<div class="card mute">조건에 맞는 상품이 없습니다.</div>')+
+  (list.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th><input type="checkbox" data-chg="pselall"></th><th>자체 상품코드</th><th>상품명</th><th>옵션</th><th class="num">매입가</th><th>매입처</th><th>상품등록일</th><th>상품수정일</th><th>관리</th></tr></thead><tbody>'+
+  cur.map(p=>{const s=M.sup.get(p.supplierId);return '<tr><td><input type="checkbox" data-chg="prow" data-id="'+p.id+'"'+(PL.sel.has(p.id)?' checked':'')+'></td><td class="nw">'+esc(p.code)+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.option)+'</td><td class="num">'+won(p.price)+'</td><td class="nw">'+esc(s?s.name:'')+'</td><td class="nw">'+esc(pDay(p.createdAt))+'</td><td class="nw">'+esc(pDay(p.updatedAt||p.createdAt))+'</td><td class="nw"><button class="btn sm" data-act="pEdit" data-id="'+p.id+'">수정</button> <button class="btn sm danger" data-act="pdelOne" data-id="'+p.id+'">삭제</button></td></tr>';}).join('')+'</tbody></table></div>':'<div class="card mute">조건에 맞는 상품이 없습니다.</div>')+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="ppage" data-d="-1"'+(PL.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="ppage" data-d="1"'+(PL.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
 I.pq=el=>{PL.q=el.value;PL.page=0;drawProducts();};
+C.pdt=el=>{PL.dtype=el.value;PL.page=0;drawProducts();};
+C.pdfilter=el=>{PL[el.dataset.k]=el.value;PL.page=0;drawProducts();};
+A.prange=el=>{const r=pRange(el.dataset.r);PL.from=r[0];PL.to=r[1];PL.page=0;const f=$('#pfrom'),t=$('#pto');if(f)f.value=r[0];if(t)t.value=r[1];drawProducts();};
 C.psup=el=>{PL.sup=el.value;PL.page=0;drawProducts();};
 A.ppage=el=>{PL.page+=+el.dataset.d;drawProducts();};
 C.prow=el=>{const id=+el.dataset.id;el.checked?PL.sel.add(id):PL.sel.delete(id);};
@@ -1497,7 +1537,7 @@ A.pSave=async()=>{
   if(sid!==p.supplierId&&S.products.some(x=>x.id!==p.id&&x.supplierId===sid&&norm(x.name)===norm(p.name)&&norm(x.option)===norm(p.option))){
     toast('선택한 매입처에 같은 상품명·옵션의 상품이 이미 있어 옮길 수 없습니다.','err',6000);return;
   }
-  const next={...p,supplierId:sid,price:raw===''?'':Number(raw)};
+  const next={...p,supplierId:sid,price:raw===''?'':Number(raw),updatedAt:new Date().toISOString()};
   try{await putOne('products',next);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
   Object.assign(p,next);rebuild();closeModal();PE=null;toast('수정했습니다.');drawProducts();
 };
@@ -1549,7 +1589,7 @@ function pgBulk(){
     '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+prod.length.toLocaleString()+'개 상품)</span></h3>'+previewTable([['name','상품명'],['option','옵션'],['price','매입가']],prod);
   }
   const sup=BK.supplierId?M.sup.get(+BK.supplierId):null;
-  return '<h1>매입 상품 등록</h1><p class="sub">매입처를 선택하고 파일을 올린 뒤 저장하면 상품이 등록됩니다. 상품코드는 저장할 때 자동으로 만들어집니다(8자리 숫자). 같은 상품명+옵션이 이미 있으면 코드는 그대로 두고 매입가만 갱신합니다.</p>'+
+  return '<h1>신규상품등록</h1><p class="sub">매입처를 선택하고 파일을 올린 뒤 저장하면 상품이 등록됩니다. 상품코드는 저장할 때 자동으로 만들어집니다(8자리 숫자). 같은 상품명+옵션이 이미 있으면 코드는 그대로 두고 매입가만 갱신합니다.</p>'+
   (BK.result?'<div class="good">저장 완료 — 신규 <b>'+BK.result.added.toLocaleString()+'</b>개, 갱신 <b>'+BK.result.updated.toLocaleString()+'</b>개 · <a href="#/products">매입 상품 조회</a></div>':'')+
   '<div class="card"><h3>① 매입처 선택</h3>'+(S.suppliers.length?'<select data-chg="bsup" style="min-width:240px"><option value="">매입처를 선택하세요</option>'+S.suppliers.map(s=>'<option value="'+s.id+'"'+(String(BK.supplierId)===String(s.id)?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select>':'<span class="err">먼저 <a href="#/suppliers/new">매입처 등록</a>에서 매입처를 등록하세요.</span>')+'</div>'+
   '<div class="card"><h3>② 상품 파일 업로드</h3>'+step2+'</div>'+
@@ -1577,7 +1617,7 @@ A.bulkSave=async()=>{
       const prev=exist.get(k)||seen.get(k);
       if(prev){
         prev.name=it.name;prev.option=it.option;if(it.price!=='')prev.price=it.price;
-        if(exist.get(k)){if(!prev.code)prev.code=genCode(used);updSet.add(prev);}
+        if(exist.get(k)){if(!prev.code)prev.code=genCode(used);prev.updatedAt=new Date().toISOString();updSet.add(prev);}
       }else{
         const p={supplierId:sid,code:genCode(used),name:it.name,option:it.option,price:it.price,createdAt:new Date().toISOString()};
         adds.push(p);seen.set(k,p);
@@ -1879,7 +1919,7 @@ function searchProducts(q,sup){
 }
 function matchResults(){
   const r=searchProducts(MT.q,MT.sup);
-  if(!S.products.length)return '<div class="card mute">등록된 상품이 없습니다. 먼저 <a href="#/products/bulk">매입 상품 등록</a>을 해주세요.</div>';
+  if(!S.products.length)return '<div class="card mute">등록된 상품이 없습니다. 먼저 <a href="#/products/bulk">신규상품등록</a>을 해주세요.</div>';
   if(!r.list.length)return '<div class="card mute">검색 결과가 없습니다. 검색어를 줄여서 다시 검색해 보세요.</div>';
   return (r.fuzzy?'<div class="notice small">검색어 전체와 일치하는 상품이 없어, 일부 단어가 일치하는 상품을 보여드립니다.</div>':'')+
   '<div class="mute small" style="margin-bottom:6px">'+r.total.toLocaleString()+'개 중 '+r.list.length+'개 표시</div><div class="tblwrap" style="max-height:340px"><table class="tbl"><thead><tr><th>매입처</th><th>상품코드</th><th>상품명</th><th>옵션</th><th class="num">매입가</th><th></th></tr></thead><tbody>'+
@@ -1991,7 +2031,7 @@ function pgCheck(){
   '<div class="card">'+
   '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option></select>'+
   '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="ckf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
-  '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="ckf" data-k="sup"><option value="">전체</option>'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+
+  '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="ckf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+
   '<div class="row" style="margin-bottom:10px">'+lb('수집일자')+'<input type="date" id="ckfrom" data-chg="ckf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ckto" data-chg="ckf" data-k="to" value="'+esc(d.to)+'">'+
   [['today','오늘'],['yesterday','어제'],['7','7일'],['30','30일'],['month','당월'],['prev','전월']].map(x=>'<button class="btn sm" '+sm+' data-act="ckrange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>'+
   '<div class="row">'+lb('검색')+'<select data-chg="ckf" data-k="field"><option value="orderNo"'+(d.field==='orderNo'?' selected':'')+'>주문번호</option><option value="orderer"'+(d.field==='orderer'?' selected':'')+'>주문자명</option><option value="receiver"'+(d.field==='receiver'?' selected':'')+'>수취인명</option></select>'+

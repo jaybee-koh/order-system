@@ -823,7 +823,7 @@ function openDB(){
 function run(stores,mode,fn){
   return new Promise((res,rej)=>{
     const t=db.transaction(stores,mode);let out;
-    t.oncomplete=()=>{res(out);if(mode==='readwrite')asMark();};
+    t.oncomplete=()=>res(out);
     t.onerror=()=>rej(t.error);
     t.onabort=()=>rej(t.error||new Error('저장 실패'));
     out=fn(t);
@@ -1287,163 +1287,6 @@ A.backup=async()=>{
   await setMeta('lastBackup',new Date().toISOString());
   toast('백업 파일을 저장했습니다.');route();
 };
-/* =====================================================================
-   폴더 자동 저장 (File System Access API · Chrome/Edge)
-   - 데이터가 바뀌면 1.5초 뒤 선택한 폴더에 자동 저장
-   - 최신본: 발주관리_자동저장.json / 하루 1개 보관본: 발주관리_일별_YYYYMMDD.json (최근 7개)
-===================================================================== */
-const AS_FILE='발주관리_자동저장.json';
-const AS={handle:null,ok:false,checked:false,paused:false,saving:false,again:false,timer:null,last:null,err:''};
-const asSupported=()=>typeof window.showDirectoryPicker==='function';
-function hdb(){return new Promise((res,rej)=>{const r=indexedDB.open('baljuFS_'+window.__USER,1);r.onupgradeneeded=()=>r.result.createObjectStore('h');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
-async function hget(){const d=await hdb();return new Promise((res,rej)=>{const q=d.transaction('h').objectStore('h').get('dir');q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error);});}
-async function hset(v){const d=await hdb();return new Promise((res,rej)=>{const t=d.transaction('h','readwrite');if(v)t.objectStore('h').put(v,'dir');else t.objectStore('h').delete('dir');t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
-async function asPerm(ask){
-  if(!AS.handle){AS.ok=false;return false;}
-  try{
-    const o={mode:'readwrite'};
-    let p=await AS.handle.queryPermission(o);
-    if(p!=='granted'&&ask)p=await AS.handle.requestPermission(o);
-    AS.ok=(p==='granted');
-  }catch(e){AS.ok=false;}
-  return AS.ok;
-}
-async function asWrite(name,text){
-  const fh=await AS.handle.getFileHandle(name,{create:true});
-  const w=await fh.createWritable();await w.write(text);await w.close();
-}
-async function asReadFile(){
-  try{const fh=await AS.handle.getFileHandle(AS_FILE);const f=await fh.getFile();const d=JSON.parse(await f.text());return d&&Array.isArray(d.suppliers)?d:null;}
-  catch(e){return null;}
-}
-const dumpDesc=d=>'매입처 '+(d.suppliers||[]).length+' · 상품 '+(d.products||[]).length+' · 주문 '+(d.orders||[]).length;
-async function asCheck(){
-  AS.checked=true;
-  const d=await asReadFile();
-  if(!d)return;
-  const fc=(d.suppliers||[]).length+(d.products||[]).length+(d.orders||[]).length;
-  const cc=S.suppliers.length+S.products.length+S.orders.length;
-  if(fc>cc){
-    const cur='매입처 '+S.suppliers.length+' · 상품 '+S.products.length+' · 주문 '+S.orders.length;
-    if(confirm('폴더의 자동저장 파일에 현재보다 많은 데이터가 있습니다.\n\n폴더 파일: '+dumpDesc(d)+'\n현재 데이터: '+cur+'\n\n[확인] 폴더 파일로 복원\n[취소] 폴더 파일을 건드리지 않고 자동 저장 일시중지')){
-      await applyDump(d);toast('폴더의 자동저장 데이터를 불러왔습니다.');
-    }else AS.paused=true;
-  }
-}
-async function asDaily(json){
-  const name='발주관리_일별_'+localDate().replace(/-/g,'')+'.json';
-  let exists=true;
-  try{await AS.handle.getFileHandle(name);}catch(e){exists=false;}
-  if(!exists)await asWrite(name,json);
-  const names=[];
-  for await(const en of AS.handle.values()){if(en.kind==='file'&&/^발주관리_일별_\d{8}\.json$/.test(en.name))names.push(en.name);}
-  names.sort().reverse();
-  for(const n of names.slice(7)){try{await AS.handle.removeEntry(n);}catch(e){}}
-}
-function asMark(){
-  if(!AS.handle)return;
-  clearTimeout(AS.timer);AS.timer=setTimeout(()=>asFlush(),1500);
-}
-async function asFlush(force){
-  clearTimeout(AS.timer);AS.timer=null;
-  if(!AS.handle)return;
-  if(AS.saving){AS.again=true;return;}
-  if(!AS.ok&&!(await asPerm(false))){asBar();asRefresh();return;}
-  AS.saving=true;
-  try{
-    if(!AS.checked)await asCheck();
-    if(AS.paused&&!force){AS.saving=false;asBar();asRefresh();return;}
-    const json=JSON.stringify(await buildDumpDB());
-    await asWrite(AS_FILE,json);
-    await asDaily(json);
-    AS.last=new Date();AS.err='';
-  }catch(e){
-    AS.err=e&&e.message?e.message:String(e);
-    if(e&&(e.name==='NotAllowedError'||e.name==='NotFoundError'||e.name==='SecurityError'))AS.ok=false;
-  }finally{AS.saving=false;}
-  asBar();asRefresh();
-  if(AS.again){AS.again=false;asMark();}
-}
-function asText(){
-  if(!AS.handle)return '설정 안 됨';
-  if(AS.err)return '저장 실패 — '+AS.err;
-  if(!AS.ok)return '연결 끊김 (다시 연결 필요)';
-  if(AS.paused)return '일시중지 (폴더 파일 보호 중)';
-  return '켜짐 · '+(AS.last?'마지막 저장 '+AS.last.toLocaleTimeString('ko-KR'):'변경 시 자동 저장');
-}
-function asRefresh(){const e=$('#asstat');if(e)e.textContent=asText();}
-function asBar(){
-  let el=$('#asbar');
-  let msg='',btns='';
-  if(AS.handle){
-    if(AS.paused){msg='⚠ 자동 저장이 일시중지되어 있습니다. 폴더에 더 많은 데이터가 있습니다.';btns='<button class="btn sm" data-act="asrestore">폴더 파일로 복원</button><button class="btn sm" data-act="asover">현재 데이터로 덮어쓰기</button>';}
-    else if(AS.err){msg='⚠ 자동 저장 실패: '+esc(AS.err);btns='<button class="btn sm" data-act="asfix">다시 연결</button><button class="btn sm" data-act="asconnect">폴더 다시 선택</button>';}
-    else if(!AS.ok){msg='⚠ 자동 저장 폴더 연결이 끊겼습니다. 브라우저를 다시 열면 한 번 확인이 필요합니다.';btns='<button class="btn sm pri" data-act="asfix">다시 연결</button>';}
-  }
-  if(!msg){if(el)el.remove();return;}
-  if(!el){el=document.createElement('div');el.id='asbar';el.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:60;background:var(--warn-soft);border:1px solid #fadfae;color:#8a5200;padding:10px 14px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.15);display:flex;gap:10px;align-items:center;font-size:13px;max-width:92vw';document.body.appendChild(el);}
-  el.innerHTML='<span>'+msg+'</span>'+btns;
-}
-A.asconnect=async()=>{
-  if(!asSupported()){toast('이 브라우저는 폴더 자동 저장을 지원하지 않습니다. Chrome 또는 Edge에서 열어주세요.','err',6000);return;}
-  let h;
-  try{h=await window.showDirectoryPicker({id:'baljuAuto',mode:'readwrite',startIn:'documents'});}
-  catch(e){if(e&&e.name!=='AbortError')toast('폴더를 선택하지 못했습니다: '+e.message,'err',6000);return;}
-  AS.handle=h;await hset(h);
-  AS.err='';AS.paused=false;AS.checked=false;
-  await asPerm(true);
-  if(!AS.ok){toast('폴더 쓰기 권한이 필요합니다.','err');asBar();route();return;}
-  await asFlush(true);
-  if(!AS.err&&!AS.paused)toast('자동 저장을 시작했습니다: '+h.name);
-  route();
-};
-A.asfix=async()=>{
-  const ok=await asPerm(true);
-  if(!ok){toast('폴더 쓰기 권한이 필요합니다.','err');asBar();return;}
-  AS.err='';AS.checked=false;
-  await asFlush(true);route();
-};
-A.asnow=async()=>{
-  if(!AS.handle)return;
-  if(!(await asPerm(true))){asBar();return;}
-  AS.err='';await asFlush(true);
-  if(!AS.err&&!AS.paused)toast('폴더에 저장했습니다.');
-  route();
-};
-A.asoff=async()=>{
-  if(!confirm('폴더 자동 저장을 끌까요?\n(폴더에 저장된 파일은 그대로 남습니다.)'))return;
-  AS.handle=null;AS.ok=false;AS.paused=false;AS.err='';AS.checked=false;clearTimeout(AS.timer);
-  await hset(null);asBar();route();
-};
-A.asover=async()=>{
-  if(!confirm('폴더의 자동저장 파일을 현재 데이터로 덮어씁니다. 계속할까요?'))return;
-  if(!(await asPerm(true))){asBar();return;}
-  AS.paused=false;AS.checked=true;AS.err='';
-  await asFlush(true);route();
-};
-A.asrestore=async()=>{
-  if(!AS.handle)return;
-  if(!(await asPerm(true))){asBar();return;}
-  const d=await asReadFile();
-  if(!d){toast('폴더에 자동저장 파일이 없습니다.','err');return;}
-  if(!confirm('현재 저장된 모든 데이터가 폴더 파일의 내용으로 교체됩니다.\n\n폴더 파일: '+dumpDesc(d)+'\n\n계속할까요?'))return;
-  AS.paused=false;AS.checked=true;
-  try{await applyDump(d);toast('폴더의 자동저장 데이터를 불러왔습니다.');}
-  catch(e){toast('불러오기 실패: '+e.message,'err',6000);}
-  asBar();route();
-};
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&AS.timer)asFlush();});
-function asCard(){
-  let h='<div class="card"><h3>자동 저장 (폴더)</h3>';
-  if(!asSupported()){
-    return h+'<p class="mute" style="margin:0">이 브라우저에서는 폴더 자동 저장을 쓸 수 없습니다. <b>Chrome 또는 Edge</b>에서 열어주세요. (아래 백업 파일 저장은 어느 브라우저에서나 됩니다.)</p></div>';
-  }
-  h+='<p class="mute" style="margin-top:0">데이터가 바뀔 때마다 선택한 폴더에 자동으로 저장합니다. 처음 한 번 <b>문서 &gt; 발주시스템</b> 폴더를 선택해 주세요. 폴더에는 <b>'+AS_FILE+'</b>(최신본)과 하루 1개씩 <b>발주관리_일별_날짜.json</b>(최근 7일)이 만들어집니다.</p>';
-  h+='<p style="margin:0 0 10px">상태: <b id="asstat">'+esc(asText())+'</b>'+(AS.handle?' · 폴더: <b>'+esc(AS.handle.name)+'</b>':'')+'</p><div class="row">';
-  if(!AS.handle)h+='<button class="btn pri" data-act="asconnect">폴더 선택</button>';
-  else h+='<button class="btn pri" data-act="asnow">지금 저장</button><button class="btn" data-act="asrestore">폴더에서 복원</button><button class="btn" data-act="asconnect">폴더 변경</button><button class="btn" data-act="asoff">자동 저장 끄기</button>';
-  return h+'</div></div>';
-}
 C.restore=async el=>{
   const f=el.files[0];el.value='';if(!f)return;
   try{
@@ -2626,7 +2469,7 @@ document.addEventListener('dblclick',e=>{
     if(oldPl.length){oldPl.forEach(x=>{x.pl=null;});await putMany('suppliers',oldPl);}
     if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
     if(!location.hash)location.hash='#/home';
-    route();asBar();
+    route();
   }catch(e){
     $('#view').innerHTML='<div class="card err"><b>데이터를 불러올 수 없습니다.</b><br>'+esc(e.message)+'<br>인터넷 연결을 확인하고 새로고침해 주세요. 시크릿 모드가 아닌 일반 창에서 열어야 합니다.</div>';
   }

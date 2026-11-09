@@ -1116,7 +1116,7 @@ const NAV=[
   {parent:'상품관리'},
   {h:'/products/bulk',t:'신규상품등록',sub:1},{h:'/products',t:'매입 상품 조회',sub:1},
   {parent:'주문관리'},
-  {h:'/orders/collect',t:'주문 수집',sub:1},{h:'/orders/confirm',t:'주문 확정 관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1}
+  {h:'/orders/collect',t:'주문 수집',sub:1},{h:'/orders/confirm',t:'주문 확정 관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1}
 ];
 const IC=(p)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 const ICONS={
@@ -1146,6 +1146,7 @@ function route(){
   $('#view').innerHTML=fn();
   if(ROUTES[cur]===pgConfirm)drawConfirmTable();
   if(ROUTES[cur]===pgCheck)drawCheckTable();
+  if(ROUTES[cur]===pgTrack)drawTrackTable();
 }
 window.addEventListener('hashchange',()=>{CF.keep.clear();if(location.hash==='#/suppliers/new'){if(SF.edit)SF.edit=false;else SF=blankSF();}route();window.scrollTo(0,0);});
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&A[el.dataset.act]){A[el.dataset.act](el,e);}});
@@ -1480,7 +1481,8 @@ function pRange(k){
     case 'week':{const dow=(t.getDay()+6)%7;return [localDate(new Date(y,m,day-dow)),localDate(new Date(y,m,day-dow+6))];}
     case 'month':return [localDate(new Date(y,m,1)),localDate(new Date(y,m+1,0))];
     case 'prev':return [localDate(new Date(y,m-1,1)),localDate(new Date(y,m,0))];
-    case '3':case '6':case '12':return [localDate(back(+k)),localDate(t)];
+    case '7d':return [localDate(new Date(y,m,day-6)),localDate(t)];
+    case '1':case '3':case '6':case '12':return [localDate(back(+k)),localDate(t)];
   }
   return ['',''];
 }
@@ -1997,8 +1999,8 @@ A.unmatch=async el=>{
 };
 
 /* ===== 매입처별 발주 엑셀 다운로드 ===== */
-const DEFAULT_TPL={headers:['주문자','수취인','연락처1','연락처2','우편번호','주소','기타','수량','배송메모','운송장번호','주문번호','거래선','상품명','옵션명','매입처'],
-  mapping:['orderer','receiver','tel1','tel2','zip','addr','','qty','memo','','orderNo','mall','itemName','itemOption','supplier'].map(src=>({src,text:''}))};
+const DEFAULT_TPL={headers:['주문자','수취인','연락처1','연락처2','우편번호','주소','기타','수량','배송메모','운송장번호','자체주문번호','거래선','상품명','옵션명','매입처'],
+  mapping:['orderer','receiver','tel1','tel2','zip','addr','','qty','memo','','ownNo','mall','itemName','itemOption','supplier'].map(src=>({src,text:''}))};
 function cellVal(o,p,s,seq,m){
   const num=v=>{if(v===''||v==null)return '';const n=Number(v);return isFinite(n)?n:String(v);};
   switch(m.src){
@@ -2023,6 +2025,11 @@ function stTag(o){const s=ordStatus(o);return '<span class="tag'+(s==='confirmed
 function setOrdStatus(o,st,now){
   o.confirmed=st!=='new';o.confirmedAt=st==='new'?null:(o.confirmedAt||now);
   o.shipped=st==='shipped';o.shippedAt=st==='shipped'?now:null;
+}
+/* 주문확인 상태인 주문에 운송장이 있으면 자동으로 출고완료로 넘깁니다. (옮겼으면 true) */
+function autoShip(o,now){
+  if(o.confirmed&&!o.shipped&&o.trackingNo){setOrdStatus(o,'shipped',now);return true;}
+  return false;
 }
 const CK={init:false,d:{},a:{},page:0,sel:new Set()};
 function ckRange(k){
@@ -2094,7 +2101,7 @@ function drawCheckTable(){
     '<button class="btn danger" data-act="ckdel">선택 삭제</button><button class="btn ok" data-act="ckdl">선택 다운로드(엑셀)</button><button class="btn ok" data-act="ckdlall">전체 다운로드(엑셀)</button><button class="btn pri" data-act="ckstatus">주문상태변경</button></div>';
   if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 매핑 주문이 없습니다. 수집일자·주문상태를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
   box.innerHTML=bar+
-  fitTable('check',[{t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>'},{t:'주문상태'},{t:'수집일'},{t:'쇼핑몰'},{t:'주문번호 <span style="color:#1c7ed6">자체주문번호</span>'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메모'},{t:'상품명'},{t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>'},{t:'수량',c:'num'},{t:'거래선'}],
+  fitTable('check',[{t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>'},{t:'주문상태'},{t:'수집일'},{t:'쇼핑몰'},{t:'주문번호 <span style="color:#1c7ed6">자체주문번호</span>'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메모'},{t:'상품명'},{t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>'},{t:'수량',c:'num'},{t:'거래선'},{t:'택배사 / 운송장번호'}],
   cur.map(o=>{
     const {p,s}=orderInfo(o);
     return '<tr class="m"><td><input type="checkbox" data-chg="ckrow" data-id="'+o.id+'"'+(CK.sel.has(o.id)?' checked':'')+'></td>'+
@@ -2103,7 +2110,7 @@ function drawCheckTable(){
       '<td><b>'+esc(o.receiver)+'</b><div class="sm2">'+esc(o.orderer)+'</div></td>'+
       '<td>'+esc(o.tel1)+(o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'+
       '<td>'+(o.zip?'<span class="mute small">['+esc(o.zip)+']</span> ':'')+esc(o.addr)+'</td>'+
-      '<td>'+esc(o.memo)+'</td><td>'+esc(o.itemName||p.name)+'</td><td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+esc(o.itemOption||'')+'</div><div style="color:#1c7ed6;font-weight:600;min-height:1.3em">'+esc(p.option||'')+'</div></td><td class="num">'+o.qty+'</td><td><b>'+esc(s.name)+'</b></td></tr>';
+      '<td>'+esc(o.memo)+'</td><td>'+esc(o.itemName||p.name)+'</td><td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+esc(o.itemOption||'')+'</div><div style="color:#1c7ed6;font-weight:600;min-height:1.3em">'+esc(p.option||'')+'</div></td><td class="num">'+o.qty+'</td><td><b>'+esc(s.name)+'</b></td><td>'+(o.trackingNo?'<b>'+esc(o.carrier||'')+'</b><div class="sm2 brk">'+esc(o.trackingNo)+'</div>':'')+'</td></tr>';
   }).join(''))+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="ckpage" data-d="-1"'+(CK.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="ckpage" data-d="1"'+(CK.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
@@ -2165,27 +2172,31 @@ A.ckdel=async()=>{
   rebuild();toast(ids.length+'건을 삭제했습니다.');drawCheckTable();
 };
 A.ckstatus=()=>{
+  if(CK.a.status==='shipped'){toast('출고완료 주문은 주문상태를 변경할 수 없습니다. (주문확인 주문에 운송장이 입력되면 자동으로 출고완료가 됩니다)','err',6000);return;}
   const all=ckList().length,sel=ckPicked().length;
-  const defTo=CK.a.status==='new'?'confirmed':CK.a.status==='confirmed'?'shipped':'confirmed';
+  const defTo=CK.a.status==='confirmed'?'new':'confirmed';
   openModal('<h2>주문상태변경</h2>'+
     '<label class="f" style="margin-top:0">변경할 주문서</label>'+
     '<div class="radios"><label class="rad"><input type="radio" name="ckscope" value="all"'+(sel?'':' checked')+'><span>전체주문 <span class="mute small">(현재 조회된 '+all.toLocaleString()+'건)</span></span></label>'+
     '<label class="rad"><input type="radio" name="ckscope" value="sel"'+(sel?' checked':'')+'><span>선택주문 <span class="mute small">(체크한 '+sel.toLocaleString()+'건)</span></span></label></div>'+
-    '<label class="f">변경할 주문상태</label><select id="ckNewStatus" style="width:100%">'+['new','confirmed','shipped'].map(k=>'<option value="'+k+'"'+(k===defTo?' selected':'')+'>'+ST_NAME[k]+'</option>').join('')+'</select>'+
+    '<label class="f">변경할 주문상태</label><select id="ckNewStatus" style="width:100%">'+['new','confirmed'].map(k=>'<option value="'+k+'"'+(k===defTo?' selected':'')+'>'+ST_NAME[k]+'</option>').join('')+'</select>'+
+    '<div class="mute small" style="margin-top:6px">신규주문 → 주문확인, 주문확인 → 신규주문으로만 바꿀 수 있습니다. 주문확인 상태에서 운송장이 입력된 주문은 자동으로 출고완료가 됩니다.</div>'+
     '<div class="foot"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="ckstatusSave">저장</button></div>');
 };
 A.ckstatusSave=async()=>{
   const chk=document.querySelector('input[name="ckscope"]:checked'),scope=chk?chk.value:'all',to=$('#ckNewStatus').value;
-  if(!ST_NAME[to])return;
+  if(to!=='new'&&to!=='confirmed')return;
   const list=scope==='sel'?ckPicked():ckList();
   if(!list.length){toast(scope==='sel'?'체크한 주문이 없습니다. 목록에서 주문을 체크하거나 전체주문을 선택하세요.':'변경할 주문이 없습니다.','err',5000);return;}
-  const todo=list.filter(o=>ordStatus(o)!==to);
-  if(!todo.length){toast('선택한 주문이 이미 '+ST_NAME[to]+' 상태입니다.','err');return;}
+  const from=to==='confirmed'?'new':'confirmed';
+  const todo=list.filter(o=>ordStatus(o)===from);
+  if(!todo.length){toast('선택한 주문 중 '+ST_NAME[from]+' 상태인 주문이 없어 '+ST_NAME[to]+'(으)로 바꿀 수 없습니다.','err',5000);return;}
   const now=new Date().toISOString();
-  todo.forEach(o=>setOrdStatus(o,to,now));
+  let auto=0;
+  todo.forEach(o=>{setOrdStatus(o,to,now);if(to==='confirmed'&&autoShip(o,now))auto++;});
   try{await putMany('orders',todo);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
   closeModal();CK.sel.clear();
-  toast(todo.length+'건을 '+ST_NAME[to]+'(으)로 변경했습니다.'+(list.length>todo.length?' (이미 같은 상태인 '+(list.length-todo.length)+'건 제외)':''));
+  toast(todo.length+'건을 '+ST_NAME[to]+'(으)로 변경했습니다.'+(auto?' (운송장이 있는 '+auto+'건은 출고완료로 자동 이동)':'')+(list.length>todo.length?' ('+ST_NAME[from]+' 상태가 아닌 '+(list.length-todo.length)+'건 제외)':''));
   route();
 };
 A.ckdl=()=>ckDownload(ckPicked(),'다운로드할 주문을 체크하세요.');
@@ -2202,8 +2213,234 @@ async function ckDownload(list,emptyMsg){
   toast(list.length+'건을 다운로드했습니다.');
 }
 
+
+/* =====================================================================
+   운송장입력(건별) — 주문별로 택배사 선택 + 운송장번호 입력 후 [선택저장]
+===================================================================== */
+const DEFAULT_CARRIERS=['CJ대한통운','롯데택배','한진택배','우체국택배','로젠택배'];
+const carrierList=()=>{const a=Array.isArray(S.meta.carriers)?S.meta.carriers:[];return [...DEFAULT_CARRIERS,...a.filter(x=>!DEFAULT_CARRIERS.includes(x))];};
+const TK={init:false,d:{},a:{},page:0,sel:new Set(),edit:{}};
+const TK_FIELDS=[['orderer','주문자명'],['receiver','수취인명'],['ownNo','자체주문번호'],['orderNo','쇼핑몰주문번호'],['itemName','수집상품명'],['pName','확정상품명']];
+function tkInit(){
+  if(TK.init)return;
+  const r=pRange('7d');
+  TK.d={from:r[0],to:r[1],mall:'',sup:'',field:'receiver',q:''};
+  TK.a=Object.assign({},TK.d);TK.init=true;
+}
+function tkList(){
+  const a=TK.a,q=norm(a.q);
+  return S.orders.filter(o=>{
+    const {p,s}=orderInfo(o);
+    if(!p)return false;
+    if(a.mall==='__none'){if(o.mall)return false;}else if(a.mall&&o.mall!==a.mall)return false;
+    if(a.sup&&s.id!==+a.sup)return false;
+    const cd=o.collectedDate||'';
+    if(a.from&&cd<a.from)return false;
+    if(a.to&&cd>a.to)return false;
+    if(q){const v=a.field==='pName'?p.name:o[a.field];if(!norm(v).includes(q))return false;}
+    return true;
+  });
+}
+function pgTrack(){
+  tkInit();
+  const d=TK.d;
+  const malls=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];
+  const sm='style="padding:2px 8px;font-size:12px"';
+  const lb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
+  return '<h1>운송장입력(건별)</h1><p class="sub">조회된 주문마다 택배사를 고르고 운송장번호를 입력한 뒤, 주문을 체크하고 [선택저장]을 누르세요. 입력한 택배사·운송장번호는 [주문확인처리]의 거래선 옆에 표시됩니다. 조회 기준 일자는 주문 수집일입니다.</p>'+
+  '<div class="card">'+
+  '<div class="row" style="margin-bottom:10px">'+lb('수집일자')+'<input type="date" id="tkfrom" data-chg="tkf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="tkto" data-chg="tkf" data-k="to" value="'+esc(d.to)+'">'+
+  [['today','오늘'],['7d','1주일'],['month','당월'],['1','1개월'],['3','3개월']].map(x=>'<button class="btn sm" '+sm+' data-act="tkrange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+
+  '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="tkf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
+  '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="tkf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+
+  '<div class="row">'+lb('검색')+'<select data-chg="tkf" data-k="field">'+TK_FIELDS.map(f=>'<option value="'+f[0]+'"'+(d.field===f[0]?' selected':'')+'>'+f[1]+'</option>').join('')+'</select>'+
+  '<input type="text" placeholder="검색어 입력" style="width:240px" data-inp="tkq" value="'+esc(d.q)+'"><button class="btn pri" data-act="tksearch">검색</button></div>'+
+  '</div><div id="ttbl"></div>';
+}
+ROUTES['/orders/tracking']=pgTrack;
+const tkVal=o=>{const e=TK.edit[o.id]||{};return {carrier:e.carrier!==undefined?e.carrier:(o.carrier||''),no:e.no!==undefined?e.no:(o.trackingNo||'')};};
+function drawTrackTable(){
+  const box=$('#ttbl');if(!box)return;
+  const list=tkList();
+  const pages=Math.max(1,Math.ceil(list.length/PAGE_O));if(TK.page>=pages)TK.page=pages-1;
+  const cur=list.slice(TK.page*PAGE_O,(TK.page+1)*PAGE_O);
+  const allSel=cur.length&&cur.every(o=>TK.sel.has(o.id));
+  const bar='<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(TK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="tksel">'+TK.sel.size+'</b>건</span><span class="grow"></span><button class="btn pri" data-act="tksave">선택저장</button></div>';
+  if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 주문이 없습니다. 수집일자를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
+  const cars=carrierList();
+  box.innerHTML=bar+
+  fitTable('track',[{t:'<input type="checkbox" data-chg="tkall"'+(allSel?' checked':'')+'>'},{t:'주문상태'},{t:'수집일'},{t:'쇼핑몰'},{t:'주문번호 <span style="color:#1c7ed6">자체주문번호</span>'},{t:'수취인 / 주문자'},{t:'수집상품명 / 옵션'},{t:'확정상품명 / 옵션'},{t:'수량',c:'num'},{t:'거래선'},{t:'택배사'},{t:'운송장번호'}],
+  cur.map(o=>{
+    const {p,s}=orderInfo(o),v=tkVal(o);
+    const opts=(v.carrier&&!cars.includes(v.carrier)?[...cars,v.carrier]:cars);
+    const saved=o.trackingNo&&!TK.edit[o.id];
+    return '<tr class="m" data-tkrow="'+o.id+'"><td><input type="checkbox" data-chg="tkrow" data-id="'+o.id+'"'+(TK.sel.has(o.id)?' checked':'')+'></td>'+
+      '<td>'+stTag(o)+'</td><td>'+esc(o.collectedDate)+'</td><td>'+esc(o.mall)+'</td>'+
+      '<td class="brk">'+esc(o.orderNo)+(o.ownNo?'<div class="sm2" style="color:#1c7ed6">'+esc(o.ownNo)+'</div>':'')+'</td>'+
+      '<td><b>'+esc(o.receiver)+'</b><div class="sm2">'+esc(o.orderer)+'</div></td>'+
+      '<td>'+esc(o.itemName)+(o.itemOption?'<div class="sm2" style="color:#f76707;font-weight:600">'+esc(o.itemOption)+'</div>':'')+'</td>'+
+      '<td>'+esc(p.name)+(p.option?'<div class="sm2" style="color:#1c7ed6;font-weight:600">'+esc(p.option)+'</div>':'')+'</td>'+
+      '<td class="num">'+o.qty+'</td><td><b>'+esc(s.name)+'</b></td>'+
+      '<td><select style="width:100%" data-chg="tkcar" data-id="'+o.id+'"><option value="">택배사 선택</option>'+opts.map(c=>'<option value="'+esc(c)+'"'+(v.carrier===c?' selected':'')+'>'+esc(c)+'</option>').join('')+'<option value="__add">＋ 택배사 추가…</option></select></td>'+
+      '<td><input type="text" style="width:100%" data-inp="tkno" data-id="'+o.id+'" value="'+esc(v.no)+'" placeholder="운송장번호" inputmode="numeric">'+(saved?'<span class="tag ok tkok">저장됨</span>':'')+'</td></tr>';
+  }).join(''))+
+  (pages>1?'<div class="pager"><button class="btn sm" data-act="tkpage" data-d="-1"'+(TK.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="tkpage" data-d="1"'+(TK.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
+}
+C.tkf=el=>{TK.d[el.dataset.k]=el.value;};
+I.tkq=el=>{TK.d.q=el.value;};
+document.addEventListener('keydown',e=>{
+  const t=e.target;if(e.key!=='Enter'||!t||!t.matches)return;
+  if(t.matches('[data-inp="tkq"]'))A.tksearch();
+  else if(t.matches('[data-inp="tkno"]')){const all=[...document.querySelectorAll('[data-inp="tkno"]')],i=all.indexOf(t);if(all[i+1]){all[i+1].focus();all[i+1].select();}}
+});
+A.tkrange=el=>{const r=pRange(el.dataset.r);TK.d.from=r[0];TK.d.to=r[1];const f=$('#tkfrom'),t=$('#tkto');if(f)f.value=r[0];if(t)t.value=r[1];};
+A.tksearch=()=>{
+  if(TK.d.from&&TK.d.to&&TK.d.from>TK.d.to){toast('시작일이 종료일보다 늦습니다.','err');return;}
+  TK.a=Object.assign({},TK.d);TK.page=0;TK.sel.clear();TK.edit={};drawTrackTable();
+};
+A.tkpage=el=>{TK.page+=+el.dataset.d;drawTrackTable();$('#ttbl').scrollIntoView({block:'start'});};
+const tkCount=()=>{const n=$('#tksel');if(n)n.textContent=TK.sel.size;};
+function tkMark(id){
+  TK.sel.add(id);
+  const cb=document.querySelector('[data-chg="tkrow"][data-id="'+id+'"]');if(cb)cb.checked=true;
+  const tr=document.querySelector('[data-tkrow="'+id+'"]');if(tr)tr.querySelectorAll('.tkok').forEach(x=>x.remove());
+  tkCount();
+}
+C.tkrow=el=>{const id=+el.dataset.id;el.checked?TK.sel.add(id):TK.sel.delete(id);tkCount();};
+C.tkall=el=>{tkList().slice(TK.page*PAGE_O,(TK.page+1)*PAGE_O).forEach(o=>el.checked?TK.sel.add(o.id):TK.sel.delete(o.id));drawTrackTable();};
+C.tkcar=el=>{
+  const id=+el.dataset.id,o=M.ord.get(id);if(!o)return;
+  if(el.value==='__add'){
+    const n=(prompt('추가할 택배사 이름을 입력하세요.')||'').trim();
+    if(n){
+      const cur=Array.isArray(S.meta.carriers)?S.meta.carriers.slice():[];
+      if(!DEFAULT_CARRIERS.includes(n)&&!cur.includes(n)){cur.push(n);setMeta('carriers',cur);}
+      TK.edit[id]=Object.assign({},TK.edit[id],{carrier:n});TK.sel.add(id);
+    }
+    drawTrackTable();return;
+  }
+  TK.edit[id]=Object.assign({},TK.edit[id],{carrier:el.value});tkMark(id);
+};
+I.tkno=el=>{const id=+el.dataset.id;TK.edit[id]=Object.assign({},TK.edit[id],{no:el.value});tkMark(id);};
+A.tksave=async()=>{
+  const ids=[...TK.sel].filter(id=>M.ord.has(id));
+  if(!ids.length){toast('저장할 주문을 체크하세요.','err');return;}
+  const now=new Date().toISOString(),list=[];let bad=0;
+  for(const id of ids){
+    const o=M.ord.get(id),v=tkVal(o),no=String(v.no||'').replace(/[\s-]/g,'');
+    if(!v.carrier||!no){bad++;continue;}
+    list.push({o,carrier:v.carrier,no});
+  }
+  if(bad){toast('택배사와 운송장번호를 모두 입력해야 저장할 수 있습니다. (미입력 '+bad+'건 — 아무것도 저장되지 않았습니다)','err',6000);return;}
+  const prev=list.map(x=>[x.o.carrier,x.o.trackingNo,x.o.trackedAt,x.o.shipped,x.o.shippedAt]);
+  let shipped=0;
+  list.forEach(x=>{x.o.carrier=x.carrier;x.o.trackingNo=x.no;x.o.trackedAt=now;if(autoShip(x.o,now))shipped++;});
+  try{await putMany('orders',list.map(x=>x.o));}
+  catch(e){list.forEach((x,i)=>{[x.o.carrier,x.o.trackingNo,x.o.trackedAt,x.o.shipped,x.o.shippedAt]=prev[i];});toast('저장 실패: '+e.message,'err',6000);return;}
+  list.forEach(x=>{delete TK.edit[x.o.id];});TK.sel.clear();
+  toast(list.length+'건의 운송장을 저장했습니다.'+(shipped?' (주문확인 '+shipped+'건은 출고완료로 자동 이동)':''));drawTrackTable();
+};
+
+
+/* =====================================================================
+   운송장입력(대량) — 엑셀(자체주문번호 · 운송장번호 · 택배사)로 한 번에 저장
+===================================================================== */
+const BT={carrier:'',fileName:'',items:null,err:''};
+function pgTrackBulk(){
+  const cars=carrierList();
+  const info=BT.err?'<div class="err" style="margin-top:10px">'+esc(BT.err)+'</div>':
+    BT.items?'<div class="row" style="margin-top:12px"><span class="tag ok">불러옴</span><b>'+esc(BT.fileName)+'</b><span class="mute small">'+BT.items.length.toLocaleString()+'건의 운송장 데이터를 읽었습니다.</span></div>':'';
+  return '<h1>운송장입력(대량)</h1><p class="sub">송장업로드양식(엑셀)에 자체주문번호, 운송장번호, 택배사를 입력해 올리면 한 번에 저장됩니다. 저장한 택배사·운송장번호는 [주문확인처리]의 거래선 옆에 표시됩니다.</p>'+
+  '<div class="card">'+
+  '<div class="row"><span class="mute small" style="min-width:56px;display:inline-block">택배사</span><select data-chg="btcar" style="min-width:160px"><option value="">택배사 선택</option>'+cars.map(c=>'<option value="'+esc(c)+'"'+(BT.carrier===c?' selected':'')+'>'+esc(c)+'</option>').join('')+'<option value="__add">＋ 택배사 추가…</option></select>'+
+  '<span class="mute small">엑셀의 택배사 칸이 비어 있는 행에 적용됩니다. (칸에 적혀 있으면 그 택배사가 우선)</span></div>'+
+  '<div class="filebox" style="margin-top:12px"><input type="file" accept=".xlsx,.csv,.xls,.txt" data-chg="btfile"> <a href="#" data-act="btsample">송장업로드양식 다운로드(엑셀)</a></div>'+info+
+  '<div class="row" style="margin-top:16px"><button class="btn pri" data-act="btsave"'+(BT.items&&BT.items.length?'':' disabled')+'>저장</button></div></div>';
+}
+ROUTES['/orders/tracking/bulk']=pgTrackBulk;
+A.btsample=(el,e)=>{e.preventDefault();download(buildXlsx([['자체주문번호','운송장번호','택배사'],['1234567890','123456789012','CJ대한통운']],'송장업로드'),'송장업로드양식.xlsx');};
+C.btcar=el=>{
+  if(el.value==='__add'){
+    const n=(prompt('추가할 택배사 이름을 입력하세요.')||'').trim();
+    if(n){
+      const cur=Array.isArray(S.meta.carriers)?S.meta.carriers.slice():[];
+      if(!DEFAULT_CARRIERS.includes(n)&&!cur.includes(n)){cur.push(n);setMeta('carriers',cur);}
+      BT.carrier=n;
+    }
+  }else BT.carrier=el.value;
+  route();
+};
+const btCell=v=>{
+  if(v==null)return '';
+  if(typeof v==='number')return isFinite(v)?String(Math.round(v)===v?v.toFixed(0):v):'';
+  return String(v).trim();
+};
+C.btfile=async el=>{
+  const f=el.files[0];if(!f)return;
+  BT.items=null;BT.err='';BT.fileName=f.name;
+  try{
+    const sheets=await parseAny(await readFileBuf(f));
+    const rows=sheets[firstNonEmptySheet(sheets)].rows;
+    let h=-1,cOwn=-1,cNo=-1,cCar=-1;
+    for(let i=0;i<Math.min(rows.length,10)&&h<0;i++){
+      const hd=(rows[i]||[]).map(x=>norm(x));
+      const a=hd.findIndex(x=>x.includes('자체주문번호'));
+      if(a>=0){h=i;cOwn=a;cNo=hd.findIndex(x=>x.includes('운송장'));cCar=hd.findIndex(x=>x.includes('택배사'));}
+    }
+    if(h<0)throw new Error('\"자체주문번호\" 열을 찾지 못했습니다. [송장업로드양식 다운로드]로 받은 양식을 사용해 주세요.');
+    if(cNo<0)throw new Error('\"운송장번호\" 열을 찾지 못했습니다. [송장업로드양식 다운로드]로 받은 양식을 사용해 주세요.');
+    const items=[];
+    for(let i=h+1;i<rows.length;i++){
+      const r=rows[i]||[];
+      const own=btCell(r[cOwn]),no=btCell(r[cNo]),car=cCar>=0?btCell(r[cCar]):'';
+      if(!own&&!no&&!car)continue;
+      items.push({row:i+1,own,no,car});
+    }
+    if(!items.length)throw new Error('저장할 데이터가 없습니다. 양식의 2번째 줄부터 입력해 주세요.');
+    BT.items=items;
+  }catch(e){BT.err=e.message;BT.items=null;}
+  route();
+};
+function btCarrier(text){
+  const cars=carrierList(),t=norm(text);
+  const ex=cars.find(c=>norm(c)===t);if(ex)return ex;
+  if(t.length>=2){const part=cars.filter(c=>norm(c).includes(t)||t.includes(norm(c)));if(part.length===1)return part[0];}
+  return '';
+}
+A.btsave=async()=>{
+  if(!BT.items||!BT.items.length){toast('운송장 파일을 먼저 선택하세요.','err');return;}
+  const byOwn=new Map();
+  S.orders.forEach(o=>{if(o.ownNo){if(!byOwn.has(o.ownNo))byOwn.set(o.ownNo,[]);byOwn.get(o.ownNo).push(o);}});
+  const now=new Date().toISOString(),fails=[],last=new Map();
+  for(const it of BT.items){
+    const own=it.own.replace(/\D/g,'');
+    const no=it.no.replace(/[\s-]/g,'');
+    const car=it.car?btCarrier(it.car):BT.carrier;
+    let why='';
+    if(!own)why='자체주문번호가 비어 있습니다.';
+    else if(!byOwn.has(own))why='해당 자체주문번호의 주문이 없습니다.';
+    else if(!no)why='운송장번호가 비어 있습니다.';
+    else if(it.car&&!car)why='등록되지 않은 택배사입니다. ('+it.car+')';
+    else if(!car)why='택배사가 없습니다. 택배사를 선택하거나 파일에 입력하세요.';
+    if(why){fails.push({row:it.row,own:it.own,why});continue;}
+    last.set(own,{carrier:car,no});
+  }
+  const list=[];let shipped=0;
+  last.forEach((v,own)=>{byOwn.get(own).forEach(o=>{o.carrier=v.carrier;o.trackingNo=v.no;o.trackedAt=now;if(autoShip(o,now))shipped++;list.push(o);});});
+  try{if(list.length)await putMany('orders',list);}
+  catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
+  const ok=last.size;
+  const failHtml=fails.length?'<h3 style="margin:14px 0 6px">입력되지 않은 건 ('+fails.length.toLocaleString()+'건)</h3><div class="tblwrap" style="max-height:240px"><table class="tbl"><thead><tr><th>엑셀 행</th><th>자체주문번호</th><th>사유</th></tr></thead><tbody>'+
+    fails.slice(0,100).map(f=>'<tr><td class="nw">'+f.row+'</td><td class="nw">'+esc(f.own)+'</td><td>'+esc(f.why)+'</td></tr>').join('')+'</tbody></table></div>'+(fails.length>100?'<div class="mute small">처음 100건만 표시했습니다.</div>':''):'';
+  openModal('<h2>'+(ok?'운송장입력 완료':'운송장입력 실패')+'</h2>'+
+    '<div class="card" style="background:#f7f8fb;box-shadow:none;margin-bottom:0">'+(ok?'<div><b style="font-size:18px">'+ok.toLocaleString()+'건</b>의 운송장을 입력했습니다. <span class="mute small">(주문 '+list.length.toLocaleString()+'줄에 반영)</span></div>'+(shipped?'<div style="margin-top:6px">주문확인 상태였던 <b>'+shipped.toLocaleString()+'줄</b>은 <b>출고완료</b>로 자동 이동했습니다.</div>':''):'<div>저장된 운송장이 없습니다. 아래 사유를 확인해 주세요.</div>')+'</div>'+failHtml+
+    '<div class="foot"><button class="btn pri" data-act="close">확인</button></div>','wide');
+  BT.items=null;BT.fileName='';BT.err='';
+  route();
+};
+
 /* ===== 한 화면 표 + 엑셀처럼 열 너비 조절 (헤더 경계선을 끌면 옆 열과 너비를 주고받음) ===== */
-const COLW_DEF={confirm:[3,11,8,9,21,9,15,4,12,8],check:[3,8,7,6,9,7,8,13,6,13,10,3,7]};
+const COLW_DEF={confirm:[3,11,8,9,21,9,15,4,12,8],check:[3,7,6,5,9,7,8,11,5,11,10,3,6,9],track:[3,7,7,6,10,8,15,15,3,8,9,9]};
 function colW(key){const s=S.meta['colw_'+key];return Array.isArray(s)&&s.length===COLW_DEF[key].length?s:COLW_DEF[key];}
 function fitTable(key,heads,body){
   const w=colW(key),n=heads.length;
@@ -2237,7 +2474,7 @@ document.addEventListener('dblclick',e=>{
   const h=e.target.closest&&e.target.closest('.rz');if(!h)return;
   const key=h.closest('table').dataset.colkey;
   setMeta('colw_'+key,COLW_DEF[key].slice());
-  if(key==='confirm')drawConfirmTable();else drawCheckTable();
+  if(key==='confirm')drawConfirmTable();else if(key==='track')drawTrackTable();else drawCheckTable();
 });
 
 /* =====================================================================
@@ -2247,6 +2484,7 @@ document.addEventListener('dblclick',e=>{
   try{
     db=await openDB();await pullFromServer();await loadAll();
     try{await ownNoBackfill();}catch(e){console.warn('자체주문번호 생성 실패',e);}
+    try{const nowIso=new Date().toISOString();const mv=S.orders.filter(o=>autoShip(o,nowIso));if(mv.length)await putMany('orders',mv);}catch(e){console.warn('출고완료 자동 이동 실패',e);}
     const oc=S.meta.orderFields;
     if(oc&&Array.isArray(oc.order)&&!oc.v2){
       if(!oc.order.includes('payAmount')){const i=oc.order.indexOf('itemOption');oc.order.splice(i>=0?i+1:oc.order.length,0,'payAmount');}

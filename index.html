@@ -306,6 +306,8 @@ table.tbl.fit th,table.tbl.fit td{padding:10px 10px;white-space:normal;word-brea
 table.tbl.fit th{white-space:nowrap}
 table.tbl.fit td .sm2{font-size:11.5px;color:var(--mute);margin-top:3px;line-height:1.4}
 table.tbl.fit td .brk{word-break:break-all}
+table.tbl.fit td a.trk{color:#1c7ed6;text-decoration:underline;cursor:pointer;font-weight:600}
+table.tbl.fit td a.trk:hover{color:#1864ab}
 table.tbl.fit td .mini{flex-wrap:wrap}
 #view{max-width:1680px}
 #nav .nparent{margin-top:14px}
@@ -2162,7 +2164,7 @@ function drawCheckTable(){
       '<td><b>'+esc(o.receiver)+'</b><div class="sm2">'+esc(o.orderer)+'</div></td>'+
       '<td>'+esc(o.tel1)+(o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'+
       '<td>'+(o.zip?'<span class="mute small">['+esc(o.zip)+']</span> ':'')+esc(o.addr)+'</td>'+
-      '<td>'+esc(o.memo)+'</td><td>'+esc(o.itemName||p.name)+'</td><td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+esc(o.itemOption||'')+'</div><div style="color:#1c7ed6;font-weight:600;min-height:1.3em">'+esc(p.option||'')+'</div></td><td class="num">'+o.qty+'</td><td><b>'+esc(s.name)+'</b></td><td>'+(o.trackingNo?'<b>'+esc(o.carrier||'')+'</b><div class="sm2 brk">'+esc(o.trackingNo)+'</div>':'')+'</td></tr>';
+      '<td>'+esc(o.memo)+'</td><td>'+esc(o.itemName||p.name)+'</td><td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+esc(o.itemOption||'')+'</div><div style="color:#1c7ed6;font-weight:600;min-height:1.3em">'+esc(p.option||'')+'</div></td><td class="num">'+o.qty+'</td><td><b>'+esc(s.name)+'</b></td><td>'+(o.trackingNo?'<b>'+esc(o.carrier||'')+'</b><div class="sm2 brk">'+(o.shipped?'<a class="trk" data-act="trkpop" data-id="'+o.id+'" title="클릭하면 '+esc(o.carrier||'택배사')+' 배송조회 팝업이 열립니다">'+esc(o.trackingNo)+'</a>':esc(o.trackingNo))+'</div>':'')+'</td></tr>';
   }).join(''))+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="ckpage" data-d="-1"'+(CK.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="ckpage" data-d="1"'+(CK.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
@@ -2180,6 +2182,30 @@ C.cksall=el=>{ckList().forEach(o=>el.checked?CK.sel.add(o.id):CK.sel.delete(o.id
 const ckPicked=()=>ckList().filter(o=>CK.sel.has(o.id));
 /* ===== C/S 메모 (주문별 CS 내용 / 처리내용) ===== */
 let CSO=null;
+/* 택배사별 배송조회 주소 — 주소가 바뀌면 여기만 고치면 됩니다. {no} 자리에 운송장번호가 들어갑니다. */
+const TRACK_URLS=[
+  {m:/CJ|대한통운/i,u:'https://trace.cjlogistics.com/next/tracking.html?wblNo={no}'},
+  {m:/롯데|lotte/i,u:'https://www.lotteglogis.com/home/reservation/tracking/linkView?InvNo={no}'},
+  {m:/한진|hanjin/i,u:'https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText2={no}'},
+  {m:/우체국|epost/i,u:'https://service.epost.go.kr/trace.RetrieveDomRigiTraceList.comm?sid1={no}'},
+  {m:/로젠|logen/i,u:'https://www.ilogen.com/web/personal/trace/{no}'}
+];
+function trackUrl(carrier,no){
+  const n=String(no||'').replace(/[\s-]/g,'');
+  const t=TRACK_URLS.find(x=>x.m.test(carrier||''));
+  if(t)return t.u.replace('{no}',encodeURIComponent(n));
+  /* 목록에 없는 택배사(직접 추가한 택배사 등)는 검색 결과로 연결 */
+  return 'https://search.naver.com/search.naver?query='+encodeURIComponent((carrier||'택배')+' '+n);
+}
+A.trkpop=(el,e)=>{
+  if(e)e.preventDefault();
+  const o=S.orders.find(x=>String(x.id)===String(el.dataset.id));
+  if(!o||!o.trackingNo)return;
+  const w=1000,h=800,l=Math.max(0,Math.round((screen.width-w)/2)),t=Math.max(0,Math.round((screen.height-h)/2));
+  const win=window.open(trackUrl(o.carrier,o.trackingNo),'trk_'+o.id,'width='+w+',height='+h+',left='+l+',top='+t+',scrollbars=yes,resizable=yes');
+  if(!win)toast('팝업이 차단되었습니다. 브라우저에서 이 페이지의 팝업을 허용해 주세요.','err',5000);
+  else win.focus();
+};
 A.cs=el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;
   CSO=o.id;

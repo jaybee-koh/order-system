@@ -1208,13 +1208,13 @@ function drawHomeChart(){
   const box=$('#hchart');if(!box)return;
   const ser=homeSeries(),total=ser.reduce((a,x)=>a+x.before+x.done,0);
   const sm=$('#hsum');if(sm)sm.textContent=(HM.mode==='day'?'최근 7일':'최근 12개월')+' 수집 주문 '+total.toLocaleString()+'건';
-  const W=760,H=290,L=46,R=12,T=26,B=50,pw=W-L-R,ph=H-T-B,n=ser.length;
+  const W=520,H=210,L=40,R=8,T=22,B=44,pw=W-L-R,ph=H-T-B,n=ser.length;
   const max=Math.max(0,...ser.map(x=>x.before+x.done));
   let step=Math.max(1,Math.ceil(max/4));
   const mag=Math.pow(10,Math.floor(Math.log10(step)));
   step=[1,2,5,10].map(f=>f*mag).find(v=>v>=step);
   const top=step*4,Y=v=>T+ph-(v/top)*ph;
-  const slot=pw/n,bw=Math.min(60,slot*0.58);
+  const slot=pw/n,bw=Math.min(44,slot*0.58);
   let g='';
   for(let i=0;i<=4;i++){const v=step*i,y=Y(v);g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" style="stroke:var(--line2)"/><text x="'+(L-8)+'" y="'+(y+4)+'" text-anchor="end" style="fill:var(--mute);font-size:11px">'+v.toLocaleString()+'</text>';}
   ser.forEach((x,i)=>{
@@ -1226,11 +1226,11 @@ function drawHomeChart(){
     if(x.before&&hb>16)g+='<text x="'+cx+'" y="'+(yb+hb/2+4)+'" text-anchor="middle" style="fill:#fff;font-size:11px;font-weight:600">'+x.before+'</text>';
     if(x.done&&hd>16)g+='<text x="'+cx+'" y="'+(yd+hd/2+4)+'" text-anchor="middle" style="fill:#fff;font-size:11px;font-weight:600">'+x.done+'</text>';
     if(tot)g+='<text x="'+cx+'" y="'+(yd-6)+'" text-anchor="middle" style="fill:var(--ink);font-size:12px;font-weight:700">'+tot.toLocaleString()+'</text>';
-    g+='</g><text x="'+cx+'" y="'+(T+ph+18)+'" text-anchor="middle" style="fill:var(--ink2);font-size:12px">'+esc(x.l)+'</text>';
-    if(x.l2)g+='<text x="'+cx+'" y="'+(T+ph+34)+'" text-anchor="middle" style="fill:var(--mute);font-size:11px">'+esc(x.l2)+'</text>';
+    g+='</g><text x="'+cx+'" y="'+(T+ph+16)+'" text-anchor="middle" style="fill:var(--ink2);font-size:12px">'+esc(x.l)+'</text>';
+    if(x.l2)g+='<text x="'+cx+'" y="'+(T+ph+31)+'" text-anchor="middle" style="fill:var(--mute);font-size:11px">'+esc(x.l2)+'</text>';
   });
   box.innerHTML='<div style="display:flex;gap:14px;font-size:12.5px;margin:2px 0 4px;color:var(--ink2)"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--pri);margin-right:5px"></i>출고전</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#7048e8;margin-right:5px"></i>출고완료</span></div>'+
-    '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="주문통계 그래프">'+g+'</svg>'+
+    '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;max-width:520px;height:auto;display:block" role="img" aria-label="주문통계 그래프">'+g+'</svg>'+
     (total?'':'<div class="mute small" style="text-align:center;margin-top:-6px">이 기간에 수집된 주문이 없습니다.</div>');
 }
 A.hmmode=el=>{HM.mode=el.dataset.m==='month'?'month':'day';route();};

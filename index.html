@@ -978,7 +978,7 @@ function orderInfo(o){
   return {p:s?p:null,s:s||null};
 }
 function stOf(o){const {p}=orderInfo(o);if(!p)return 'none';return 'matched';}
-const ST_LABEL={none:'미매칭',matched:'매칭완료',done:'발주완료'};
+const ST_LABEL={none:'미매핑',matched:'매핑완료',done:'발주완료'};
 
 /* =====================================================================
    컬럼 자동 인식
@@ -993,8 +993,8 @@ const ORDER_FIELDS=[
   {key:'qty',label:'수량'},
   {key:'memo',label:'배송메모'},
   {key:'orderNo',label:'주문번호',req:1},
-  {key:'itemName',label:'상품명 (매칭에 사용)',req:1},
-  {key:'itemOption',label:'옵션명 (매칭에 사용)'},
+  {key:'itemName',label:'상품명 (매핑에 사용)',req:1},
+  {key:'itemOption',label:'옵션명 (매핑에 사용)'},
   {key:'payAmount',label:'결제금액'},
   {key:'settleAmount',label:'정산예정금액'}
 ];
@@ -1178,8 +1178,8 @@ function pgHome(){
   const un=S.orders.filter(o=>stOf(o)==='none').length;
   const wait=S.orders.filter(o=>stOf(o)==='matched'&&!o.confirmed).length;
   return '<h1>홈</h1><p class="sub">매입처 · 상품 · 주문을 한 곳에서 관리합니다. 모든 데이터는 로그인한 계정의 서버에 저장됩니다.</p>'+
-  '<div class="stats"><div class="stat"><span>매입처</span><b>'+S.suppliers.length+'</b></div><div class="stat"><span>등록 상품</span><b>'+S.products.length.toLocaleString()+'</b></div><div class="stat"><span>매칭이 필요한 주문</span><b style="color:'+(un?'var(--warn)':'inherit')+'">'+un+'</b></div><div class="stat"><span>신규주문(확인 대기)</span><b>'+wait+'</b></div></div>'+
-  '<div class="card"><h3>사용 순서</h3><ol class="steps"><li><a href="#/suppliers/new">매입처 등록</a> — 거래하는 매입처(업체명 등)를 등록합니다.</li><li><a href="#/products/bulk">신규상품등록</a> — 매입처를 고르고 상품 파일을 올려 저장합니다.</li><li><a href="#/orders/collect">주문 수집</a> — 쇼핑몰에서 받은 주문 엑셀을 올려 저장합니다.</li><li><a href="#/orders/confirm">주문 확정 관리</a> — [매칭하기]로 상품을 연결합니다. 한 번 매칭한 상품은 다음 주문부터 자동 매칭됩니다.</li><li><a href="#/orders/check">주문확인처리</a> — 매칭된 주문을 조회하고, 선택해서 엑셀로 내려받거나 [주문상태변경]으로 신규주문 → 주문확인 처리를 합니다.</li></ol></div>';
+  '<div class="stats"><div class="stat"><span>매입처</span><b>'+S.suppliers.length+'</b></div><div class="stat"><span>등록 상품</span><b>'+S.products.length.toLocaleString()+'</b></div><div class="stat"><span>매핑이 필요한 주문</span><b style="color:'+(un?'var(--warn)':'inherit')+'">'+un+'</b></div><div class="stat"><span>신규주문(확인 대기)</span><b>'+wait+'</b></div></div>'+
+  '<div class="card"><h3>사용 순서</h3><ol class="steps"><li><a href="#/suppliers/new">매입처 등록</a> — 거래하는 매입처(업체명 등)를 등록합니다.</li><li><a href="#/products/bulk">신규상품등록</a> — 매입처를 고르고 상품 파일을 올려 저장합니다.</li><li><a href="#/orders/collect">주문 수집</a> — 쇼핑몰에서 받은 주문 엑셀을 올려 저장합니다.</li><li><a href="#/orders/confirm">주문 확정 관리</a> — [매핑하기]로 상품을 연결합니다. 한 번 매핑한 상품은 다음 주문부터 자동 매핑됩니다.</li><li><a href="#/orders/check">주문확인처리</a> — 매핑된 주문을 조회하고, 선택해서 엑셀로 내려받거나 [주문상태변경]으로 신규주문 → 주문확인 처리를 합니다.</li></ol></div>';
 }
 ROUTES['/home']=pgHome;
 async function buildDumpDB(){
@@ -1446,7 +1446,7 @@ A.supEdit=el=>{
 A.supDel=async el=>{
   const id=+el.dataset.id,s=M.sup.get(id);
   const pids=S.products.filter(p=>p.supplierId===id).map(p=>p.id);
-  if(!confirm('"'+s.name+'" 매입처를 삭제할까요?\n이 매입처의 등록 상품 '+pids.length+'개도 함께 삭제되고, 해당 상품과 매칭된 주문은 미매칭으로 돌아갑니다.'))return;
+  if(!confirm('"'+s.name+'" 매입처를 삭제할까요?\n이 매입처의 등록 상품 '+pids.length+'개도 함께 삭제되고, 해당 상품과 매핑된 주문은 미매핑으로 돌아갑니다.'))return;
   await delMany('products',pids);await delMany('suppliers',[id]);
   const pset=new Set(pids);
   const rk=Object.keys(S.rules).filter(k=>pset.has(S.rules[k]));
@@ -1523,7 +1523,7 @@ A.pEdit=el=>{
   const n=S.orders.filter(o=>o.productId===p.id).length;
   openModal('<h2>매입 상품 수정</h2><div class="card" style="background:#f7f8fb;box-shadow:none;margin-bottom:0"><div class="small mute">자체 상품코드 '+esc(p.code)+'</div><div><b>'+esc(p.name)+'</b>'+(p.option?' <span class="mute">/ '+esc(p.option)+'</span>':'')+'</div></div>'+
     '<label class="f">매입처</label><select id="pe-sup" style="width:100%">'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(x.id===p.supplierId?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select>'+
-    (n?'<div class="mute small" style="margin-top:5px">이 상품과 매칭된 주문 '+n+'건이 있습니다. 매입처를 바꾸면 해당 주문의 매입처도 함께 바뀝니다.</div>':'')+
+    (n?'<div class="mute small" style="margin-top:5px">이 상품과 매핑된 주문 '+n+'건이 있습니다. 매입처를 바꾸면 해당 주문의 매입처도 함께 바뀝니다.</div>':'')+
     '<label class="f">매입가</label><input type="text" id="pe-price" inputmode="numeric" style="width:100%" value="'+esc(p.price===''||p.price==null?'':p.price)+'" placeholder="숫자만 입력">'+
     '<div class="foot"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="pSave">저장</button></div>');
   const inp=$('#pe-price');if(inp){inp.focus();inp.select();}
@@ -1544,7 +1544,7 @@ A.pSave=async()=>{
 A.pdelOne=async el=>{
   const p=M.prod.get(+el.dataset.id);if(!p)return;
   const n=S.orders.filter(o=>o.productId===p.id).length;
-  if(!confirm('"'+p.name+(p.option?' / '+p.option:'')+'" 상품을 삭제할까요?'+(n?'\n이 상품과 매칭된 주문 '+n+'건은 미매칭으로 돌아갑니다.':'')))return;
+  if(!confirm('"'+p.name+(p.option?' / '+p.option:'')+'" 상품을 삭제할까요?'+(n?'\n이 상품과 매핑된 주문 '+n+'건은 미매핑으로 돌아갑니다.':'')))return;
   try{
     await delMany('products',[p.id]);
     const rk=Object.keys(S.rules).filter(k=>S.rules[k]===p.id);
@@ -1556,7 +1556,7 @@ A.pdelOne=async el=>{
 A.pdel=async()=>{
   const ids=[...PL.sel].filter(id=>M.prod.has(id));
   if(!ids.length){toast('삭제할 상품을 체크하세요.','err');return;}
-  if(!confirm(ids.length+'개 상품을 삭제할까요? 매칭된 주문은 미매칭으로 돌아갑니다.'))return;
+  if(!confirm(ids.length+'개 상품을 삭제할까요? 매핑된 주문은 미매핑으로 돌아갑니다.'))return;
   await delMany('products',ids);
   const set=new Set(ids);
   const rk=Object.keys(S.rules).filter(k=>set.has(S.rules[k]));await delMany('rules',rk);rk.forEach(k=>delete S.rules[k]);
@@ -1690,9 +1690,9 @@ function pgCollect(){
     mapTableCollect(clHeaders(),CL.map,mallRow())+
     (function(){const sets=collectedSets(),n=orders.filter(o=>isCollected(o,sets)).length;return n?'<div class="notice" style="margin-top:14px"><b>이미 수집된 주문입니다.</b> 이 파일의 '+orders.length.toLocaleString()+'건 중 '+n.toLocaleString()+'건은 이미 수집된 주문번호라 저장할 때 제외됩니다.</div>':'';})()+
     '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+orders.length.toLocaleString()+'건)</span></h3>'+
-    previewTable(curFields().map(f=>[f.custom?'c_'+f.key:f.key,f.label.replace(' (매칭에 사용)','')]).concat([['mall','쇼핑몰']]),orders);
+    previewTable(curFields().map(f=>[f.custom?'c_'+f.key:f.key,f.label.replace(' (매핑에 사용)','')]).concat([['mall','쇼핑몰']]),orders);
   }
-  return '<h1>주문 수집</h1><p class="sub">쇼핑몰 주문내역 파일을 올리고 저장하면 [주문 확정 관리]에 표시됩니다. 이전에 매칭한 상품은 자동으로 매칭됩니다.</p>'+
+  return '<h1>주문 수집</h1><p class="sub">쇼핑몰 주문내역 파일을 올리고 저장하면 [주문 확정 관리]에 표시됩니다. 이전에 매핑한 상품은 자동으로 매핑됩니다.</p>'+
   '<div class="card"><h3>① 주문내역 파일 업로드</h3>'+body+'</div>'+
   '<div class="card"><h3>② 저장</h3><button class="btn pri" data-act="collectSave"'+(CL.sheets&&orders.length?'':' disabled')+'>저장</button> <span class="mute small">'+(CL.sheets?orders.length.toLocaleString()+'건을 저장합니다.':'')+'</span></div>';
 }
@@ -1740,9 +1740,9 @@ A.fdel=async()=>{
   if(!keys.length){toast('삭제할 항목을 체크하세요.','err');return;}
   const REQ=['orderNo','itemName'];
   const del=keys.filter(k=>!REQ.includes(k));
-  if(del.length<keys.length)toast('주문번호·상품명은 중복 확인과 상품 매칭에 필요해서 삭제할 수 없습니다.','err',5000);
+  if(del.length<keys.length)toast('주문번호·상품명은 중복 확인과 상품 매핑에 필요해서 삭제할 수 없습니다.','err',5000);
   if(!del.length){FC.sel.clear();route();return;}
-  const names=curFields().filter(f=>del.includes(f.key)).map(f=>f.label.replace(' (매칭에 사용)','')).join(', ');
+  const names=curFields().filter(f=>del.includes(f.key)).map(f=>f.label.replace(' (매핑에 사용)','')).join(', ');
   if(!confirm('선택한 항목을 삭제할까요?\n'+names+'\n(삭제한 기본 항목은 [항목 추가]에서 다시 추가할 수 있습니다.)'))return;
   const c=fcopy();
   c.order=c.order.filter(k=>!del.includes(k));
@@ -1754,7 +1754,7 @@ A.fdel=async()=>{
 A.fadd=()=>{
   const c=fcfg(),hidden=ORDER_FIELDS.filter(f=>!c.order.includes(f.key));
   openModal('<h2>항목 추가</h2>'+
-    (hidden.length?'<div class="small mute" style="margin-bottom:6px">삭제했던 기본 항목 다시 추가</div><div class="chips">'+hidden.map(f=>'<button class="chip" data-act="faddb" data-key="'+f.key+'">'+esc(f.label.replace(' (매칭에 사용)',''))+'</button>').join('')+'</div>':'')+
+    (hidden.length?'<div class="small mute" style="margin-bottom:6px">삭제했던 기본 항목 다시 추가</div><div class="chips">'+hidden.map(f=>'<button class="chip" data-act="faddb" data-key="'+f.key+'">'+esc(f.label.replace(' (매핑에 사용)',''))+'</button>').join('')+'</div>':'')+
     '<div class="small mute" style="margin:14px 0 6px">새 항목 만들기 (파일의 열을 골라 주문과 함께 저장)</div><div class="row"><input type="text" id="fname" class="grow" placeholder="항목 이름 (예: 결제금액)"><button class="btn pri" data-act="faddc">추가</button></div>'+
     '<div class="foot"><button class="btn" data-act="close">닫기</button></div>');
   const i=$('#fname');if(i)i.focus();
@@ -1770,7 +1770,7 @@ A.faddb=async el=>{
 A.faddc=async()=>{
   const name=(($('#fname')||{}).value||'').trim();
   if(!name){toast('항목 이름을 입력하세요.','err');return;}
-  if(curFields().some(f=>f.label.replace(' (매칭에 사용)','')===name)){toast('이미 있는 항목 이름입니다.','err');return;}
+  if(curFields().some(f=>f.label.replace(' (매핑에 사용)','')===name)){toast('이미 있는 항목 이름입니다.','err');return;}
   const c=fcopy();
   const key='x'+Date.now().toString(36);
   c.custom=(c.custom||[]).concat([{key,label:name}]);
@@ -1806,7 +1806,7 @@ function collectedSets(){
 }
 function isCollected(o,sets){return o.orderNo?sets.no.has(norm(o.orderNo)):sets.alt.has(altSig(o));}
 A.collectSave=async()=>{
-  if(!(CL.map.itemName||[]).length){toast('"주문 상품명"에 해당하는 열을 선택하세요. (상품 매칭에 필요합니다)','err',6000);return;}
+  if(!(CL.map.itemName||[]).length){toast('"주문 상품명"에 해당하는 열을 선택하세요. (상품 매핑에 필요합니다)','err',6000);return;}
   if(!(CL.map.orderNo||[]).length&&!confirm('"주문번호" 열이 선택되지 않았습니다. 이대로 저장하면 중복 주문을 걸러낼 수 없습니다. 계속할까요?'))return;
   if(!CL.mall&&!confirm('"쇼핑몰"이 선택되지 않았습니다. 이대로 저장할까요?'))return;
   const list=extractOrders(clRows(),CL.headerRow-1,CL.map);
@@ -1829,7 +1829,7 @@ A.collectSave=async()=>{
   try{
     await putMany('orders',adds);S.orders.push(...adds);rebuild();
     await setMeta(sigOf(clHeaders()),CL.map);await setMeta(mallKey(clHeaders()),CL.mall);
-    toast('주문 '+adds.length+'건 저장 (자동 매칭 '+auto+'건'+(dup?', 중복 제외 '+dup+'건':'')+')',adds.length?'ok':'err',6000);
+    toast('주문 '+adds.length+'건 저장 (자동 매핑 '+auto+'건'+(dup?', 중복 제외 '+dup+'건':'')+')',adds.length?'ok':'err',6000);
     CL.sheets=null;CL.fileName='';
     CF.status=adds.length&&adds.length>auto?'none':'all';CF.date='';CF.page=0;CF.q='';
     location.hash='#/orders/confirm';
@@ -1853,8 +1853,8 @@ function confirmList(){
 function pgConfirm(){
   const sc=scoped();
     const dates=[...new Set(S.orders.map(o=>o.collectedDate))].sort().reverse();
-  return '<h1>주문 확정 관리</h1><p class="sub">각 주문에 [매칭하기]로 상품을 연결하면 매입처가 표시됩니다. 매칭이 끝난 주문은 [주문확인처리]에서 조회·다운로드·상태변경을 할 수 있습니다.</p>'+
-  '<div class="card row"><div class="chips">'+[['all','전체'],['none','미매칭'],['matched','매칭완료']].map(([k,l])=>'<button class="chip'+(CF.status===k?' on':'')+'" data-act="cstat" data-s="'+k+'">'+l+'</button>').join('')+'</div><span class="grow"></span>'+
+  return '<h1>주문 확정 관리</h1><p class="sub">각 주문에 [매핑하기]로 상품을 연결하면 매입처가 표시됩니다. 매핑이 끝난 주문은 [주문확인처리]에서 조회·다운로드·상태변경을 할 수 있습니다.</p>'+
+  '<div class="card row"><div class="chips">'+[['all','전체'],['none','미매핑'],['matched','매핑완료']].map(([k,l])=>'<button class="chip'+(CF.status===k?' on':'')+'" data-act="cstat" data-s="'+k+'">'+l+'</button>').join('')+'</div><span class="grow"></span>'+
   '<select data-chg="cdate"><option value="">전체 수집일</option>'+dates.map(d=>'<option value="'+d+'"'+(CF.date===d?' selected':'')+'>'+d+'</option>').join('')+'</select>'+
   '<input type="text" placeholder="주문번호 · 수취인 · 상품명 검색" style="width:240px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
   '<div id="ctbl"></div>';
@@ -1869,10 +1869,10 @@ function drawConfirmTable(){
   if(!S.orders.length){box.innerHTML='<div class="card mute">수집된 주문이 없습니다. <a href="#/orders/collect">주문 수집</a>에서 주문내역 파일을 올려주세요.</div>';return;}
   if(!list.length){box.innerHTML='<div class="card mute">조건에 맞는 주문이 없습니다.</div>';return;}
   box.innerHTML='<div class="mute small" style="margin-bottom:6px">자료수 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</div>'+
-  fitTable('confirm',[{t:'<input type="checkbox" data-chg="csall"'+(allSel?' checked':'')+'>'},{t:'쇼핑몰 / 주문번호'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메세지'},{t:'주문 상품'},{t:'수량',c:'num'},{t:'매칭'},{t:'매입처'}],
+  fitTable('confirm',[{t:'<input type="checkbox" data-chg="csall"'+(allSel?' checked':'')+'>'},{t:'쇼핑몰 / 주문번호'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메세지'},{t:'주문 상품'},{t:'수량',c:'num'},{t:'매핑'},{t:'매입처'}],
   cur.map(o=>{
     const {p,s}=orderInfo(o),st=stOf(o);
-    const mc=p?'<div class="pn">'+esc(p.name)+(p.option?' <span class="mute" style="font-weight:400">/ '+esc(p.option)+'</span>':'')+'</div><div class="mini"><button class="btn sm" data-act="match" data-id="'+o.id+'">변경</button><button class="btn sm" data-act="unmatch" data-id="'+o.id+'">해제</button>'+(o.matchedAuto?'<span class="tag">자동</span>':'')+'</div>':'<button class="btn sm pri" data-act="match" data-id="'+o.id+'">매칭하기</button>';
+    const mc=p?'<div class="pn">'+esc(p.name)+(p.option?' <span class="mute" style="font-weight:400">/ '+esc(p.option)+'</span>':'')+'</div><div class="mini"><button class="btn sm" data-act="match" data-id="'+o.id+'">변경</button><button class="btn sm" data-act="unmatch" data-id="'+o.id+'">해제</button>'+(o.matchedAuto?'<span class="tag">자동</span>':'')+'</div>':'<button class="btn sm pri" data-act="match" data-id="'+o.id+'">매핑하기</button>';
     return '<tr class="'+(st==='matched'?'m':st==='done'?'d':'u')+'"><td><input type="checkbox" data-chg="crow" data-id="'+o.id+'"'+(CF.sel.has(o.id)?' checked':'')+'></td>'+
       '<td>'+(o.mall?'<span class="tag gray">'+esc(o.mall)+'</span>':'')+'<div class="sm2 brk">'+esc(o.orderNo)+'</div></td>'+
       '<td><b>'+esc(o.receiver)+'</b><div class="sm2">'+esc(o.orderer)+'</div></td>'+
@@ -1900,7 +1900,7 @@ A.cdel=async()=>{
   await delMany('orders',ids);const set=new Set(ids);S.orders=S.orders.filter(o=>!set.has(o.id));CF.sel.clear();rebuild();toast('삭제했습니다.');route();
 };
 
-/* ===== 매칭 팝업 ===== */
+/* ===== 매핑 팝업 ===== */
 function redrawConfirm(){const cur=(location.hash||'#/home').slice(1);if(ROUTES[cur]===pgConfirm)drawConfirmTable();else route();}
 let MT=null;
 A.match=el=>{
@@ -1927,7 +1927,7 @@ function matchResults(){
 }
 function drawMatch(){
   const o=M.ord.get(MT.orderId);
-  openModal('<h2>상품 매칭</h2><div class="card" style="background:#f7f8fb;box-shadow:none"><div class="small mute">매칭할 주문</div><div><b>'+esc(o.itemName)+'</b>'+(o.itemOption?' <span class="mute">/ '+esc(o.itemOption)+'</span>':'')+'</div><div class="small mute">'+esc(o.orderNo)+' · '+esc(o.receiver)+' · 수량 '+o.qty+'</div></div>'+
+  openModal('<h2>상품 매핑</h2><div class="card" style="background:#f7f8fb;box-shadow:none"><div class="small mute">매핑할 주문</div><div><b>'+esc(o.itemName)+'</b>'+(o.itemOption?' <span class="mute">/ '+esc(o.itemOption)+'</span>':'')+'</div><div class="small mute">'+esc(o.orderNo)+' · '+esc(o.receiver)+' · 수량 '+o.qty+'</div></div>'+
     '<div class="row" style="margin-bottom:10px"><input type="text" id="mq" class="grow" placeholder="상품명 · 코드 · 옵션으로 검색" value="'+esc(MT.q)+'" data-inp="mq"><select data-chg="msup"><option value="">전체 매입처</option>'+S.suppliers.map(s=>'<option value="'+s.id+'"'+(String(MT.sup)===String(s.id)?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select></div><div id="mres">'+matchResults()+'</div><div class="foot"><button class="btn" data-act="close">닫기</button></div>','wide');
   const inp=$('#mq');if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
 }
@@ -1947,7 +1947,7 @@ A.pick=async el=>{
   await putMany('orders',changed);
   changed.forEach(x=>CF.keep.add(x.id));
   closeModal();MT=null;
-  toast('매칭 완료: '+p.name+(extra?' (같은 상품 주문 '+extra+'건도 함께 매칭)':''));
+  toast('매핑 완료: '+p.name+(extra?' (같은 상품 주문 '+extra+'건도 함께 매핑)':''));
   redrawConfirm();
 };
 A.unmatch=async el=>{
@@ -1960,7 +1960,7 @@ A.unmatch=async el=>{
 
 /* ===== 매입처별 발주 엑셀 다운로드 ===== */
 const DEFAULT_TPL={headers:['주문자','수취인','연락처1','연락처2','우편번호','주소','기타','수량','배송메모','운송장번호','주문번호','거래선','상품명','옵션명','매입처'],
-  mapping:['orderer','receiver','tel1','tel2','zip','addr','','qty','memo','','orderNo','mall','pName','pOption','supplier'].map(src=>({src,text:''}))};
+  mapping:['orderer','receiver','tel1','tel2','zip','addr','','qty','memo','','orderNo','mall','itemName','itemOption','supplier'].map(src=>({src,text:''}))};
 function cellVal(o,p,s,seq,m){
   const num=v=>{if(v===''||v==null)return '';const n=Number(v);return isFinite(n)?n:String(v);};
   switch(m.src){
@@ -1977,7 +1977,7 @@ function cellVal(o,p,s,seq,m){
   }
 }
 /* =====================================================================
-   주문확인처리 (매칭된 주문만 조회 · 다운로드 · 주문상태 변경)
+   주문확인처리 (매핑된 주문만 조회 · 다운로드 · 주문상태 변경)
 ===================================================================== */
 const ST_NAME={new:'신규주문',confirmed:'주문확인',shipped:'출고완료'};
 const ordStatus=o=>o.shipped?'shipped':(o.confirmed?'confirmed':'new');
@@ -2027,7 +2027,7 @@ function pgCheck(){
   const malls=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];
   const sm='style="padding:2px 8px;font-size:12px"';
   const lb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
-  return '<h1>주문확인처리</h1><p class="sub">매칭이 끝난 주문만 조회됩니다. 조회 기준 일자는 주문 수집일입니다. 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
+  return '<h1>주문확인처리</h1><p class="sub">매핑이 끝난 주문만 조회됩니다. 조회 기준 일자는 주문 수집일입니다. 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
   '<div class="card">'+
   '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option></select>'+
   '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="ckf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
@@ -2053,10 +2053,10 @@ function drawCheckTable(){
   const allSel=list.length&&list.every(o=>CK.sel.has(o.id));
   const isConf=CK.a.status==='confirmed';
   const bar='<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(CK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="ksel">'+CK.sel.size+'</b>건</span><span class="grow"></span>'+
-    '<button class="btn danger" data-act="ckdel">선택 삭제</button><button class="btn ok" data-act="ckdl">선택 다운로드(엑셀)</button><button class="btn pri" data-act="ckstatus">주문상태변경</button></div>';
-  if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 매칭 주문이 없습니다. 수집일자·주문상태를 확인하거나, 아직 매칭하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매칭해 주세요.</div>';return;}
+    '<button class="btn danger" data-act="ckdel">선택 삭제</button><button class="btn ok" data-act="ckdl">선택 다운로드(엑셀)</button><button class="btn ok" data-act="ckdlall">전체 다운로드(엑셀)</button><button class="btn pri" data-act="ckstatus">주문상태변경</button></div>';
+  if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 매핑 주문이 없습니다. 수집일자·주문상태를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
   box.innerHTML=bar+
-  fitTable('check',[{t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>'},{t:'주문상태'},{t:'수집일'},{t:'쇼핑몰'},{t:'주문번호'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메모'},{t:'상품명'},{t:'옵션명'},{t:'수량',c:'num'},{t:'거래선'}],
+  fitTable('check',[{t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>'},{t:'주문상태'},{t:'수집일'},{t:'쇼핑몰'},{t:'주문번호'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메모'},{t:'상품명'},{t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>'},{t:'수량',c:'num'},{t:'거래선'}],
   cur.map(o=>{
     const {p,s}=orderInfo(o);
     return '<tr class="m"><td><input type="checkbox" data-chg="ckrow" data-id="'+o.id+'"'+(CK.sel.has(o.id)?' checked':'')+'></td>'+
@@ -2065,7 +2065,7 @@ function drawCheckTable(){
       '<td><b>'+esc(o.receiver)+'</b><div class="sm2">'+esc(o.orderer)+'</div></td>'+
       '<td>'+esc(o.tel1)+(o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'+
       '<td>'+(o.zip?'<span class="mute small">['+esc(o.zip)+']</span> ':'')+esc(o.addr)+'</td>'+
-      '<td>'+esc(o.memo)+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.option)+'</td><td class="num">'+o.qty+'</td><td><b>'+esc(s.name)+'</b></td></tr>';
+      '<td>'+esc(o.memo)+'</td><td>'+esc(o.itemName||p.name)+'</td><td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+esc(o.itemOption||'')+'</div><div style="color:#1c7ed6;font-weight:600;min-height:1.3em">'+esc(p.option||'')+'</div></td><td class="num">'+o.qty+'</td><td><b>'+esc(s.name)+'</b></td></tr>';
   }).join(''))+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="ckpage" data-d="-1"'+(CK.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="ckpage" data-d="1"'+(CK.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
@@ -2150,9 +2150,10 @@ A.ckstatusSave=async()=>{
   toast(todo.length+'건을 '+ST_NAME[to]+'(으)로 변경했습니다.'+(list.length>todo.length?' (이미 같은 상태인 '+(list.length-todo.length)+'건 제외)':''));
   route();
 };
-A.ckdl=async()=>{
-  const list=ckPicked();
-  if(!list.length){toast('다운로드할 주문을 체크하세요.','err');return;}
+A.ckdl=()=>ckDownload(ckPicked(),'다운로드할 주문을 체크하세요.');
+A.ckdlall=()=>ckDownload(ckList(),'다운로드할 주문이 없습니다.');
+async function ckDownload(list,emptyMsg){
+  if(!list.length){toast(emptyMsg,'err');return;}
   const tpl=DEFAULT_TPL;
   const rows=[tpl.headers.slice()];
   list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(tpl.mapping.map(m=>cellVal(o,p,s,i+1,m)));});
@@ -2161,10 +2162,10 @@ A.ckdl=async()=>{
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});
   await putMany('orders',list);
   toast(list.length+'건을 다운로드했습니다.');
-};
+}
 
 /* ===== 한 화면 표 + 엑셀처럼 열 너비 조절 (헤더 경계선을 끌면 옆 열과 너비를 주고받음) ===== */
-const COLW_DEF={confirm:[3,11,8,9,21,9,15,4,12,8],check:[3,8,7,6,9,7,8,15,8,13,6,3,7]};
+const COLW_DEF={confirm:[3,11,8,9,21,9,15,4,12,8],check:[3,8,7,6,9,7,8,13,6,13,10,3,7]};
 function colW(key){const s=S.meta['colw_'+key];return Array.isArray(s)&&s.length===COLW_DEF[key].length?s:COLW_DEF[key];}
 function fitTable(key,heads,body){
   const w=colW(key),n=heads.length;

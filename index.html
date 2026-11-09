@@ -2257,8 +2257,11 @@ async function ckDownload(list,emptyMsg){
   if(!list.length){toast(emptyMsg,'err');return;}
   const tpl=DEFAULT_TPL;
   const withTrk=CK.a.status==='shipped';
-  const rows=[tpl.headers.slice().concat(withTrk?['택배사','운송장번호']:[])];
-  list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(tpl.mapping.map(m=>cellVal(o,p,s,i+1,m)).concat(withTrk?[o.carrier||'',o.trackingNo||'']:[]));});
+  /* 출고완료 다운로드에서만 자체주문번호 대신 쇼핑몰주문번호를 내려받습니다 */
+  const hdr=tpl.headers.map(h=>withTrk&&h==='자체주문번호'?'쇼핑몰주문번호':h);
+  const mapping=tpl.mapping.map(m=>withTrk&&m.src==='ownNo'?{...m,src:'orderNo'}:m);
+  const rows=[hdr.concat(withTrk?['택배사','운송장번호']:[])];
+  list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(mapping.map(m=>cellVal(o,p,s,i+1,m)).concat(withTrk?[o.carrier||'',o.trackingNo||'']:[]));});
   download(buildXlsx(rows,'발주서'),'주문확인_발주_'+localDate().replace(/-/g,'')+'.xlsx');
   const now=new Date().toISOString();
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});

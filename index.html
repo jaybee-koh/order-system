@@ -1226,13 +1226,13 @@ function drawBarChart(boxId,sumId,mode,metric){
   const FL=v=>amt?won(v)+'원':v+'건';
   const ser=homeSeries(mode,metric),total=ser.reduce((a,x)=>a+x.before+x.done,0);
   const sm=$('#'+sumId);if(sm)sm.textContent=(mode==='day'?'최근 7일':'최근 6개월')+(amt?' 매입금액 '+won(total)+'원':' 수집 주문 '+total.toLocaleString()+'건');
-  const W=520,H=210,L=amt?48:40,R=8,T=22,B=44,pw=W-L-R,ph=H-T-B,n=ser.length;
+  const W=Math.max(260,Math.round(box.clientWidth||520)),H=Math.round(Math.min(300,Math.max(190,W*0.4))),L=amt?48:40,R=8,T=22,B=44,pw=W-L-R,ph=H-T-B,n=ser.length;
   const max=Math.max(0,...ser.map(x=>x.before+x.done));
   let step=Math.max(1,Math.ceil(max/4));
   const mag=Math.pow(10,Math.floor(Math.log10(step)));
   step=[1,2,5,10].map(f=>f*mag).find(v=>v>=step);
   const top=step*4,Y=v=>T+ph-(v/top)*ph;
-  const slot=pw/n,bw=Math.min(44,slot*0.58);
+  const slot=pw/n,bw=Math.min(72,slot*0.58);
   let g='';
   for(let i=0;i<=4;i++){const v=step*i,y=Y(v);g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" style="stroke:var(--line2)"/><text x="'+(L-8)+'" y="'+(y+4)+'" text-anchor="end" style="fill:var(--mute);font-size:11px">'+F(v)+'</text>';}
   ser.forEach((x,i)=>{
@@ -1248,10 +1248,16 @@ function drawBarChart(boxId,sumId,mode,metric){
     if(x.l2)g+='<text x="'+cx+'" y="'+(T+ph+31)+'" text-anchor="middle" style="fill:var(--mute);font-size:11px">'+esc(x.l2)+'</text>';
   });
   box.innerHTML='<div style="display:flex;gap:14px;font-size:12.5px;margin:2px 0 4px;color:var(--ink2)"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--pri);margin-right:5px"></i>출고전</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#7048e8;margin-right:5px"></i>출고완료</span></div>'+
-    '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;max-width:520px;height:auto;display:block" role="img" aria-label="'+(amt?'주문통계(매입금액) 그래프':'주문통계 그래프')+'">'+g+'</svg>'+
+    '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="'+(amt?'주문통계(매입금액) 그래프':'주문통계 그래프')+'">'+g+'</svg>'+
     (total?'':'<div class="mute small" style="text-align:center;margin-top:-6px">'+(amt?'이 기간에 매입금액이 집계된 주문이 없습니다.':'이 기간에 수집된 주문이 없습니다.')+'</div>');
 }
 function drawHomeChart(){drawBarChart('hchart','hsum',HM.mode,'cnt');drawBarChart('hchart2','hsum2',HM.pmode,'amt');}
+/* 창 크기가 바뀌면 각 박스 너비에 맞게 그래프를 다시 그립니다 */
+let _hrz=0,_hw=0;
+window.addEventListener('resize',()=>{
+  clearTimeout(_hrz);
+  _hrz=setTimeout(()=>{const b=$('#hchart');if(b&&b.clientWidth&&Math.abs(b.clientWidth-_hw)>4){_hw=b.clientWidth;drawHomeChart();}},150);
+});
 A.hmmode=el=>{HM.mode=el.dataset.m==='month'?'month':'day';route();};
 A.hmmode2=el=>{HM.pmode=el.dataset.m==='month'?'month':'day';route();};
 ROUTES['/home']=()=>{setTimeout(drawHomeChart,0);return pgHome();};

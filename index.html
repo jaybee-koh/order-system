@@ -2307,7 +2307,7 @@ const TK_FIELDS=[['orderer','주문자명'],['receiver','수취인명'],['ownNo'
 function tkInit(){
   if(TK.init)return;
   const r=pRange('7d');
-  TK.d={from:r[0],to:r[1],mall:'',sup:'',field:'receiver',q:''};
+  TK.d={from:r[0],to:r[1],mall:'',sup:'',field:'receiver',q:'',reg:false};
   TK.a=Object.assign({},TK.d);TK.init=true;
 }
 function tkList(){
@@ -2317,6 +2317,7 @@ function tkList(){
     if(!p)return false;
     if(a.mall==='__none'){if(o.mall)return false;}else if(a.mall&&o.mall!==a.mall)return false;
     if(a.sup&&s.id!==+a.sup)return false;
+    if(a.reg?!o.trackingNo:!!o.trackingNo)return false; /* 기본: 운송장 미입력만 / 체크 시: 송장 등록된 주문만 */
     const cd=o.collectedDate||'';
     if(a.from&&cd<a.from)return false;
     if(a.to&&cd>a.to)return false;
@@ -2337,7 +2338,8 @@ function pgTrack(){
   '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="tkf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
   '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="tkf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+
   '<div class="row">'+lb('검색')+'<select data-chg="tkf" data-k="field">'+TK_FIELDS.map(f=>'<option value="'+f[0]+'"'+(d.field===f[0]?' selected':'')+'>'+f[1]+'</option>').join('')+'</select>'+
-  '<input type="text" placeholder="검색어 입력" style="width:240px" data-inp="tkq" value="'+esc(d.q)+'"><button class="btn pri" data-act="tksearch">검색</button></div>'+
+  '<input type="text" placeholder="검색어 입력" style="width:240px" data-inp="tkq" value="'+esc(d.q)+'"><button class="btn pri" data-act="tksearch">검색</button>'+
+  '<label style="display:inline-flex;align-items:center;gap:5px;margin-left:6px;cursor:pointer"><input type="checkbox" data-chg="tkreg"'+(d.reg?' checked':'')+'>송장 등록된 주문</label></div>'+
   '</div><div id="ttbl"></div>';
 }
 ROUTES['/orders/tracking']=pgTrack;
@@ -2349,7 +2351,7 @@ function drawTrackTable(){
   const cur=list.slice(TK.page*PAGE_O,(TK.page+1)*PAGE_O);
   const allSel=cur.length&&cur.every(o=>TK.sel.has(o.id));
   const bar='<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(TK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="tksel">'+TK.sel.size+'</b>건</span><span class="grow"></span><button class="btn pri" data-act="tksave">선택저장</button></div>';
-  if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 주문이 없습니다. 수집일자를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
+  if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 '+(TK.a.reg?'송장 등록된':'운송장 미입력')+' 주문이 없습니다. 수집일자를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
   const cars=carrierList();
   box.innerHTML=bar+
   fitTable('track',[{t:'<input type="checkbox" data-chg="tkall"'+(allSel?' checked':'')+'>'},{t:'주문상태'},{t:'수집일'},{t:'쇼핑몰'},{t:'주문번호 <span style="color:#1c7ed6">자체주문번호</span>'},{t:'수취인 / 주문자'},{t:'수집상품명 / 옵션'},{t:'확정상품명 / 옵션'},{t:'수량',c:'num'},{t:'거래선'},{t:'택배사'},{t:'운송장번호'}],
@@ -2373,6 +2375,7 @@ function drawTrackTable(){
   (pages>1?'<div class="pager"><button class="btn sm" data-act="tkpage" data-d="-1"'+(TK.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="tkpage" data-d="1"'+(TK.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
 C.tkf=el=>{TK.d[el.dataset.k]=el.value;};
+C.tkreg=el=>{TK.d.reg=el.checked;};
 I.tkq=el=>{TK.d.q=el.value;};
 document.addEventListener('keydown',e=>{
   const t=e.target;if(e.key!=='Enter'||!t||!t.matches)return;

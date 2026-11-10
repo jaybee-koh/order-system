@@ -575,6 +575,16 @@ table.tbl tr.chdone td b,table.tbl tr.chdone td span{opacity:.75}
 .hbv{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.25}
 .hbv small{display:block;font-size:11px;font-weight:500;color:var(--mute)}
 @media(max-width:1200px){.hgrid2,.hg2{grid-template-columns:1fr}.hkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.hcol{display:flex;flex-direction:column}
+.hhead{margin-bottom:12px;min-height:36px}
+.hcol .htiles{flex:1;grid-template-rows:repeat(2,minmax(0,1fr))}
+.hcol .hsets{flex:1;grid-template-rows:repeat(3,minmax(0,1fr))}
+.hcol .hnote{min-height:34px}
+.htile{display:flex;flex-direction:column;justify-content:center}
+.hset{align-content:center}
+.hkpi b{font-size:22px}
+.hbox h3{font-size:14.5px}
 </style>
 </head>
 <body>
@@ -1326,6 +1336,12 @@ function dlt(cur,prev,unit,money){
   const df=cur-prev,pc=Math.abs(df/prev*100).toFixed(1),sg=df>0?'+':df<0?'−':'';
   return '<div class="hd '+(df>0?'up':df<0?'dn':'')+'">'+(df>0?'▲ ':df<0?'▼ ':'')+sg+f(df)+' ('+sg+pc+'%)</div>';
 }
+/* 그래프 폭(px): 실제 박스 너비에 맞춰 그려서 글자 크기가 커지지 않게 함 */
+function hcw(half){
+  const b=$('#hdash'),w=b?b.clientWidth:0;if(!w)return half?460:940;
+  const two=window.innerWidth>1200;
+  return Math.max(300,Math.round(half&&two?(w-16)/2-46:w-46));
+}
 function trendSeries(rows,mode,t){
   const keys=[];
   if(mode==='day'){for(let i=13;i>=0;i--){const k=addD(t,-i);keys.push({k,l:k.slice(5),l2:HD_WD[pDate(k).getDay()]});}}
@@ -1338,10 +1354,10 @@ function trendSeries(rows,mode,t){
 }
 const niceTop=m=>{if(m<=0)return 4;let s=Math.ceil(m/4);const g=Math.pow(10,Math.floor(Math.log10(s)));s=[1,2,5,10].map(f=>f*g).find(v=>v>=s);return s*4;};
 /* 판매 추이: 막대=판매금액, 선=결제건수 */
-function trendSvg(ser){
-  const W=640,H=250,L=52,R=34,T=24,B=44,pw=W-L-R,ph=H-T-B,n=ser.length;
+function trendSvg(ser,W){
+  const H=200,L=50,R=30,T=22,B=40,pw=W-L-R,ph=H-T-B,n=ser.length;
   const topP=niceTop(Math.max(0,...ser.map(x=>x.pay))),topC=Math.max(4,Math.max(0,...ser.map(x=>x.cnt)));
-  const slot=pw/n,bw=Math.min(40,slot*.56),Yp=v=>T+ph-v/topP*ph,Yc=v=>T+ph-v/topC*ph;
+  const slot=pw/n,bw=Math.min(34,slot*.5),Yp=v=>T+ph-v/topP*ph,Yc=v=>T+ph-v/topC*ph;
   let g='',pts=[];
   for(let i=0;i<=4;i++){const y=T+ph-ph*i/4;g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="#eef0f4"/><text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end" class="ax">'+fmtCompact(topP*i/4)+'</text><text x="'+(W-R+6)+'" y="'+(y+4)+'" class="ax" style="fill:#e8890c">'+Math.round(topC*i/4)+'</text>';}
   ser.forEach((x,i)=>{
@@ -1357,7 +1373,7 @@ function trendSvg(ser){
   return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="판매 추이 그래프">'+g+'</svg>';
 }
 /* 요일별 일평균 판매금액 */
-function wdChart(rows,t){
+function wdChart(rows,t,W){
   const from=HD.an?addD(t,-(HD.an-1)):(rows.length?rows.reduce((m,x)=>x.d<m?x.d:m,t):t);
   const days=Math.round((pDate(t)-pDate(from))/864e5)+1,occ=Array(7).fill(0);
   for(let i=0;i<days;i++)occ[pDate(addD(from,i)).getDay()]++;
@@ -1365,7 +1381,7 @@ function wdChart(rows,t){
   rows.forEach(r=>{const w=pDate(r.d).getDay();a[w].pay+=r.pay;a[w].cnt++;});
   const items=[1,2,3,4,5,6,0].map(w=>({w,avg:occ[w]?a[w].pay/occ[w]:0,ac:occ[w]?a[w].cnt/occ[w]:0,pay:a[w].pay,cnt:a[w].cnt}));
   const best=items.reduce((b,x)=>x.avg>b.avg?x:b,items[0]),mx=Math.max(1,...items.map(x=>x.avg));
-  const W=640,H=230,L=10,R=10,T=26,B=50,pw=W-L-R,ph=H-T-B,slot=pw/7,bw=Math.min(58,slot*.6);
+  const H=190,L=10,R=10,T=22,B=44,pw=W-L-R,ph=H-T-B,slot=pw/7,bw=Math.min(44,slot*.5);
   let g='';
   items.forEach((x,i)=>{
     const cx=L+slot*i+slot/2,h=x.avg/mx*ph,y=T+ph-h,isB=x.avg>0&&x.w===best.w;
@@ -1392,13 +1408,13 @@ function buildHome(){
   const st={pre:0,nw:0,cf:0,sh:0};
   S.orders.forEach(o=>{if(stOf(o)==='none'){st.pre++;return;}const s=ordStatus(o);if(s==='shipped')st.sh++;else if(s==='confirmed')st.cf++;else st.nw++;});
   const tile=(href,l,n,c,hint)=>'<a class="htile" href="#'+href+'" style="--c:'+c+'"><span>'+l+'</span><b>'+n.toLocaleString()+'<small>건</small></b><em>'+hint+'</em></a>';
-  const sale='<div class="card hbox"><div class="row" style="margin-bottom:12px"><h3 style="margin:0">판매관리</h3><span class="grow"></span><span class="mute small">전체 주문 '+S.orders.length.toLocaleString()+'건</span></div><div class="htiles">'+
-    tile('/orders/confirm','주문확정 전',st.pre,'#e8890c','미매핑 · 상품 연결 필요')+tile('/orders/check','신규주문',st.nw,'#3b5bdb','주문확인 대기')+tile('/orders/check','주문확인',st.cf,'#12a150','출고 대기')+tile('/orders/tracking','출고완료',st.sh,'#7048e8','운송장 입력 완료')+'</div></div>';
+  const sale='<div class="card hbox hcol"><div class="row hhead"><h3 style="margin:0">판매관리</h3><span class="grow"></span><span class="mute small">전체 주문 '+S.orders.length.toLocaleString()+'건</span></div><div class="htiles">'+
+    tile('/orders/confirm','주문확정 전',st.pre,'#e8890c','미매핑 · 상품 연결 필요')+tile('/orders/check','신규주문',st.nw,'#3b5bdb','주문확인 대기')+tile('/orders/check','주문확인',st.cf,'#12a150','출고 대기')+tile('/orders/tracking','출고완료',st.sh,'#7048e8','운송장 입력 완료')+'</div><div class="hnote">주문확정 전 = 상품 매핑이 안 된 주문 · 신규주문 = 매핑 후 확인 대기 · 건수는 전체 주문 기준</div></div>';
   /* 정산관리 */
   const sr={day:[t,t],week:[mondayOf(t),t],month:[t.slice(0,8)+'01',t],all:[null,null]}[HD.set];
   const sa=agg(inR(rows,sr[0],sr[1])),sm=sa.margin,rate=sa.mpay?sm/sa.mpay*100:0;
   const chip=(act,cur,list)=>'<div class="chips">'+list.map(([k,l])=>'<button class="chip'+(String(cur)===String(k)?' on':'')+'" data-act="'+act+'" data-m="'+k+'">'+l+'</button>').join('')+'</div>';
-  const settle='<div class="card hbox"><div class="row" style="margin-bottom:12px"><h3 style="margin:0">정산관리</h3><span class="grow"></span>'+chip('hset',HD.set,[['day','오늘'],['week','이번 주'],['month','이번 달'],['all','전체']])+'</div><div class="hsets">'+
+  const settle='<div class="card hbox hcol"><div class="row hhead"><h3 style="margin:0">정산관리</h3><span class="grow"></span>'+chip('hset',HD.set,[['day','오늘'],['week','이번 주'],['month','이번 달'],['all','전체']])+'</div><div class="hsets">'+
     '<div class="hset"><span>매출액</span><b>'+won(sa.pay)+'<small>원</small></b><em>결제금액 합계 · '+sa.cnt.toLocaleString()+'건</em></div>'+
     '<div class="hset"><span>매입액</span><b>'+won(sa.buy)+'<small>원</small></b><em>매입가 × 수량</em></div>'+
     '<div class="hset mg"><span>마진</span><b class="'+(sm<0?'neg':'')+'">'+won(sm)+'<small>원</small></b><em>마진율 '+rate.toFixed(1)+'% · 수수료 −'+won(sa.fee)+' · 배송비 −'+won(sa.ship)+'</em></div></div>'+
@@ -1410,9 +1426,9 @@ function buildHome(){
   const perf='<div class="card hbox"><div class="row" style="margin-bottom:4px"><h3 style="margin:0">판매성과</h3><span class="mute small">'+rg.cl+' '+(rg.cur[0]===rg.cur[1]?rg.cur[0]:rg.cur[0]+' ~ '+rg.cur[1])+' · '+rg.lab+'</span><span class="grow"></span>'+chip('hperf',HD.perf,[['day','일간'],['week','주간'],['month','월간']])+'</div>'+
     '<div class="hkpis">'+kpi('상품결제건수',cur.cnt.toLocaleString(),'건',dlt(cur.cnt,prv.cnt,'건'))+kpi('상품결제수량',cur.qty.toLocaleString(),'개',dlt(cur.qty,prv.qty,'개'))+kpi('상품결제단가',won(Math.round(cu)),'원',dlt(Math.round(cu),Math.round(pu),'',1))+kpi('판매금액(총)',won(cur.pay),'원',dlt(cur.pay,prv.pay,'',1))+'</div>'+
     '<div class="row" style="margin:14px 0 2px"><b style="font-size:13px">'+(HD.perf==='day'?'최근 14일':HD.perf==='week'?'최근 8주 (월요일 시작)':'최근 12개월')+' 판매 추이</b><span class="grow"></span><span class="hleg"><i style="background:#3b5bdb"></i>판매금액</span><span class="hleg"><i style="background:#e8890c;height:3px;border-radius:2px"></i>결제건수</span></div>'+
-    trendSvg(trendSeries(rows,HD.perf,t))+'<div class="mute small" style="margin-top:4px">주문 수집일 기준 · 상품결제단가 = 판매금액 ÷ 수량</div></div>';
+    trendSvg(trendSeries(rows,HD.perf,t),hcw(false))+'<div class="mute small" style="margin-top:4px">주문 수집일 기준 · 상품결제단가 = 판매금액 ÷ 수량</div></div>';
   /* 판매분석 */
-  const ar=inR(rows,HD.an?addD(t,-(HD.an-1)):null,t),aa=agg(ar),wd=wdChart(ar,t);
+  const ar=inR(rows,HD.an?addD(t,-(HD.an-1)):null,t),aa=agg(ar),wd=wdChart(ar,t,hcw(true));
   const malls=groupBy(ar,r=>r.o.mall||'미지정').sort((a,b)=>b.pay-a.pay);
   const mallH=hbars(malls.slice(0,8).map(x=>({l:x.l,v:x.pay,t:won(x.pay)+'원',s:(aa.pay?(x.pay/aa.pay*100).toFixed(1):'0.0')+'% · '+x.cnt.toLocaleString()+'건'})),'#3b5bdb');
   const tops=groupBy(ar,r=>r.p?r.p.name+(r.p.option?' / '+r.p.option:''):(r.o.itemName||'(상품명 없음)')+(r.o.itemOption?' / '+r.o.itemOption:'')).sort((a,b)=>b.pay-a.pay||b.qty-a.qty).slice(0,10);
@@ -1433,7 +1449,9 @@ function redrawHome(){const b=$('#hdash');if(b)b.innerHTML=buildHome();}
 A.hperf=el=>{HD.perf=el.dataset.m;redrawHome();};
 A.hset=el=>{HD.set=el.dataset.m;redrawHome();};
 A.han=el=>{HD.an=+el.dataset.m;redrawHome();};
-ROUTES['/home']=pgHome;
+ROUTES['/home']=()=>{setTimeout(redrawHome,0);return pgHome();};
+let _hrz2=0,_hw2=0;
+window.addEventListener('resize',()=>{clearTimeout(_hrz2);_hrz2=setTimeout(()=>{const b=$('#hdash');if(b&&b.clientWidth&&Math.abs(b.clientWidth-_hw2)>4){_hw2=b.clientWidth;redrawHome();}},150);});
 
 async function buildDumpDB(){
   const [sup,prod,ord,rules,meta]=await Promise.all(['suppliers','products','orders','rules','meta'].map(getAll));

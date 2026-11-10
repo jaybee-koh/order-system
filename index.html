@@ -1918,20 +1918,30 @@ A.bulkmatch=async()=>{
   const targets=sel.filter(o=>stOf(o)==='none');
   const already=sel.length-targets.length;
   if(!targets.length){toast('선택한 주문이 모두 이미 매핑되어 있습니다.','err');return;}
-  /* 상품명 + 옵션명 이중 체크용 색인 (정규화한 상품명||옵션명 → 상품 목록) */
-  const idx=new Map();
+  /* 상품명 색인 (정규화한 상품명 → 상품 목록) */
+  const byName=new Map();
   S.products.forEach(p=>{
     if(!M.sup.has(p.supplierId))return;
-    const k=norm(p.name)+'||'+norm(p.option);
-    if(!idx.has(k))idx.set(k,[]);
-    idx.get(k).push(p);
+    const k=norm(p.name);
+    if(!byName.has(k))byName.set(k,[]);
+    byName.get(k).push(p);
   });
   const changed=[],ruleRows=[];let none=0,multi=0;
   targets.forEach(o=>{
-    if(!norm(o.itemName)){none++;return;}
-    const hit=idx.get(ruleKey(o))||[];      /* 상품명·옵션명이 둘 다 일치해야 후보 */
+    const nk=norm(o.itemName);
+    if(!nk){none++;return;}
+    const cands=byName.get(nk)||[];           /* 1차: 상품명 일치 */
+    if(!cands.length){none++;return;}
+    const oo=norm(o.itemOption);
+    let hit;
+    if(!oo){
+      hit=cands;                              /* 주문에 옵션이 없으면 상품명이 유일할 때만 */
+    }else{                                    /* 2차: 옵션명 확인 */
+      hit=cands.filter(p=>norm(p.option)===oo);
+      if(!hit.length)hit=cands.filter(p=>{const po=norm(p.option);return po&&(po.includes(oo)||oo.includes(po));});
+    }
     if(!hit.length){none++;return;}
-    if(hit.length>1){multi++;return;}        /* 후보가 2개 이상이면 불확실 → 제외 */
+    if(hit.length>1){multi++;return;}         /* 후보가 2개 이상이면 불확실 → 제외 */
     const pr=hit[0];
     o.productId=pr.id;o.matchedAuto=true;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
     changed.push(o);
@@ -1945,7 +1955,7 @@ A.bulkmatch=async()=>{
   }
   const skipped=none+multi;
   let msg='일괄매핑 완료: '+changed.length+'건 매핑';
-  if(skipped)msg+=' / '+skipped+'건 제외(상품명·옵션명이 정확히 일치하는 상품이 없거나 2개 이상)';
+  if(skipped)msg+=' / '+skipped+'건 제외(일치하는 상품이 없거나 후보가 2개 이상)';
   if(already)msg+=' / 이미 매핑된 '+already+'건 건너뜀';
   toast(msg,changed.length?'ok':'err',7000);
   redrawConfirm();

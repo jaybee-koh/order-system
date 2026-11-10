@@ -1939,12 +1939,13 @@ A.bulkmatch=async()=>{
     const covered=(x,y,ytxt)=>[...x].every(t=>/^\d+$/.test(t)?y.has(t):ytxt.includes(t));
     return covered(B,A,norm(a))||covered(A,B,norm(b));
   };
+  const NOOPT=new Set(['없음','옵션없음','해당없음','선택안함','선택없음','기본','기본옵션','단일상품','단품','없습니다','null','none','na','-']);
   const changed=[],ruleRows=[];let none=0,multi=0;
   targets.forEach(o=>{
     const nk=norm(o.itemName);
     if(!nk){none++;return;}
     const cands=byName.get(nk)||[];           /* 1차: 상품명 일치 */
-    const oo=norm(o.itemOption);
+    const oo0=norm(o.itemOption),oo=NOOPT.has(oo0)?'':oo0;   /* '없음' 등은 옵션 없음으로 처리 */
     let hit;
     if(!cands.length){
       /* 상품명이 완전히 같지 않아도, 옵션명이 완전히 같고 상품명 단어가 서로 포함되면 확실한 건으로 처리 */

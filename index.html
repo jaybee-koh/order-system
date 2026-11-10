@@ -2928,17 +2928,30 @@ A.ckdlall=()=>ckDownload(ckList(),'다운로드할 주문이 없습니다.');
 async function ckDownload(list,emptyMsg){
   if(!list.length){toast(emptyMsg,'err');return;}
   const tpl=DEFAULT_TPL;
-  const withTrk=list.length>0&&list.every(o=>ordStatus(o)==='shipped');
-  /* 출고완료 다운로드에서만 자체주문번호 대신 쇼핑몰주문번호를 내려받습니다 */
-  const hdr=tpl.headers.map(h=>withTrk&&h==='자체주문번호'?'쇼핑몰주문번호':h);
-  const mapping=tpl.mapping.map(m=>withTrk&&m.src==='ownNo'?{...m,src:'orderNo'}:m);
-  const rows=[hdr.concat(withTrk?['택배사','운송장번호']:[])];
-  list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(mapping.map(m=>cellVal(o,p,s,i+1,m)).concat(withTrk?[o.carrier||'',o.trackingNo||'']:[]));});
+  const allShip=list.every(o=>ordStatus(o)==='shipped');
+  /* 출고완료 주문이 하나라도 있으면 택배사·운송장번호를 함께 내려받습니다 */
+  const withTrk=list.some(o=>ordStatus(o)==='shipped'||o.trackingNo);
+  /* 출고완료만 다운로드할 때는 자체주문번호 대신 쇼핑몰주문번호를 내려받습니다 */
+  const hdr=tpl.headers.map(h=>allShip&&h==='자체주문번호'?'쇼핑몰주문번호':h);
+  const mapping=tpl.mapping.map(m=>allShip&&m.src==='ownNo'?{...m,src:'orderNo'}:m);
+  const ti=hdr.indexOf('운송장번호');   /* 기본 양식의 빈 '운송장번호' 칸을 채우고, 그 앞에 '택배사' 칸을 넣습니다 */
+  const rows=[];
+  if(withTrk){const h=hdr.slice();if(ti>=0)h.splice(ti,0,'택배사');else h.push('택배사','운송장번호');rows.push(h);}
+  else rows.push(hdr);
+  list.forEach((o,i)=>{
+    const {p,s}=orderInfo(o);
+    const r=mapping.map(m=>cellVal(o,p,s,i+1,m));
+    if(withTrk){
+      if(ti>=0){r[ti]=o.trackingNo||'';r.splice(ti,0,o.carrier||'');}
+      else r.push(o.carrier||'',o.trackingNo||'');
+    }
+    rows.push(r);
+  });
   download(buildXlsx(rows,'발주서'),'주문확인_발주_'+localDate().replace(/-/g,'')+'.xlsx');
   const now=new Date().toISOString();
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});
   await putMany('orders',list);
-  toast(list.length+'건을 다운로드했습니다.');
+  toast(list.length+'건을 다운로드했습니다.'+(withTrk?' (택배사·운송장번호 포함)':''));
 }
 
 

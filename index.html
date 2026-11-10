@@ -1818,7 +1818,6 @@ function pgConfirm(){
   '<div class="card row"><div class="chips">'+[['all','전체'],['none','미매핑'],['matched','매핑완료']].map(([k,l])=>'<button class="chip'+(CF.status===k?' on':'')+'" data-act="cstat" data-s="'+k+'">'+l+'</button>').join('')+'</div><span class="grow"></span>'+
   '<select data-chg="cdate"><option value="">전체 수집일</option>'+dates.map(d=>'<option value="'+d+'"'+(CF.date===d?' selected':'')+'>'+d+'</option>').join('')+'</select>'+
   '<input type="text" placeholder="자체주문번호 · 주문번호 · 수취인 · 상품명 검색" style="width:240px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
-  '<div class="row" style="margin:0 0 10px"><span class="mute small">주문을 체크한 뒤 [일괄매핑]은 상품명·옵션명이 일치하는 확실한 건만 자동 매핑하고, [매핑해제]는 체크한 주문의 매핑을 해제합니다.</span><span class="grow"></span><button class="btn pri" data-act="bulkmatch">일괄매핑</button><button class="btn" data-act="bulkunmatch">매핑해제</button></div>'+
   '<div id="ctbl"></div>';
 }
 ROUTES['/orders/confirm']=pgConfirm;
@@ -1830,7 +1829,7 @@ function drawConfirmTable(){
   const allSel=list.length&&list.every(o=>CF.sel.has(o.id));
   if(!S.orders.length){box.innerHTML='<div class="card mute">수집된 주문이 없습니다. <a href="#/orders/collect">주문 수집</a>에서 주문내역 파일을 올려주세요.</div>';return;}
   if(!list.length){box.innerHTML='<div class="card mute">조건에 맞는 주문이 없습니다.</div>';return;}
-  box.innerHTML='<div class="mute small" style="margin-bottom:6px">자료수 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</div>'+
+  box.innerHTML='<div class="row" style="margin-bottom:6px"><span class="mute small">자료수 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</span><span class="grow"></span><button class="btn pri" data-act="bulkmatch">일괄매핑</button><button class="btn" data-act="bulkunmatch">매핑해제</button></div>'+
   fitTable('confirm',[{t:'<input type="checkbox" data-chg="csall"'+(allSel?' checked':'')+'>'},{t:'쇼핑몰 / 주문번호 <span style="color:#1c7ed6">자체주문번호</span>'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메세지'},{t:'주문 상품'},{t:'수량',c:'num'},{t:'매핑'},{t:'매입처'}],
   cur.map(o=>{
     const {p,s}=orderInfo(o),st=stOf(o);

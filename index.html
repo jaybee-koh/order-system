@@ -2700,7 +2700,7 @@ function ckRange(k){
 function ckInit(){
   if(CK.init)return;
   const r=ckRange('7');
-  CK.d={status:'new',mall:'',sup:'',from:r[0],to:r[1],field:'orderNo',q:''};
+  CK.d={status:'',mall:'',sup:'',from:r[0],to:r[1],field:'orderNo',q:''};
   CK.a=Object.assign({},CK.d);CK.init=true;
 }
 function ckList(skipStatus){
@@ -2708,7 +2708,7 @@ function ckList(skipStatus){
   return S.orders.filter(o=>{
     const {p,s}=orderInfo(o);
     if(!p)return false;
-    if(!skipStatus&&ordStatus(o)!==a.status)return false;
+    if(!skipStatus&&a.status&&ordStatus(o)!==a.status)return false;
     if(a.mall==='__none'){if(o.mall)return false;}else if(a.mall&&o.mall!==a.mall)return false;
     if(a.sup&&s.id!==+a.sup)return false;
     const cd=o.collectedDate||'';
@@ -2726,7 +2726,7 @@ function pgCheck(){
   const lb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
   return '<h1>주문확인처리</h1><p class="sub">매핑이 끝난 주문만 조회됩니다. 조회 기준 일자는 주문 수집일입니다. 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
   '<div class="card">'+
-  '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option></select>'+
+  '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value=""'+(d.status===''?' selected':'')+'>전체</option><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option></select>'+
   '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="ckf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
   '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="ckf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+
   '<div class="row" style="margin-bottom:10px">'+lb('수집일자')+'<input type="date" id="ckfrom" data-chg="ckf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ckto" data-chg="ckf" data-k="to" value="'+esc(d.to)+'">'+
@@ -2742,7 +2742,7 @@ function drawCheckTable(){
   if(kc){
     const cnt={new:0,confirmed:0,shipped:0};
     ckList(true).forEach(o=>{cnt[ordStatus(o)]++;});
-    kc.innerHTML='<div class="chips" style="display:inline-flex">'+['new','confirmed','shipped'].map(k=>'<button class="chip'+(CK.a.status===k?' on':'')+'" data-act="ckstat" data-s="'+k+'">'+ST_NAME[k]+' <b>'+cnt[k].toLocaleString()+'</b></button>').join('')+'</div>';
+    kc.innerHTML='<div class="chips" style="display:inline-flex">'+['','new','confirmed','shipped'].map(k=>'<button class="chip'+(CK.a.status===k?' on':'')+'" data-act="ckstat" data-s="'+k+'">'+(k?ST_NAME[k]:'전체')+' <b>'+(k?cnt[k]:cnt.new+cnt.confirmed+cnt.shipped).toLocaleString()+'</b></button>').join('')+'</div>';
   }
   const list=ckList();
   const pages=Math.max(1,Math.ceil(list.length/PAGE_O));if(CK.page>=pages)CK.page=pages-1;
@@ -2832,7 +2832,7 @@ A.csSave=async()=>{
   drawCheckTable();
 };
 A.ckstat=el=>{
-  const s=el.dataset.s;if(!ST_NAME[s])return;
+  const s=el.dataset.s;if(s&&!ST_NAME[s])return;
   CK.a.status=s;CK.d.status=s;CK.page=0;CK.sel.clear();
   const sel=$('[data-chg="ckf"][data-k="status"]');if(sel)sel.value=s;
   drawCheckTable();
@@ -2880,7 +2880,7 @@ A.ckdlall=()=>ckDownload(ckList(),'다운로드할 주문이 없습니다.');
 async function ckDownload(list,emptyMsg){
   if(!list.length){toast(emptyMsg,'err');return;}
   const tpl=DEFAULT_TPL;
-  const withTrk=CK.a.status==='shipped';
+  const withTrk=list.length>0&&list.every(o=>ordStatus(o)==='shipped');
   /* 출고완료 다운로드에서만 자체주문번호 대신 쇼핑몰주문번호를 내려받습니다 */
   const hdr=tpl.headers.map(h=>withTrk&&h==='자체주문번호'?'쇼핑몰주문번호':h);
   const mapping=tpl.mapping.map(m=>withTrk&&m.src==='ownNo'?{...m,src:'orderNo'}:m);

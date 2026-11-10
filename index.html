@@ -1504,29 +1504,56 @@ A.psaleBulk=async()=>{
   toast(list.length.toLocaleString()+'개 상품의 판매상태를 '+st+'(으)로 변경했습니다.');
 };
 C.pselall=el=>{const list=filteredProducts().slice(PL.page*PAGE_P,(PL.page+1)*PAGE_P);list.forEach(p=>el.checked?PL.sel.add(p.id):PL.sel.delete(p.id));drawProducts();};
-/* ---- 상품 수정 (매입가 / 매입처) ---- */
+/* ---- 상품 수정 (매입처 / 자체상품코드 / 상품명 / 옵션명 / 카테고리 / 매입가 / 부가세 / 배송비) ---- */
 let PE=null;
 A.pEdit=el=>{
   const p=M.prod.get(+el.dataset.id);if(!p)return;
   PE=p.id;
   const n=S.orders.filter(o=>o.productId===p.id).length;
-  openModal('<h2>매입 상품 수정</h2><div class="card" style="background:#f7f8fb;box-shadow:none;margin-bottom:0"><div class="small mute">자체 상품코드 '+esc(p.code)+'</div><div><b>'+esc(p.name)+'</b>'+(p.option?' <span class="mute">/ '+esc(p.option)+'</span>':'')+'</div></div>'+
-    '<label class="f">매입처</label><select id="pe-sup" style="width:100%">'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(x.id===p.supplierId?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select>'+
-    (n?'<div class="mute small" style="margin-top:5px">이 상품과 매핑된 주문 '+n+'건이 있습니다. 매입처를 바꾸면 해당 주문의 매입처도 함께 바뀝니다.</div>':'')+
-    '<label class="f">매입가</label><input type="text" id="pe-price" inputmode="numeric" style="width:100%" value="'+esc(p.price===''||p.price==null?'':p.price)+'" placeholder="숫자만 입력">'+
-    '<div class="foot"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="pSave">저장</button></div>');
-  const inp=$('#pe-price');if(inp){inp.focus();inp.select();}
+  const v=x=>esc(x===''||x==null?'':x);
+  const fld=(label,req,html)=>'<div><label class="f'+(req?' rq':'')+'">'+label+'</label>'+html+'</div>';
+  const inp=(id,val,ph,num)=>'<input type="text" id="'+id+'" style="width:100%"'+(num?' inputmode="numeric"':'')+' value="'+v(val)+'" placeholder="'+(ph||'')+'">';
+  const sel=(id,cur,opts)=>'<select id="'+id+'" style="width:100%">'+opts.map(o=>'<option value="'+o+'"'+(cur===o?' selected':'')+'>'+(o||'미지정')+'</option>').join('')+'</select>';
+  const supSel='<select id="pe-sup" style="width:100%">'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(x.id===p.supplierId?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select>';
+  const taxOpts=p.taxType?['과세','면세']:['','과세','면세'];
+  const shipOpts=p.shipFee?['포함','미포함']:['','포함','미포함'];
+  openModal('<h2>매입 상품 수정</h2>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 16px">'+
+    fld('매입처',1,supSel)+fld('자체상품코드',0,inp('pe-code',p.code,'비워두면 자동 부여'))+
+    fld('상품명',1,inp('pe-name',p.name))+fld('옵션명',1,inp('pe-option',p.option))+
+    fld('카테고리',0,inp('pe-cat',p.category))+fld('매입가',0,inp('pe-price',p.price,'숫자만 입력',1))+
+    fld('부가세',0,sel('pe-tax',p.taxType||'',taxOpts))+fld('배송비',0,sel('pe-shipfee',p.shipFee||'',shipOpts))+
+    fld('배송비 금액',0,inp('pe-shipamt',p.shipAmount,'숫자만 입력',1))+
+    '</div>'+
+    (n?'<div class="mute small" style="margin-top:8px">이 상품과 매핑된 주문 '+n+'건이 있습니다. 매입처를 바꾸면 해당 주문의 매입처도 함께 바뀝니다. 상품명·옵션명을 바꿔도 기존 주문 매핑은 유지됩니다.</div>':'')+
+    '<div class="foot"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="pSave">저장</button></div>','');
+  const f=$('#pe-name');if(f){f.focus();}
 };
 A.pSave=async()=>{
   const p=M.prod.get(PE);if(!p)return;
   const sid=+$('#pe-sup').value;
-  const raw=$('#pe-price').value.replace(/[,원\s]/g,'');
-  if(raw!==''&&(isNaN(Number(raw))||Number(raw)<0)){toast('매입가는 숫자로 입력하세요.','err');return;}
+  const code=$('#pe-code').value.trim();
+  const name=$('#pe-name').value.trim();
+  const option=$('#pe-option').value.trim();
+  const category=$('#pe-cat').value.trim();
+  const taxType=$('#pe-tax').value;
+  const shipFee=$('#pe-shipfee').value;
+  const num=(id,label)=>{
+    const raw=$(id).value.replace(/[,원\s]/g,'');
+    if(raw==='')return '';
+    if(isNaN(Number(raw))||Number(raw)<0){toast(label+'는 숫자로 입력하세요.','err');return null;}
+    return Number(raw);
+  };
   if(!M.sup.has(sid)){toast('매입처를 선택하세요.','err');return;}
-  if(sid!==p.supplierId&&S.products.some(x=>x.id!==p.id&&x.supplierId===sid&&norm(x.name)===norm(p.name)&&norm(x.option)===norm(p.option))){
-    toast('선택한 매입처에 같은 상품명·옵션의 상품이 이미 있어 옮길 수 없습니다.','err',6000);return;
+  if(!name){toast('상품명을 입력하세요.','err');return;}
+  if(!option){toast('옵션명을 입력하세요.','err');return;}
+  const price=num('#pe-price','매입가');if(price===null)return;
+  const shipAmount=num('#pe-shipamt','배송비 금액');if(shipAmount===null)return;
+  if(code&&S.products.some(x=>x.id!==p.id&&String(x.code||'')===code)){toast('이미 사용 중인 자체상품코드입니다. 다른 코드를 입력하거나 비워 두세요.','err',5000);return;}
+  if(S.products.some(x=>x.id!==p.id&&x.supplierId===sid&&norm(x.name)===norm(name)&&norm(x.option)===norm(option))){
+    toast('선택한 매입처에 같은 상품명·옵션명의 상품이 이미 있어 저장할 수 없습니다.','err',6000);return;
   }
-  const next={...p,supplierId:sid,price:raw===''?'':Number(raw),updatedAt:new Date().toISOString()};
+  const next={...p,supplierId:sid,code:code||p.code||genCode(new Set(S.products.map(x=>String(x.code||'')))),name,option,category,price,taxType,shipFee,shipAmount,updatedAt:new Date().toISOString()};
   try{await putOne('products',next);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
   Object.assign(p,next);rebuild();closeModal();PE=null;toast('수정했습니다.');drawProducts();
 };

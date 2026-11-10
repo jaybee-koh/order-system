@@ -301,7 +301,39 @@ input[type=file]::file-selector-button:hover{background:#f3f5fa}
 .hgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
 .hgrid>.card{min-width:0}
 @media(max-width:1100px){.hgrid{grid-template-columns:1fr}}
-@media(max-width:800px){#nav{display:none}#view{padding:20px 16px 50px}}
+#mtop,#nav-ov{display:none}
+@media(max-width:800px){
+  #app{flex-direction:column}
+  #view{padding:20px 16px 50px;width:100%}
+  #mtop{
+    display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:900;
+    height:54px;padding:0 12px;background:var(--nav-bg);color:#fff;
+    box-shadow:0 2px 8px rgba(0,0,0,.18);
+  }
+  #mtop .mbtn{
+    width:40px;height:40px;border:0;border-radius:10px;background:transparent;color:#fff;
+    display:grid;place-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  }
+  #mtop .mbtn:active{background:rgba(255,255,255,.12)}
+  #mtop .mbtn svg{width:24px;height:24px}
+  #mtop .mttl{font-weight:700;font-size:15.5px;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #nav{
+    display:flex;position:fixed;left:0;top:0;bottom:0;height:100%;width:272px;max-width:84vw;
+    z-index:1001;transform:translateX(-102%);transition:transform .25s ease;
+    box-shadow:none;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+    padding-top:calc(20px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  }
+  body.navopen #nav{transform:none;box-shadow:var(--sh-lg)}
+  #nav a{padding:12px 12px;font-size:14.5px}
+  #nav a.nsub{padding-left:39px}
+  #nav a.on::before{left:-12px}
+  #nav-ov{
+    display:block;position:fixed;inset:0;z-index:1000;background:rgba(10,15,30,.5);
+    opacity:0;pointer-events:none;transition:opacity .25s ease;
+  }
+  body.navopen #nav-ov{opacity:1;pointer-events:auto}
+  body.navopen{overflow:hidden}
+}
 
 
 /* 주문 확정 관리: 가로 스크롤 없이 한 화면에 */
@@ -616,6 +648,13 @@ table.tbl tr.chdone td b,table.tbl tr.chdone td span{opacity:.75}
   </div>
 </div>
 <div id="app">
+  <header id="mtop">
+    <button type="button" class="mbtn" id="nav-toggle" aria-label="메뉴 열기" aria-controls="nav" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <span class="mttl" id="mtop-ttl">발주 관리</span>
+  </header>
+  <div id="nav-ov"></div>
   <nav id="nav"></nav>
   <main id="view"></main>
 </div>
@@ -1301,6 +1340,7 @@ function drawNav(cur){
   $('#nav').innerHTML='<div class="logo"><span class="mark">'+IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/>')+'</span><div>발주 관리<small>Order Management</small></div></div>'+
   NAV.map(n=>n.parent?'<div class="nparent">'+(ICONS['p_'+n.parent]||ICONS.parent)+n.parent+'</div>':n.g?'<div class="grp">'+n.g+'</div>':'<a href="#'+n.h+'" class="'+(n.sub?'nsub ':'')+(n.h===cur?'on':'')+'">'+(n.sub?'':(ICONS[n.h]||''))+n.t+'</a>').join('')+
   '<div class="navfoot"><div class="acct">'+esc(window.__USER)+'</div>데이터는 서버에 계정별로 저장됩니다.<div id="syncst"></div><button type="button" class="logout" onclick="zianLogout()">로그아웃</button></div>';
+  const on=document.querySelector('#nav a.on');const tt=document.getElementById('mtop-ttl');if(tt)tt.textContent=on?on.textContent.trim():'발주 관리';
   SYNC.paint();
 }
 const ROUTES={};
@@ -1313,6 +1353,15 @@ function route(){
   if(ROUTES[cur]===pgCheck)drawCheckTable();
   if(ROUTES[cur]===pgTrack)drawTrackTable();
 }
+function setNav(open){
+  document.body.classList.toggle('navopen',!!open);
+  const b=document.getElementById('nav-toggle');if(b){b.setAttribute('aria-expanded',open?'true':'false');b.setAttribute('aria-label',open?'메뉴 닫기':'메뉴 열기');}
+}
+document.getElementById('nav-toggle').addEventListener('click',()=>setNav(!document.body.classList.contains('navopen')));
+document.getElementById('nav-ov').addEventListener('click',()=>setNav(false));
+document.getElementById('nav').addEventListener('click',e=>{if(e.target.closest('a'))setNav(false);});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')setNav(false);});
+window.addEventListener('resize',()=>{if(window.innerWidth>800)setNav(false);});
 window.addEventListener('hashchange',()=>{CF.keep.clear();if(location.hash==='#/suppliers/new'){if(SF.edit)SF.edit=false;else SF=blankSF();}route();window.scrollTo(0,0);});
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&A[el.dataset.act]){A[el.dataset.act](el,e);}});
 document.addEventListener('change',e=>{const el=e.target.closest('[data-chg]');if(el&&C[el.dataset.chg])C[el.dataset.chg](el,e);});

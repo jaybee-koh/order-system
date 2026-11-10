@@ -1598,6 +1598,9 @@ function chTypes(r){
 const chRowOf=rid=>CH.rows.find(r=>r.rid===rid);
 const chProd=code=>{const c=String(code||'').trim();return c?(S.products.find(p=>String(p.code||'')===c)||null):null;};
 const chName=p=>p?p.name+(p.option?' / '+p.option:''):'';
+const chSup=p=>{const x=p?M.sup.get(p.supplierId):null;return x?x.name:'';};
+/* 기록의 매입처 — 입력 당시 저장해 둔 값, 이전 기록은 현재 상품의 매입처 */
+const chSupOf=r=>r.sup!=null&&r.sup!==''?r.sup:chSup(M.prod.get(r.productId));
 const chQ=(rid,attr)=>document.querySelector('['+attr+'="'+rid+'"]');
 function chHint(r,p){
   if(!String(r.code).trim())return '';
@@ -1613,6 +1616,7 @@ function pgChanges(){
     const inp=(k,ph,num)=>'<input type="text" data-inp="chf" data-r="'+r.rid+'" data-k="'+k+'"'+(num?' inputmode="numeric"':'')+' value="'+esc(r[k])+'" placeholder="'+(ph||'')+'">';
     const saleOpt='<select data-chg="chf" data-r="'+r.rid+'" data-k="sale"><option value="">변경 없음</option>'+SALE_ST.map(x=>'<option value="'+x+'"'+(r.sale===x?' selected':'')+'>'+x+'</option>').join('')+'</select>';
     return '<tr><td class="nw mute">'+(i+1)+'</td>'+
+      '<td style="min-width:150px"><input type="text" readonly tabindex="-1" data-s="'+r.rid+'" value="'+esc(chSup(p))+'" placeholder="자동 입력"></td>'+
       '<td style="min-width:170px"><div style="position:relative"><input type="text" style="padding-right:40px" data-inp="chf" data-r="'+r.rid+'" data-k="code" value="'+esc(r.code)+'" placeholder="상품코드"><button type="button" class="chpick" data-act="chPick" data-r="'+r.rid+'" title="상품 조회 (여러 개 선택 가능)" aria-label="상품 조회">'+IC('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>')+'</button></div><div class="small" data-h="'+r.rid+'" style="margin-top:4px;min-height:1.2em">'+chHint(r,p)+'</div></td>'+
       '<td style="min-width:230px"><input type="text" readonly tabindex="-1" data-n="'+r.rid+'" value="'+esc(chName(p))+'" placeholder="상품코드를 넣으면 자동 입력"></td>'+
       '<td style="min-width:120px">'+inp('before','현재 값',1)+'</td>'+
@@ -1624,7 +1628,7 @@ function pgChanges(){
   }).join('');
   return '<h1>상품변경사항</h1><p class="sub">판매가·판매상태·이미지·기타(상세페이지 등) 변경 내용을 입력하면 아래에 기록됩니다. 판매가와 판매상태는 상품 리스트(매입 상품 조회)에도 바로 반영되고, 이미지변경과 기타변경사항은 기록만 남습니다. 상품코드 칸의 돋보기로 여러 상품을 한 번에 골라 한꺼번에 입력할 수 있습니다. 판매가는 상품 리스트의 가격(매입가 칸)에 반영됩니다.</p>'+
   '<div class="card"><div class="row" style="margin-bottom:12px"><label class="f rq" style="margin:0">일자</label><input type="date" data-chg="chf" data-k="date" value="'+esc(CH.date)+'"><span class="grow"></span><button class="btn sm" data-act="chRowAdd">+ 행 추가</button></div>'+
-  '<div class="tblwrap chtbl" style="overflow:auto"><table class="tbl"><thead><tr><th>#</th><th>상품코드</th><th>상품명</th><th>변경 전 판매가</th><th>변경 후 판매가</th><th>판매상태 변경</th><th>이미지변경</th><th>기타변경사항</th><th></th></tr></thead><tbody>'+draft+'</tbody></table></div>'+
+  '<div class="tblwrap chtbl" style="overflow:auto"><table class="tbl"><thead><tr><th>#</th><th>매입처</th><th>상품코드</th><th>상품명</th><th>변경 전 판매가</th><th>변경 후 판매가</th><th>판매상태 변경</th><th>이미지변경</th><th>기타변경사항</th><th></th></tr></thead><tbody>'+draft+'</tbody></table></div>'+
   '<div class="row" style="margin-top:16px"><button class="btn pri" data-act="chAdd">입력</button><span class="mute small">행마다 변경 후 판매가, 판매상태, 이미지변경, 기타변경사항 중 하나 이상은 입력해야 합니다. 비어 있는 행은 무시됩니다.</span></div></div>'+
   '<h3 style="margin:20px 0 8px">변경 기록</h3>'+
   '<div class="card row"><span class="small"><b>변경내용</b></span><select data-chg="chfl" data-k="type"><option value="">전체</option>'+CH_TYPES.map(x=>'<option value="'+x+'"'+(CHFL.type===x?' selected':'')+'>'+x+'</option>').join('')+'</select>'+
@@ -1645,10 +1649,10 @@ function chRecHtml(){
   const rows=list.map(r=>{
     const types=chTypes(r).map(t=>'<span style="display:inline-block;margin:0 4px 2px 0;font-weight:700;color:'+CH_CLR[t]+'">'+t+'</span>').join('');
     const sale=r.sale?'<b style="color:'+SALE_CLR[r.sale]+'">'+(r.prevSale&&r.prevSale!==r.sale?esc(r.prevSale)+' → ':'')+esc(r.sale)+'</b>':'<span class="mute">-</span>';
-    return '<tr'+(r.applied?' class="chdone"':'')+'><td class="nw">'+esc(r.date)+'</td><td class="nw">'+esc(r.code)+'</td><td>'+esc(r.name+(r.option?' / '+r.option:''))+'</td><td class="nw">'+types+'</td><td class="num">'+(won(r.before)||'-')+'</td><td class="num">'+(r.after===''||r.after==null?'<span class="mute">-</span>':'<b>'+won(r.after)+'</b>')+'</td><td class="nw">'+sale+'</td><td>'+(r.etc?esc(r.etc):'<span class="mute">-</span>')+'</td><td style="text-align:center"><input type="checkbox" data-chg="chApplied" data-id="'+esc(r.id)+'"'+(r.applied?' checked':'')+'></td><td class="nw"><button class="btn sm danger" data-act="chDel" data-id="'+esc(r.id)+'">삭제</button></td></tr>';
+    return '<tr'+(r.applied?' class="chdone"':'')+'><td class="nw">'+esc(r.date)+'</td><td class="nw">'+esc(chSupOf(r))+'</td><td class="nw">'+esc(r.code)+'</td><td>'+esc(r.name+(r.option?' / '+r.option:''))+'</td><td class="nw">'+types+'</td><td class="num">'+(won(r.before)||'-')+'</td><td class="num">'+(r.after===''||r.after==null?'<span class="mute">-</span>':'<b>'+won(r.after)+'</b>')+'</td><td class="nw">'+sale+'</td><td>'+(r.etc?esc(r.etc):'<span class="mute">-</span>')+'</td><td style="text-align:center"><input type="checkbox" data-chg="chApplied" data-id="'+esc(r.id)+'"'+(r.applied?' checked':'')+'></td><td class="nw"><button class="btn sm danger" data-act="chDel" data-id="'+esc(r.id)+'">삭제</button></td></tr>';
   }).join('');
   return '<div class="mute small" style="margin:2px 0 6px">'+(filtered?'조회 결과 '+list.length.toLocaleString()+'건 · 전체 '+all.length.toLocaleString()+'건':'총 '+all.length.toLocaleString()+'건')+'</div>'+
-  (list.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>일자</th><th>상품코드</th><th>상품명</th><th>변경내용</th><th class="num">변경 전 판매가</th><th class="num">변경 후 판매가</th><th>판매상태 변경</th><th>기타변경사항</th><th style="text-align:center">반영여부</th><th>관리</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="card mute">'+(filtered?'조건에 맞는 변경 기록이 없습니다.':'입력한 변경사항이 없습니다.')+'</div>');
+  (list.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>일자</th><th>매입처</th><th>상품코드</th><th>상품명</th><th>변경내용</th><th class="num">변경 전 판매가</th><th class="num">변경 후 판매가</th><th>판매상태 변경</th><th>기타변경사항</th><th style="text-align:center">반영여부</th><th>관리</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="card mute">'+(filtered?'조건에 맞는 변경 기록이 없습니다.':'입력한 변경사항이 없습니다.')+'</div>');
 }
 const chDrawList=()=>{const b=$('#chlist');if(b)b.innerHTML=chRecHtml();};
 C.chfl=el=>{CHFL[el.dataset.k]=el.value;chDrawList();};
@@ -1665,6 +1669,7 @@ const chInput=el=>{
   if(k==='code'){
     const p=chProd(r.code);
     const nm=chQ(r.rid,'data-n');if(nm)nm.value=chName(p);
+    const sp=chQ(r.rid,'data-s');if(sp)sp.value=chSup(p);
     const h=chQ(r.rid,'data-h');if(h)h.innerHTML=chHint(r,p);
     if(!r.bt){
       r.before=p&&p.price!==''&&p.price!=null?String(p.price):'';
@@ -1747,7 +1752,7 @@ A.chAdd=async()=>{
     const prevSale=saleOf(p);
     if(after!==''){p.price=after;p.updatedAt=now;changed.add(p);}
     if(sale){p.saleStatus=sale;changed.add(p);}
-    recs.push({id:'c'+Date.now().toString(36)+i.toString(36)+Math.random().toString(36).slice(2,5),date:CH.date,code:String(p.code||''),productId:p.id,name:p.name,option:p.option||'',before,after,sale,prevSale,img,etc,applied:false,createdAt:now});
+    recs.push({id:'c'+Date.now().toString(36)+i.toString(36)+Math.random().toString(36).slice(2,5),date:CH.date,code:String(p.code||''),productId:p.id,sup:chSup(p),name:p.name,option:p.option||'',before,after,sale,prevSale,img,etc,applied:false,createdAt:now});
   });
   const old=S.meta.prodChanges;
   try{

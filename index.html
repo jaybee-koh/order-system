@@ -1164,7 +1164,7 @@ const NAV=[
   {parent:'매입처관리'},
   {h:'/suppliers/new',t:'매입처등록',sub:1},{h:'/suppliers',t:'매입처조회/수정',sub:1},
   {parent:'상품관리'},
-  {h:'/products/new',t:'신규상품등록',sub:1},{h:'/products/bulk',t:'상품대량등록',sub:1},{h:'/products',t:'매입상품조회',sub:1},
+  {h:'/products/changes',t:'상품변경사항',sub:1},{h:'/products/new',t:'신규상품등록',sub:1},{h:'/products/bulk',t:'상품대량등록',sub:1},{h:'/products',t:'매입상품조회',sub:1},
   {parent:'주문관리'},
   {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1}
 ];
@@ -1176,6 +1176,7 @@ const ICONS={
   'parent':IC('<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/><path d="M8 10h.01M12 10h.01M16 10h.01"/>'),
   '/suppliers/new':IC('<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>'),
   '/suppliers':IC('<path d="M4 6h16M4 12h16M4 18h10"/>'),
+  '/products/changes':IC('<path d="M4 7h12"/><path d="m13 4 3 3-3 3"/><path d="M20 17H8"/><path d="m11 14-3 3 3 3"/>'),
   '/products/new':IC('<path d="M12 5v14"/><path d="M5 12h14"/>'),
   '/products/bulk':IC('<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/>'),
   '/products':IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>'),
@@ -1560,6 +1561,102 @@ A.pbApply=async()=>{
   toast(list.length.toLocaleString()+'개 상품의 '+label+'(으)로 변경했습니다.');
 };
 C.pselall=el=>{const list=filteredProducts().slice(PL.page*PAGE_P,(PL.page+1)*PAGE_P);list.forEach(p=>el.checked?PL.sel.add(p.id):PL.sel.delete(p.id));drawProducts();};
+/* =====================================================================
+   상품변경사항 — 판매가(상품 리스트의 가격)·판매상태 변경 기록. 입력하면 상품 리스트에 바로 반영됩니다.
+   기록은 meta 저장소의 'prodChanges' 키에 보관합니다.
+===================================================================== */
+const CH={date:'',code:'',before:'',after:'',sale:'',bt:false};
+const chProd=code=>{const c=String(code||'').trim();return c?(S.products.find(p=>String(p.code||'')===c)||null):null;};
+const chName=p=>p?p.name+(p.option?' / '+p.option:''):'';
+function chHint(p){
+  if(!CH.code.trim())return '';
+  if(!p)return '<span class="err">일치하는 상품코드가 없습니다.</span>';
+  return '<span class="mute">현재 판매가 '+(won(p.price)||'-')+'원 · 판매상태 '+saleOf(p)+'</span>';
+}
+function pgChanges(){
+  if(!CH.date)CH.date=localDate();
+  const p=chProd(CH.code);
+  const fld=(label,req,html)=>'<div><label class="f'+(req?' rq':'')+'">'+label+'</label>'+html+'</div>';
+  const txt=(id,k,ph,num,ro)=>'<input type="text" id="'+id+'" style="width:100%"'+(num?' inputmode="numeric"':'')+(ro?' readonly tabindex="-1"':' data-inp="chf" data-k="'+k+'"')+' value="'+esc(ro?chName(p):CH[k])+'" placeholder="'+(ph||'')+'">';
+  const saleOpt='<select style="width:100%" data-chg="chf" data-k="sale"><option value="">변경 없음</option>'+SALE_ST.map(x=>'<option value="'+x+'"'+(CH.sale===x?' selected':'')+'>'+x+'</option>').join('')+'</select>';
+  const list=[...(S.meta.prodChanges||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||'').localeCompare(a.createdAt||''));
+  const rows=list.map(r=>{
+    const sale=r.sale?'<b style="color:'+SALE_CLR[r.sale]+'">'+(r.prevSale&&r.prevSale!==r.sale?esc(r.prevSale)+' → ':'')+esc(r.sale)+'</b>':'<span class="mute">-</span>';
+    return '<tr><td class="nw">'+esc(r.date)+'</td><td class="nw">'+esc(r.code)+'</td><td>'+esc(r.name+(r.option?' / '+r.option:''))+'</td><td class="num">'+(won(r.before)||'-')+'</td><td class="num">'+(r.after===''||r.after==null?'<span class="mute">-</span>':'<b>'+won(r.after)+'</b>')+'</td><td class="nw">'+sale+'</td><td style="text-align:center"><input type="checkbox" data-chg="chApplied" data-id="'+esc(r.id)+'"'+(r.applied?' checked':'')+'></td><td class="nw"><button class="btn sm danger" data-act="chDel" data-id="'+esc(r.id)+'">삭제</button></td></tr>';
+  }).join('');
+  return '<h1>상품변경사항</h1><p class="sub">판매가·판매상태 변경 내용을 입력하면 아래에 기록되고, 상품 리스트(매입 상품 조회)에 바로 반영됩니다. 판매가는 상품 리스트의 가격(매입가 칸)에 반영됩니다. 맨 끝 [반영여부]는 직접 체크해 두는 표시입니다.</p>'+
+  '<div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px">'+
+  fld('일자',1,'<input type="date" style="width:100%" data-chg="chf" data-k="date" value="'+esc(CH.date)+'">')+
+  fld('상품코드',1,txt('ch-code','code','상품코드 입력')+'<div class="small" id="ch-hint" style="margin-top:5px;min-height:1.2em">'+chHint(p)+'</div>')+
+  fld('상품명',0,txt('ch-name','',' 상품코드를 넣으면 자동 입력',0,1))+
+  fld('변경 전 판매가',0,txt('ch-before','before','상품코드 입력 시 현재 값',1))+
+  fld('변경 후 판매가',0,txt('ch-after','after','숫자만 입력',1))+
+  fld('판매상태 변경',0,saleOpt)+
+  '</div><div class="row" style="margin-top:18px"><button class="btn pri" data-act="chAdd">입력</button><span class="mute small">변경 후 판매가와 판매상태 중 하나 이상은 입력해야 합니다.</span></div></div>'+
+  '<h3 style="margin:20px 0 8px">변경 기록 <span class="mute small">(총 '+list.length.toLocaleString()+'건)</span></h3>'+
+  (list.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>일자</th><th>상품코드</th><th>상품명</th><th class="num">변경 전 판매가</th><th class="num">변경 후 판매가</th><th>판매상태 변경</th><th style="text-align:center">반영여부</th><th>관리</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="card mute">입력한 변경사항이 없습니다.</div>');
+}
+ROUTES['/products/changes']=pgChanges;
+const chInput=el=>{
+  const k=el.dataset.k;CH[k]=el.value;
+  if(k==='before')CH.bt=true;
+  if(k==='code'){
+    const p=chProd(CH.code);
+    const nm=$('#ch-name');if(nm)nm.value=chName(p);
+    const h=$('#ch-hint');if(h)h.innerHTML=chHint(p);
+    if(p&&!CH.bt){CH.before=p.price===''||p.price==null?'':String(p.price);const b=$('#ch-before');if(b)b.value=CH.before;}
+    if(!p&&!CH.bt){CH.before='';const b=$('#ch-before');if(b)b.value='';}
+  }
+};
+I.chf=chInput;C.chf=chInput;
+A.chAdd=async()=>{
+  const p=chProd(CH.code);
+  if(!CH.date){toast('일자를 입력하세요.','err');return;}
+  if(!CH.code.trim()){toast('상품코드를 입력하세요.','err');return;}
+  if(!p){toast('일치하는 상품코드가 없습니다.','err');return;}
+  const num=(v,label)=>{
+    const raw=String(v||'').replace(/[,원\s]/g,'');
+    if(raw==='')return '';
+    if(isNaN(Number(raw))||Number(raw)<0){toast(label+'는 숫자로 입력하세요.','err');return null;}
+    return Number(raw);
+  };
+  const after=num(CH.after,'변경 후 판매가');if(after===null)return;
+  let before=num(CH.before,'변경 전 판매가');if(before===null)return;
+  const sale=SALE_ST.includes(CH.sale)?CH.sale:'';
+  if(after===''&&!sale){toast('변경 후 판매가 또는 판매상태를 입력하세요.','err');return;}
+  if(before===''&&p.price!==''&&p.price!=null)before=Number(p.price);
+  const prevSale=saleOf(p),prevP={price:p.price,saleStatus:p.saleStatus,updatedAt:p.updatedAt};
+  if(after!==''){p.price=after;p.updatedAt=new Date().toISOString();}
+  if(sale)p.saleStatus=sale;
+  const rec={id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),date:CH.date,code:String(p.code||''),productId:p.id,name:p.name,option:p.option||'',before,after,sale,prevSale,applied:false,createdAt:new Date().toISOString()};
+  const old=S.meta.prodChanges;
+  try{
+    await putOne('products',p);
+    await setMeta('prodChanges',[...(old||[]),rec]);
+  }catch(e){
+    Object.assign(p,prevP);S.meta.prodChanges=old;
+    toast('저장 실패: '+e.message,'err',6000);return;
+  }
+  CH.code=CH.before=CH.after=CH.sale='';CH.bt=false;
+  const y=window.scrollY;route();window.scrollTo(0,y);
+  toast('변경사항을 입력하고 상품 리스트에 반영했습니다.');
+};
+C.chApplied=async el=>{
+  const list=S.meta.prodChanges||[],r=list.find(x=>x.id===el.dataset.id);if(!r)return;
+  const prev=[r.applied,r.appliedAt];
+  r.applied=el.checked;r.appliedAt=el.checked?new Date().toISOString():null;
+  try{await setMeta('prodChanges',list);}
+  catch(e){r.applied=prev[0];r.appliedAt=prev[1];el.checked=!!prev[0];toast('저장 실패: '+e.message,'err',5000);}
+};
+A.chDel=async el=>{
+  const list=S.meta.prodChanges||[],r=list.find(x=>x.id===el.dataset.id);if(!r)return;
+  if(!confirm('이 변경 기록을 삭제할까요?\n기록만 삭제되며, 이미 반영된 상품 정보는 되돌리지 않습니다.'))return;
+  const old=list;
+  try{await setMeta('prodChanges',list.filter(x=>x!==r));}
+  catch(e){S.meta.prodChanges=old;toast('삭제 실패: '+e.message,'err',5000);return;}
+  const y=window.scrollY;route();window.scrollTo(0,y);toast('삭제했습니다.');
+};
+
 /* ---- 상품 수정 (매입처 / 자체상품코드 / 상품명 / 옵션명 / 카테고리 / 매입가 / 부가세 / 배송비) ---- */
 let PE=null;
 A.pEdit=el=>{

@@ -173,6 +173,7 @@ input[type=checkbox]:checked::after{
 input[type=checkbox]:focus-visible{outline:none;box-shadow:0 0 0 3px var(--pri-ring)}
 label.f{display:block;font-weight:600;margin:16px 0 7px;font-size:13px;color:var(--ink2)}
 .req{color:var(--err);margin-left:3px}
+label.f.rq{color:#e03131}
 .mute{color:var(--mute)}
 .small{font-size:12.5px}
 
@@ -1031,9 +1032,14 @@ function curFields(){
 const customFields=()=>((fcfg().custom)||[]);
 const saveCfg=c=>setMeta('orderFields',c);
 const PROD_FIELDS=[
+  {key:'supplier',label:'매입처',req:1},
   {key:'name',label:'상품명',req:1},
-  {key:'option',label:'옵션'},
-  {key:'price',label:'매입가'}
+  {key:'option',label:'옵션명',req:1},
+  {key:'category',label:'카테고리'},
+  {key:'salePrice',label:'판매가'},
+  {key:'price',label:'매입가',req:1},
+  {key:'tax',label:'부가세'},
+  {key:'ship',label:'배송비'}
 ];
 function makeTaker(headers){
   const H=headers.map(norm),used=new Set(),map={};
@@ -1072,14 +1078,19 @@ function guessOrderCols(headers){
 }
 function guessProdCols(headers){
   const {map,take,exact}=makeTaker(headers);
+  take('supplier',/매입처|공급처|거래처|공급업체|업체명/);
   exact('name','상품명');
   if(!map.name)take('name',/상품명|품명|제품명|이름|^상품$/,/코드|번호/);
   take('option',/옵션|규격|사이즈|색상/,/가격|금액|코드/);
+  take('category',/카테고리|분류|category/);
+  take('salePrice',/판매가|판매금액|소비자가|판매단가/);
   take('price',/매입가|공급가|원가|도매가|단가|가격/);
+  take('tax',/부가세|과세|면세|세금/);
+  take('ship',/배송비|택배비|배송료/);
   return map;
 }
 const ORDER_HDR_RE=/주문|수취인|받는|상품명|우편|주소|수량|배송|연락처|옵션/;
-const PROD_HDR_RE=/상품|코드|옵션|매입|공급|단가|가격|품명/;
+const PROD_HDR_RE=/상품|코드|옵션|매입|공급|단가|가격|품명|카테고리|판매|부가세|배송/;
 
 /* ===== 주문/상품 추출 ===== */
 function fixPhone(v){
@@ -1117,12 +1128,28 @@ function extractOrders(rows,hdrIdx,map){
 }
 function extractProducts(rows,hdrIdx,map){
   const get=(r,f)=>(map[f]||[]).map(i=>String(r[i]==null?'':r[i]).trim()).filter(Boolean)[0]||'';
+  const num=v=>{v=String(v||'').replace(/[,원\s]/g,'');return v===''||isNaN(Number(v))?'':Number(v);};
   const out=[];
   for(let i=hdrIdx+1;i<rows.length;i++){
-    const r=rows[i];
-    const name=get(r,'name');if(!name)continue;
-    let price=get(r,'price').replace(/[,원\s]/g,'');price=price===''||isNaN(Number(price))?'':Number(price);
-    out.push({name,option:get(r,'option'),price});
+    const r=rows[i]||[];
+    const raw={supplier:get(r,'supplier'),name:get(r,'name'),option:get(r,'option'),category:get(r,'category'),salePrice:get(r,'salePrice'),price:get(r,'price'),tax:get(r,'tax'),ship:get(r,'ship')};
+    if(!Object.keys(raw).some(k=>raw[k]))continue;
+    const it={row:i+1,supplier:raw.supplier,name:raw.name,option:raw.option,category:raw.category,
+      salePrice:num(raw.salePrice),price:num(raw.price),taxType:'',shipFee:'',shipAmount:''};
+    it.badSale=raw.salePrice!==''&&it.salePrice==='';
+    it.badPrice=raw.price!==''&&it.price==='';
+    if(raw.tax){
+      if(/면세|비과세/.test(raw.tax))it.taxType='면세';else if(/과세/.test(raw.tax))it.taxType='과세';else it.badTax=true;
+    }
+    if(raw.ship){
+      const n=num(raw.ship);
+      if(n!==''){it.shipFee=n>0?'미포함':'포함';it.shipAmount=n;}
+      else if(/미포함|별도|착불/.test(raw.ship))it.shipFee='미포함';
+      else if(/포함|무료/.test(raw.ship))it.shipFee='포함';
+      else it.badShip=true;
+    }
+    it.shipDisp=it.shipFee+(it.shipAmount!==''?' '+it.shipAmount.toLocaleString():'');
+    out.push(it);
   }
   return out;
 }
@@ -1136,7 +1163,7 @@ const NAV=[
   {parent:'매입처관리'},
   {h:'/suppliers/new',t:'매입처등록',sub:1},{h:'/suppliers',t:'매입처조회/수정',sub:1},
   {parent:'상품관리'},
-  {h:'/products/bulk',t:'신규상품등록',sub:1},{h:'/products',t:'매입상품조회',sub:1},
+  {h:'/products/new',t:'신규상품등록',sub:1},{h:'/products/bulk',t:'상품대량등록',sub:1},{h:'/products',t:'매입상품조회',sub:1},
   {parent:'주문관리'},
   {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1}
 ];
@@ -1148,6 +1175,7 @@ const ICONS={
   'parent':IC('<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/><path d="M8 10h.01M12 10h.01M16 10h.01"/>'),
   '/suppliers/new':IC('<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>'),
   '/suppliers':IC('<path d="M4 6h16M4 12h16M4 18h10"/>'),
+  '/products/new':IC('<path d="M12 5v14"/><path d="M5 12h14"/>'),
   '/products/bulk':IC('<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/>'),
   '/products':IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>'),
   '/orders/collect':IC('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 19h14"/>'),
@@ -1204,7 +1232,7 @@ function pgHome(){
   return '<h1>홈</h1><p class="sub">매입처 · 상품 · 주문을 한 곳에서 관리합니다. 모든 데이터는 로그인한 계정의 서버에 저장됩니다.</p>'+
   '<div class="stats"><div class="stat"><span>매입처</span><b>'+S.suppliers.length+'</b></div><div class="stat"><span>등록 상품</span><b>'+S.products.length.toLocaleString()+'</b></div><div class="stat"><span>매핑이 필요한 주문</span><b style="color:'+(un?'var(--warn)':'inherit')+'">'+un+'</b></div><div class="stat"><span>신규주문(확인 대기)</span><b>'+wait+'</b></div><div class="stat"><span>출고전</span><b>'+before.toLocaleString()+'</b></div><div class="stat"><span>출고완료</span><b>'+shipped.toLocaleString()+'</b></div></div>'+
   '<div class="hgrid"><div class="card"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">주문통계</h3><span class="mute small" id="hsum"></span><span class="grow"></span><div class="chips"><button class="chip'+(HM.mode==='day'?' on':'')+'" data-act="hmmode" data-m="day">일별 (최근 7일)</button><button class="chip'+(HM.mode==='month'?' on':'')+'" data-act="hmmode" data-m="month">월별 (최근 6개월)</button></div></div><div id="hchart"></div><div class="mute small" style="margin-top:6px">주문 수집일 기준 · 출고전 = 신규주문 + 주문확인(출고완료 전 전체)</div></div><div class="card"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">주문통계 (매입금액)</h3><span class="mute small" id="hsum2"></span><span class="grow"></span><div class="chips"><button class="chip'+(HM.pmode==='day'?' on':'')+'" data-act="hmmode2" data-m="day">일별 (최근 7일)</button><button class="chip'+(HM.pmode==='month'?' on':'')+'" data-act="hmmode2" data-m="month">월별 (최근 6개월)</button></div></div><div id="hchart2"></div><div class="mute small" style="margin-top:6px">주문 수집일 기준 · 매핑된 주문의 매입가 × 수량 (미매핑 주문 제외)</div></div></div>'+
-  '<div class="card"><h3>사용 순서</h3><ol class="steps"><li><a href="#/suppliers/new">매입처 등록</a> — 거래하는 매입처(업체명 등)를 등록합니다.</li><li><a href="#/products/bulk">신규상품등록</a> — 매입처를 고르고 상품 파일을 올려 저장합니다.</li><li><a href="#/orders/collect">주문 수집</a> — 쇼핑몰에서 받은 주문 엑셀을 올려 저장합니다.</li><li><a href="#/orders/confirm">주문 확정 관리</a> — [매핑하기]로 상품을 연결합니다. 한 번 매핑한 상품은 다음 주문부터 자동 매핑됩니다.</li><li><a href="#/orders/check">주문확인처리</a> — 매핑된 주문을 조회하고, 선택해서 엑셀로 내려받거나 [주문상태변경]으로 신규주문 → 주문확인 처리를 합니다.</li></ol></div>';
+  '<div class="card"><h3>사용 순서</h3><ol class="steps"><li><a href="#/suppliers/new">매입처 등록</a> — 거래하는 매입처(업체명 등)를 등록합니다.</li><li><a href="#/products/new">신규상품등록</a> · <a href="#/products/bulk">상품대량등록</a> — 상품을 1개씩 입력하거나, 엑셀 파일로 한 번에 등록합니다.</li><li><a href="#/orders/collect">주문 수집</a> — 쇼핑몰에서 받은 주문 엑셀을 올려 저장합니다.</li><li><a href="#/orders/confirm">주문 확정 관리</a> — [매핑하기]로 상품을 연결합니다. 한 번 매핑한 상품은 다음 주문부터 자동 매핑됩니다.</li><li><a href="#/orders/check">주문확인처리</a> — 매핑된 주문을 조회하고, 선택해서 엑셀로 내려받거나 [주문상태변경]으로 신규주문 → 주문확인 처리를 합니다.</li></ol></div>';
 }
 const HM={mode:'day',pmode:'day'};
 /* 금액 표시용 축약 (1억·1만 단위) */
@@ -1369,7 +1397,7 @@ A.sfSave=async el=>{
     rebuild();
   }catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
   SF=blankSF();
-  if(el.dataset.go==='bulk'){BK.supplierId=obj.id;BK.result=null;location.hash='#/products/bulk';return;}
+  if(el.dataset.go==='bulk'){NP.supplierId=obj.id;NP.result=null;location.hash='#/products/new';return;}
   if(old){toast('수정했습니다.');location.hash='#/suppliers';return;}
   toast('"'+name+'" 매입처를 등록했습니다.');route();
   const f=$('[data-f=name]');if(f)f.focus();
@@ -1391,7 +1419,7 @@ A.supDel=async el=>{
   S.products=S.products.filter(p=>p.supplierId!==id);S.suppliers=S.suppliers.filter(x=>x.id!==id);
   rebuild();toast('삭제했습니다.');route();
 };
-A.supToBulk=el=>{BK.supplierId=+el.dataset.id;BK.result=null;location.hash='#/products/bulk';};
+A.supToBulk=el=>{NP.supplierId=+el.dataset.id;NP.result=null;location.hash='#/products/new';};
 A.supToList=el=>{PL.sup=String(el.dataset.id);PL.q='';PL.page=0;location.hash='#/products';};
 
 /* =====================================================================
@@ -1404,7 +1432,7 @@ function pgProducts(){
   const dateRow='<div class="card row"><select data-chg="pdt"><option value="created"'+(PL.dtype==='created'?' selected':'')+'>상품등록일</option><option value="updated"'+(PL.dtype==='updated'?' selected':'')+'>상품수정일</option></select>'+
   '<input type="date" id="pfrom" data-chg="pdfilter" data-k="from" value="'+esc(PL.from)+'"><span>~</span><input type="date" id="pto" data-chg="pdfilter" data-k="to" value="'+esc(PL.to)+'">'+
   [['today','오늘'],['yesterday','어제'],['week','금주'],['month','당월'],['prev','전월'],['3','3개월'],['6','6개월'],['12','1년']].map(x=>'<button class="btn sm" '+sm+' data-act="prange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
-  return '<div class="row"><div class="grow"><h1>매입 상품 조회</h1><p class="sub">매입처별로 등록된 매입 상품을 검색하고 관리합니다.</p></div><a class="btn pri" href="#/products/bulk" style="text-decoration:none">신규상품등록</a></div>'+dateRow+
+  return '<div class="row"><div class="grow"><h1>매입 상품 조회</h1><p class="sub">매입처별로 등록된 매입 상품을 검색하고 관리합니다.</p></div><a class="btn" href="#/products/bulk" style="text-decoration:none">상품대량등록</a><a class="btn pri" href="#/products/new" style="text-decoration:none">신규상품등록</a></div>'+dateRow+
   '<div class="card row"><input type="text" id="pq" placeholder="상품명 · 코드 · 옵션 검색" style="width:280px" data-inp="pq" value="'+esc(PL.q)+'"><select data-chg="psup"><option value="">전체 매입처</option>'+S.suppliers.map(s=>'<option value="'+s.id+'"'+(String(PL.sup)===String(s.id)?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select><span class="grow"></span><button class="btn danger" data-act="pdel">선택 삭제</button></div><div id="ptbl"></div>';
 }
 ROUTES['/products']=()=>{setTimeout(drawProducts,0);return pgProducts();};
@@ -1506,7 +1534,7 @@ A.pdel=async()=>{
 /* =====================================================================
    매입 상품 등록
 ===================================================================== */
-const BK={supplierId:'',fileName:'',sheets:null,sheetIdx:0,headerRow:1,map:{},result:null};
+const BK={fileName:'',sheets:null,sheetIdx:0,headerRow:1,map:{},result:null};
 function bkRows(){return BK.sheets?BK.sheets[BK.sheetIdx].rows:[];}
 function bkHeaders(){const r=bkRows()[BK.headerRow-1]||[];return r.map(x=>String(x==null?'':x));}
 async function bulkLoadBuf(buf,name){
@@ -1526,40 +1554,67 @@ function pgBulk(){
     (BK.sheets.length>1?'<span class="mute small">시트:</span><select data-chg="bsheet">'+BK.sheets.map((s,i)=>'<option value="'+i+'"'+(i===BK.sheetIdx?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select>':'')+
     '<span class="mute small">제목 행:</span><input type="number" min="1" style="width:70px" value="'+BK.headerRow+'" data-chg="bhdr"><span class="mute small">번째 줄</span></div>'+
     '<h3 style="margin-top:16px">열 확인</h3>'+mapTable(PROD_FIELDS,hdr,BK.map,'bulk')+
-    '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+prod.length.toLocaleString()+'개 상품)</span></h3>'+previewTable([['name','상품명'],['option','옵션'],['price','매입가']],prod);
+    '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+prod.length.toLocaleString()+'개 상품)</span></h3>'+previewTable([['supplier','매입처'],['name','상품명'],['option','옵션명'],['category','카테고리'],['salePrice','판매가'],['price','매입가'],['taxType','부가세'],['shipDisp','배송비']],prod);
   }
-  const sup=BK.supplierId?M.sup.get(+BK.supplierId):null;
-  return '<h1>신규상품등록</h1><p class="sub">매입처를 선택하고 파일을 올린 뒤 저장하면 상품이 등록됩니다. 상품코드는 저장할 때 자동으로 만들어집니다(8자리 숫자). 같은 상품명+옵션이 이미 있으면 코드는 그대로 두고 매입가만 갱신합니다.</p>'+
-  (BK.result?'<div class="good">저장 완료 — 신규 <b>'+BK.result.added.toLocaleString()+'</b>개, 갱신 <b>'+BK.result.updated.toLocaleString()+'</b>개 · <a href="#/products">매입 상품 조회</a></div>':'')+
-  '<div class="card"><h3>① 매입처 선택</h3>'+(S.suppliers.length?'<select data-chg="bsup" style="min-width:240px"><option value="">매입처를 선택하세요</option>'+S.suppliers.map(s=>'<option value="'+s.id+'"'+(String(BK.supplierId)===String(s.id)?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select>':'<span class="err">먼저 <a href="#/suppliers/new">매입처 등록</a>에서 매입처를 등록하세요.</span>')+'</div>'+
-  '<div class="card"><h3>② 상품 파일 업로드</h3>'+step2+'</div>'+
-  '<div class="card"><h3>③ 저장</h3><button class="btn pri" data-act="bulkSave"'+(BK.sheets&&sup&&prod.length?'':' disabled')+'>저장 (상품 등록)</button> <span class="mute small">'+(sup?esc(sup.name)+'에 ':'')+(BK.sheets?prod.length.toLocaleString()+'개 상품을 등록합니다.':'')+'</span></div>';
+  let res='';
+  if(BK.result){
+    const r=BK.result;
+    res=(r.added||r.updated?'<div class="good">저장 완료 — 신규 <b>'+r.added.toLocaleString()+'</b>개, 갱신 <b>'+r.updated.toLocaleString()+'</b>개 · <a href="#/products">매입 상품 조회</a></div>':'')+
+    (r.fails.length?'<div class="card"><h3 style="margin:0 0 8px">등록되지 않은 건 ('+r.fails.length.toLocaleString()+'건)</h3><div class="tblwrap" style="max-height:240px"><table class="tbl"><thead><tr><th>엑셀 행</th><th>사유</th></tr></thead><tbody>'+
+      r.fails.slice(0,100).map(f=>'<tr><td class="nw">'+f.row+'</td><td>'+esc(f.why)+'</td></tr>').join('')+'</tbody></table></div>'+(r.fails.length>100?'<div class="mute small">처음 100건만 표시했습니다.</div>':'')+'</div>':'');
+  }
+  return '<h1>상품대량등록</h1><p class="sub">엑셀 파일에 매입처, 상품명, 옵션명, 카테고리, 판매가, 매입가, 부가세, 배송비를 적어 올리면 상품이 한 번에 등록됩니다. 매입처는 미리 등록된 매입처 이름과 같아야 합니다. 상품코드는 저장할 때 자동으로 만들어집니다(8자리 숫자). 같은 매입처에 같은 상품명+옵션명이 이미 있으면 코드는 그대로 두고 입력한 내용으로 갱신합니다.</p>'+
+  res+
+  '<div class="card"><h3>① 상품 파일 업로드</h3>'+step2+'<div class="mute small" style="margin-top:10px">부가세: 과세 / 면세 · 배송비: 금액(숫자) 또는 포함 / 미포함 · 매입처, 상품명, 옵션명, 매입가는 꼭 있어야 합니다.</div></div>'+
+  '<div class="card"><h3>② 저장</h3><button class="btn pri" data-act="bulkSave"'+(BK.sheets&&prod.length?'':' disabled')+'>저장 (상품 등록)</button> <span class="mute small">'+(BK.sheets?prod.length.toLocaleString()+'개 상품을 등록합니다.':'')+'</span></div>';
 }
 ROUTES['/products/bulk']=pgBulk;
-C.bsup=el=>{BK.supplierId=el.value;route();};
 C.bfile=async el=>{const f=el.files[0];if(!f)return;try{BK.result=null;await bulkLoadBuf(await readFileBuf(f),f.name);}catch(e){toast(e.message,'err',7000);}route();};
 C.bsheet=el=>{BK.sheetIdx=+el.value;bkRecalc(true);route();};
 C.bhdr=el=>{BK.headerRow=Math.max(1,parseInt(el.value,10)||1);bkRecalc(false);route();};
-A.sample=(el,e)=>{e.preventDefault();download(buildXlsx([['상품명','옵션','매입가'],['샘플 상품','블랙/L',12000],['샘플 상품2','',8500]],'상품'),'상품등록_샘플양식.xlsx');};
+A.sample=(el,e)=>{
+  e.preventDefault();
+  const sn=S.suppliers.length?S.suppliers[0].name:'매입처명';
+  download(buildXlsx([['매입처','상품명','옵션명','카테고리','판매가','매입가','부가세','배송비'],[sn,'샘플 상품','블랙/L','의류',25000,12000,'과세','포함'],[sn,'샘플 상품2','없음','식품',12000,8500,'면세',3000]],'상품'),'상품대량등록_샘플양식.xlsx');
+};
 A.bulkSave=async()=>{
-  const sid=+BK.supplierId;
-  if(!sid||!M.sup.has(sid)){toast('매입처를 선택하세요.','err');return;}
-  if(!(BK.map.name||[]).length){toast('"상품명"에 해당하는 열을 선택하세요.','err');return;}
+  const need=[['supplier','매입처'],['name','상품명'],['option','옵션명'],['price','매입가']];
+  for(const [k,l] of need){if(!(BK.map[k]||[]).length){toast('"'+l+'"에 해당하는 열을 선택하세요.','err');return;}}
   const items=extractProducts(bkRows(),BK.headerRow-1,BK.map);
   if(!items.length){toast('등록할 상품이 없습니다.','err');return;}
-  const keyOf=(name,opt)=>sid+'|'+norm(name)+'|'+norm(opt);
+  const supByName=new Map(S.suppliers.map(x=>[norm(x.name),x]));
+  const keyOf=(sid,name,opt)=>sid+'|'+norm(name)+'|'+norm(opt);
   const used=new Set(S.products.map(p=>String(p.code||'')));
-  const exist=new Map();S.products.filter(p=>p.supplierId===sid).forEach(p=>exist.set(keyOf(p.name,p.option),p));
-  const adds=[],updSet=new Set();const seen=new Map();
+  const exist=new Map();S.products.forEach(p=>exist.set(keyOf(p.supplierId,p.name,p.option),p));
+  const applyProd=(p,it)=>{
+    p.name=it.name;p.option=it.option;p.price=it.price;
+    if(it.category)p.category=it.category;
+    if(it.salePrice!=='')p.salePrice=it.salePrice;
+    if(it.taxType)p.taxType=it.taxType;
+    if(it.shipFee){p.shipFee=it.shipFee;p.shipAmount=it.shipAmount;}
+  };
+  const adds=[],updSet=new Set(),fails=[],seen=new Map();
   try{
     for(const it of items){
-      const k=keyOf(it.name,it.option);
+      let why='';
+      const sp=it.supplier?supByName.get(norm(it.supplier)):null;
+      if(!it.supplier)why='매입처가 비어 있습니다.';
+      else if(!sp)why='등록되지 않은 매입처입니다. ('+it.supplier+')';
+      else if(!it.name)why='상품명이 비어 있습니다.';
+      else if(!it.option)why='옵션명이 비어 있습니다.';
+      else if(it.price==='')why=it.badPrice?'매입가가 숫자가 아닙니다.':'매입가가 비어 있습니다.';
+      else if(it.badSale)why='판매가가 숫자가 아닙니다.';
+      else if(it.badTax)why='부가세는 과세 또는 면세로 입력하세요.';
+      else if(it.badShip)why='배송비는 금액(숫자) 또는 포함/미포함으로 입력하세요.';
+      if(why){fails.push({row:it.row,why});continue;}
+      const k=keyOf(sp.id,it.name,it.option);
       const prev=exist.get(k)||seen.get(k);
       if(prev){
-        prev.name=it.name;prev.option=it.option;if(it.price!=='')prev.price=it.price;
+        applyProd(prev,it);
         if(exist.get(k)){if(!prev.code)prev.code=genCode(used);prev.updatedAt=new Date().toISOString();updSet.add(prev);}
       }else{
-        const p={supplierId:sid,code:genCode(used),name:it.name,option:it.option,price:it.price,createdAt:new Date().toISOString()};
+        const p={supplierId:sp.id,code:genCode(used),name:it.name,option:it.option,price:it.price,category:'',salePrice:'',taxType:'',shipFee:'',shipAmount:'',createdAt:new Date().toISOString()};
+        applyProd(p,it);
         adds.push(p);seen.set(k,p);
       }
     }
@@ -1568,9 +1623,68 @@ A.bulkSave=async()=>{
   try{
     await putMany('products',adds);await putMany('products',upds);
     S.products.push(...adds);rebuild();
-    BK.result={added:adds.length,updated:upds.length};BK.sheets=null;BK.fileName='';
-    toast('상품 '+(adds.length+upds.length).toLocaleString()+'개를 저장했습니다.');route();
+    BK.result={added:adds.length,updated:upds.length,fails};BK.sheets=null;BK.fileName='';
+    toast(fails.length&&!adds.length&&!upds.length?'등록된 상품이 없습니다. 아래 사유를 확인하세요.':'상품 '+(adds.length+upds.length).toLocaleString()+'개를 저장했습니다.'+(fails.length?' (제외 '+fails.length.toLocaleString()+'건)':''),fails.length&&!adds.length&&!upds.length?'err':'ok',6000);
+    route();
   }catch(e){toast('저장 실패: '+e.message,'err',6000);}
+};
+
+/* =====================================================================
+   신규상품등록 (1건씩 직접 입력)
+===================================================================== */
+const NP={supplierId:'',name:'',option:'',category:'',salePrice:'',price:'',tax:'과세',shipFee:'포함',shipAmt:'',result:null};
+function pgNewProd(){
+  const res=NP.result;NP.result=null;
+  const fld=(label,req,html)=>'<div><label class="f'+(req?' rq':'')+'">'+label+'</label>'+html+'</div>';
+  const txt=(k,ph,num)=>'<input type="text" style="width:100%"'+(num?' inputmode="numeric"':'')+' data-inp="npf" data-k="'+k+'" value="'+esc(NP[k])+'" placeholder="'+(ph||'')+'">';
+  const sel=(k,opts)=>'<select style="width:100%" data-chg="npf" data-k="'+k+'">'+opts.map(o=>'<option value="'+o+'"'+(NP[k]===o?' selected':'')+'>'+o+'</option>').join('')+'</select>';
+  const supSel=S.suppliers.length?'<select style="width:100%" data-chg="npf" data-k="supplierId"><option value="">매입처를 선택하세요</option>'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(String(NP.supplierId)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select>':'<span class="err">먼저 <a href="#/suppliers/new">매입처등록</a>에서 매입처를 등록하세요.</span>';
+  return '<h1>신규상품등록</h1><p class="sub">상품을 1개씩 직접 입력해 등록합니다. 여러 개는 [상품대량등록]에서 엑셀로 한 번에 등록하세요. 상품코드는 저장할 때 자동으로 만들어집니다(8자리 숫자).</p>'+
+  (res?'<div class="good">'+(res.updated?'수정':'등록')+' 완료 — <b>'+esc(res.name)+'</b> / '+esc(res.option)+' (상품코드 '+esc(res.code)+') · <a href="#/products">매입 상품 조회</a></div>':'')+
+  '<div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0 20px">'+
+  fld('매입처',1,supSel)+fld('상품명',1,txt('name'))+fld('옵션명',1,txt('option'))+fld('카테고리',0,txt('category'))+
+  fld('판매가',0,txt('salePrice','숫자만 입력',1))+fld('매입가',1,txt('price','숫자만 입력',1))+
+  fld('부가세',0,sel('tax',['과세','면세']))+fld('배송비',0,sel('shipFee',['포함','미포함']))+fld('배송비 금액',0,txt('shipAmt','숫자만 입력',1))+
+  '</div><div class="row" style="margin-top:22px"><button class="btn pri" data-act="npSave">상품 등록</button><button class="btn" data-act="npReset">입력 지우기</button></div></div>';
+}
+ROUTES['/products/new']=pgNewProd;
+I.npf=el=>{NP[el.dataset.k]=el.value;};
+C.npf=el=>{NP[el.dataset.k]=el.value;};
+A.npReset=()=>{NP.name=NP.option=NP.category=NP.salePrice=NP.price=NP.shipAmt='';NP.tax='과세';NP.shipFee='포함';route();};
+A.npSave=async()=>{
+  const sid=+NP.supplierId,name=NP.name.trim(),option=NP.option.trim();
+  if(!sid||!M.sup.has(sid)){toast('매입처를 선택하세요.','err');return;}
+  if(!name){toast('상품명을 입력하세요.','err');return;}
+  if(!option){toast('옵션명을 입력하세요.','err');return;}
+  const n=(v,label,req)=>{
+    const raw=String(v||'').replace(/[,원\s]/g,'');
+    if(raw===''){if(req){toast(label+'를 입력하세요.','err');return null;}return '';}
+    if(isNaN(Number(raw))||Number(raw)<0){toast(label+'는 숫자로 입력하세요.','err');return null;}
+    return Number(raw);
+  };
+  const price=n(NP.price,'매입가',true);if(price===null)return;
+  const salePrice=n(NP.salePrice,'판매가',false);if(salePrice===null)return;
+  const shipAmount=n(NP.shipAmt,'배송비 금액',false);if(shipAmount===null)return;
+  const ex=S.products.find(p=>p.supplierId===sid&&norm(p.name)===norm(name)&&norm(p.option)===norm(option));
+  if(ex&&!confirm('이 매입처에 같은 상품명·옵션명의 상품이 이미 있습니다.\n입력한 내용으로 수정할까요?'))return;
+  const now=new Date().toISOString();
+  const fields={name,option,price,category:NP.category.trim(),salePrice,taxType:NP.tax,shipFee:NP.shipFee,shipAmount};
+  try{
+    if(ex){
+      const next={...ex,...fields,updatedAt:now};
+      if(!next.code)next.code=genCode(new Set(S.products.map(p=>String(p.code||''))));
+      await putOne('products',next);Object.assign(ex,next);
+      NP.result={name,option,code:ex.code,updated:true};
+    }else{
+      const p={supplierId:sid,code:genCode(new Set(S.products.map(x=>String(x.code||'')))),...fields,createdAt:now};
+      await putOne('products',p);S.products.push(p);
+      NP.result={name,option,code:p.code,updated:false};
+    }
+  }catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
+  rebuild();
+  NP.name=NP.option=NP.category=NP.salePrice=NP.price=NP.shipAmt='';
+  toast('상품을 '+(ex?'수정':'등록')+'했습니다.');
+  route();
 };
 
 /* 자체 상품코드: 8자리 무작위 숫자(10000000~99999999), 중복 없음 */
@@ -1934,7 +2048,7 @@ function searchProducts(q,sup){
 }
 function matchResults(){
   const r=searchProducts(MT.q,MT.sup);
-  if(!S.products.length)return '<div class="card mute">등록된 상품이 없습니다. 먼저 <a href="#/products/bulk">신규상품등록</a>을 해주세요.</div>';
+  if(!S.products.length)return '<div class="card mute">등록된 상품이 없습니다. 먼저 <a href="#/products/new">신규상품등록</a>을 해주세요.</div>';
   if(!r.list.length)return '<div class="card mute">검색 결과가 없습니다. 검색어를 줄여서 다시 검색해 보세요.</div>';
   return (r.fuzzy?'<div class="notice small">검색어 전체와 일치하는 상품이 없어, 일부 단어가 일치하는 상품을 보여드립니다.</div>':'')+
   '<div class="mute small" style="margin-bottom:6px">'+r.total.toLocaleString()+'개 중 '+r.list.length+'개 표시</div><div class="tblwrap" style="max-height:340px"><table class="tbl"><thead><tr><th>매입처</th><th>상품코드</th><th>상품명</th><th>옵션</th><th class="num">매입가</th><th></th></tr></thead><tbody>'+

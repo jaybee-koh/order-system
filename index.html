@@ -1809,7 +1809,7 @@ A.collectSave=async()=>{
     await setMeta(sigOf(clHeaders()),CL.map);await setMeta(mallKey(clHeaders()),CL.mall);
     toast('주문 '+adds.length+'건 저장 (자동 매핑 '+auto+'건'+(dup?', 중복 제외 '+dup+'건':'')+')',adds.length?'ok':'err',6000);
     CL.sheets=null;CL.fileName='';
-    CF.status=adds.length&&adds.length>auto?'none':'all';CF.date='';CF.page=0;CF.q='';
+    CF.status=adds.length&&adds.length>auto?'none':'all';CF.from='';CF.to='';CF.page=0;CF.q='';
     location.hash='#/orders/confirm';
   }catch(e){toast('저장 실패: '+e.message,'err',6000);}
 };
@@ -1817,14 +1817,20 @@ A.collectSave=async()=>{
 /* =====================================================================
    주문 확정 관리
 ===================================================================== */
-const CF={status:'all',q:'',date:'',page:0,incDone:false,sel:new Set(),keep:new Set(),d:{status:'all',q:''}};  /* d = 화면에서 고른 값(검색 버튼을 눌러야 status·q 적용) */
+const CF={status:'all',q:'',field:'ownNo',from:'',to:'',page:0,incDone:false,sel:new Set(),keep:new Set(),d:{status:'all',q:'',field:'ownNo',from:'',to:''}};  /* d = 화면에서 고른 값(검색 버튼을 눌러야 적용) */
+const CF_FIELDS=[['ownNo','자체주문번호'],['orderNo','주문번호'],['receiver','수취인'],['itemName','상품명']];
 const PAGE_O=100;
-const scoped=()=>S.orders.filter(o=>!o.confirmed&&(!CF.date||o.collectedDate===CF.date));
+const scoped=()=>S.orders.filter(o=>{if(o.confirmed)return false;const cd=o.collectedDate||'';if(CF.from&&cd<CF.from)return false;if(CF.to&&cd>CF.to)return false;return true;});
 function cfQMatch(o,q){
   if(!q)return true;
-  const {p,s}=orderInfo(o);
-  const h=norm([o.orderNo,o.ownNo,o.orderer,o.receiver,o.tel1,o.tel2,o.addr,o.itemName,o.itemOption,p?p.name:'',s?s.name:''].join(' '));
-  return h.includes(q);
+  let v;
+  switch(CF.field){
+    case 'orderNo':v=o.orderNo;break;
+    case 'receiver':v=o.receiver;break;
+    case 'itemName':{const {p}=orderInfo(o);v=(o.itemName||'')+' '+(p?p.name:'');break;}
+    default:v=o.ownNo;
+  }
+  return norm(v).includes(q);
 }
 function confirmList(){
   const q=norm(CF.q);
@@ -1846,12 +1852,12 @@ function drawConfirmChips(){
 }
 function pgConfirm(){
   const sc=scoped();
-  CF.d={status:CF.status,q:CF.q};
-    const dates=[...new Set(S.orders.map(o=>o.collectedDate))].sort().reverse();
+  CF.d={status:CF.status,q:CF.q,field:CF.field,from:CF.from,to:CF.to};
   return '<h1>주문 확정 관리</h1><p class="sub">각 주문에 [매핑하기]로 상품을 연결하면 매입처가 표시됩니다. 매핑이 끝난 주문은 [주문확인처리]에서 조회·다운로드·상태변경을 할 수 있습니다.</p>'+
   '<div class="card row"><div class="chips" id="cchips"></div><span class="grow"></span>'+
-  '<select data-chg="cdate"><option value="">전체 수집일</option>'+dates.map(d=>'<option value="'+d+'"'+(CF.date===d?' selected':'')+'>'+d+'</option>').join('')+'</select>'+
-  '<input type="text" placeholder="자체주문번호 · 주문번호 · 수취인 · 상품명 검색" style="width:240px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn pri" data-act="csearch">검색</button><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
+  '<span class="mute small">수집일</span><input type="date" data-chg="cdf" data-k="from" value="'+esc(CF.from)+'"><span>~</span><input type="date" data-chg="cdf" data-k="to" value="'+esc(CF.to)+'">'+
+  '<select data-chg="cdf" data-k="field">'+CF_FIELDS.map(f=>'<option value="'+f[0]+'"'+(CF.field===f[0]?' selected':'')+'>'+f[1]+'</option>').join('')+'</select>'+
+  '<input type="text" placeholder="검색어 입력" style="width:220px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn pri" data-act="csearch">검색</button><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
   '<div id="ctbl"></div>';
 }
 ROUTES['/orders/confirm']=pgConfirm;
@@ -1891,9 +1897,12 @@ function drawConfirmTableInner(){
   (pages>1?'<div class="pager"><button class="btn sm" data-act="cpage" data-d="-1"'+(CF.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="cpage" data-d="1"'+(CF.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
 A.cstat=el=>{CF.d.status=el.dataset.s;drawConfirmChips();};   /* 고르기만 하고, [검색]을 눌러야 적용 */
-A.csearch=()=>{CF.status=CF.d.status;CF.q=CF.d.q;CF.page=0;CF.keep.clear();drawConfirmTable();};
+A.csearch=()=>{
+  if(CF.d.from&&CF.d.to&&CF.d.from>CF.d.to){toast('시작일자가 종료일자보다 늦습니다.','err');return;}
+  CF.status=CF.d.status;CF.q=CF.d.q;CF.field=CF.d.field;CF.from=CF.d.from;CF.to=CF.d.to;CF.page=0;CF.keep.clear();drawConfirmTable();
+};
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.matches&&e.target.matches('[data-inp="cq"]'))A.csearch();});
-C.cdate=el=>{CF.date=el.value;CF.page=0;CF.keep.clear();drawConfirmTable();};
+C.cdf=el=>{CF.d[el.dataset.k]=el.value;};
 C.incdone=el=>{CF.incDone=el.checked;route();};
 I.cq=el=>{CF.d.q=el.value;};
 A.cpage=el=>{CF.page+=+el.dataset.d;drawConfirmTable();$('#ctbl').scrollIntoView({block:'start'});};

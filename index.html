@@ -1355,14 +1355,34 @@ function fmtCompact(v){
   if(a>=1e4)return s+String(Math.round(a/1e3)/10).replace(/\.0$/,'')+'만';
   return Number(v).toLocaleString();
 }
-/* 주문 1건의 금액 계산: 매출=결제금액, 마진=결제금액-수수료(15%)-매입액-배송비 */
+/* 상품 변경 기록을 기준으로 주문일 당시 매입가를 복원한다.
+   변경일 당일 주문부터 변경 후 가격을 적용하며, 가격 변경 기록이 없으면 현재 상품 가격을 사용한다. */
+function homeBuyPrice(p,o,d){
+  if(!p)return 0;
+  const all=S.meta.prodChanges||[];
+  const code=String(p.code||'');
+  const hist=all.filter(r=>{
+    if(r.after===''||r.after==null||!r.date)return false;
+    return (r.productId&&r.productId===p.id)||(!r.productId&&code&&String(r.code||'')===code);
+  }).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.createdAt||'').localeCompare(b.createdAt||''));
+  if(!hist.length)return nz(p.price);
+  /* 첫 변경 전 가격이 확인되면 변경일 이전 주문에는 그 가격을 적용 */
+  const firstBefore=hist.find(r=>r.before!==''&&r.before!=null);
+  let price=firstBefore?Number(firstBefore.before):nz(p.price);
+  for(const r of hist){
+    if((r.date||'')>d)break;
+    price=Number(r.after);
+  }
+  return isFinite(price)?price:nz(p.price);
+}
+/* 주문 1건의 금액 계산: 매출=결제금액, 마진=결제금액-수수료(15%)-주문일 당시 매입액-배송비 */
 function homeRows(){
   const out=[];
   S.orders.forEach(o=>{
     const d=ordDayOf(o);if(!d)return;
     const {p,s}=orderInfo(o),pay=nz(o.payAmount),qty=nz(o.qty)||1;
-    const buy=p?nz(p.price)*qty:0,ship=p&&p.shipFee==='미포함'?nz(p.shipAmount):0,fee=Math.round(pay*HD_FEE);
-    out.push({o,p,s,d,pay,qty,buy,ship,fee,mapped:!!p,nobuy:!!p&&!(nz(p.price)>0),margin:p?pay-fee-buy-ship:0});
+    const unitBuy=p?homeBuyPrice(p,o,d):0,buy=unitBuy*qty,ship=p&&p.shipFee==='미포함'?nz(p.shipAmount):0,fee=Math.round(pay*HD_FEE);
+    out.push({o,p,s,d,pay,qty,buy,ship,fee,mapped:!!p,nobuy:!!p&&!(unitBuy>0),margin:p?pay-fee-buy-ship:0});
   });
   return out;
 }

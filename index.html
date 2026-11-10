@@ -1147,7 +1147,7 @@ function extractProducts(rows,hdrIdx,map){
       else if(/포함|무료/.test(raw.ship))it.shipFee='포함';
       else it.badShip=true;
     }
-    it.shipDisp=it.shipFee+(it.shipAmount!==''?' '+it.shipAmount.toLocaleString():'');
+    it.shipDisp=it.shipAmount!==''?it.shipAmount.toLocaleString():it.shipFee;   /* 미리보기에는 금액만 표시 (포함은 0) */
     out.push(it);
   }
   return out;
@@ -1564,7 +1564,7 @@ function pgBulk(){
   }
   return '<h1>상품대량등록</h1><p class="sub">엑셀 파일에 매입처, 자체상품코드, 상품명, 옵션명, 카테고리, 매입가, 부가세, 배송비를 적어 올리면 상품이 한 번에 등록됩니다. 매입처는 미리 등록된 매입처 이름과 같아야 합니다. 자체상품코드를 비워 두면 8자리 숫자가 자동으로 부여되고(중복 없음), 적으면 그 코드가 사용됩니다. 같은 매입처에 같은 상품명+옵션명이 이미 있으면 입력한 내용으로 갱신합니다.</p>'+
   res+
-  '<div class="card"><h3>① 상품 파일 업로드</h3>'+step2+'<div class="mute small" style="margin-top:10px">부가세: 과세 / 면세 · 배송비: 금액(숫자) 또는 포함 / 미포함 · 매입처, 상품명, 옵션명, 매입가는 꼭 있어야 합니다.</div></div>'+
+  '<div class="card"><h3>① 상품 파일 업로드</h3>'+step2+'<div class="mute small" style="margin-top:10px">부가세: 과세 / 면세 · 배송비: 금액(숫자), 배송비 포함이면 0 · 매입처, 상품명, 옵션명, 매입가는 꼭 있어야 합니다.</div></div>'+
   '<div class="card"><h3>② 저장</h3><button class="btn pri" data-act="bulkSave"'+(BK.sheets&&prod.length?'':' disabled')+'>저장 (상품 등록)</button> <span class="mute small">'+(BK.sheets?prod.length.toLocaleString()+'개 상품을 등록합니다.':'')+'</span></div>';
 }
 ROUTES['/products/bulk']=pgBulk;
@@ -1607,7 +1607,7 @@ A.bulkSave=async()=>{
       else if(!it.option)why='옵션명이 비어 있습니다.';
       else if(it.price==='')why=it.badPrice?'매입가가 숫자가 아닙니다.':'매입가가 비어 있습니다.';
       else if(it.badTax)why='부가세는 과세 또는 면세로 입력하세요.';
-      else if(it.badShip)why='배송비는 금액(숫자) 또는 포함/미포함으로 입력하세요.';
+      else if(it.badShip)why='배송비는 금액(숫자)으로 입력하세요. (배송비 포함은 0)';
       else if(own&&own!==prev)why='이미 다른 상품에서 사용 중인 자체상품코드입니다. ('+it.code+')';
       if(why){fails.push({row:it.row,why});continue;}
       if(prev){

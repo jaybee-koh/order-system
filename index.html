@@ -537,6 +537,44 @@ select.selsm{height:29px;min-height:29px;padding:0 24px 0 10px;font-size:12px;bo
 /* 상품변경사항 — 반영여부 체크된 기록 행은 회색 */
 table.tbl tr.chdone td,table.tbl tr.chdone:hover td{background:#e6e8ec;color:#6b7280}
 table.tbl tr.chdone td b,table.tbl tr.chdone td span{opacity:.75}
+/* ---------- 홈 대시보드 ---------- */
+.hgrid2{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:stretch}
+.hg2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.hbox{margin-bottom:16px;min-width:0}
+.hgrid2 .hbox,.hg2 .hbox{margin-bottom:0}.hgrid2{margin-bottom:16px}
+.hbox h3{margin-bottom:12px}
+.htiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.htile{position:relative;display:block;padding:14px 16px 13px 18px;border:1px solid var(--line);border-radius:12px;background:#fff;text-decoration:none;color:var(--ink);overflow:hidden;transition:box-shadow .15s,transform .15s}
+.htile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.htile:hover{box-shadow:var(--sh-md);transform:translateY(-1px)}
+.htile span{display:block;font-size:12.5px;font-weight:600;color:var(--mute)}
+.htile b{display:block;margin-top:6px;font-size:28px;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:var(--c)}
+.htile b small,.hset b small,.hkpi b small{font-size:13px;font-weight:600;margin-left:3px;color:var(--mute);letter-spacing:0}
+.htile em{display:block;margin-top:3px;font-size:11.5px;font-style:normal;color:var(--mute)}
+.hsets{display:grid;gap:10px}
+.hset{display:grid;grid-template-columns:90px 1fr;align-items:baseline;column-gap:10px;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:#fafbfd}
+.hset span{font-size:13px;font-weight:600;color:var(--ink2)}
+.hset b{font-size:22px;font-weight:700;text-align:right;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.hset em{grid-column:1/-1;text-align:right;font-size:11.5px;font-style:normal;color:var(--mute);margin-top:2px}
+.hset.mg{background:var(--pri-soft);border-color:#d5defc}.hset.mg b{color:var(--pri);font-size:25px}.hset.mg b.neg{color:#1c7ed6}
+.hnote{margin-top:10px;font-size:11.5px;color:var(--mute);line-height:1.55}
+.hkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:12px}
+.hkpi{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.hkpi span{font-size:12.5px;font-weight:600;color:var(--mute)}
+.hkpi b{display:block;margin:6px 0 4px;font-size:24px;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.hd,.hd0{font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.hd.up{color:#e03131}.hd.dn{color:#1c7ed6}.hd0,.hd{color:var(--mute)}
+.hd.up{color:#e03131}.hd.dn{color:#1c7ed6}
+.hleg{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);margin-left:10px}
+.hleg i{display:inline-block;width:10px;height:10px;border-radius:3px}
+.ax{fill:var(--mute);font-size:11px}.ax2{fill:var(--ink2);font-size:12px}.av{fill:var(--ink);font-size:11.5px;font-weight:700}
+.hb{display:grid;gap:9px}
+.hbr{display:grid;grid-template-columns:minmax(70px,30%) 1fr minmax(96px,auto);gap:10px;align-items:center;font-size:12.5px}
+.hbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2);font-weight:600}
+.hbt{height:10px;background:#f0f2f7;border-radius:6px;overflow:hidden}.hbt i{display:block;height:100%;border-radius:6px}
+.hbv{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.25}
+.hbv small{display:block;font-size:11px;font-weight:500;color:var(--mute)}
+@media(max-width:1200px){.hgrid2,.hg2{grid-template-columns:1fr}.hkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -1240,84 +1278,163 @@ function previewTable(cols,rows){
 /* =====================================================================
    홈
 ===================================================================== */
-function pgHome(){
-  const un=S.orders.filter(o=>stOf(o)==='none').length;
-  const wait=S.orders.filter(o=>stOf(o)==='matched'&&!o.confirmed).length;
-  const shipped=S.orders.filter(o=>ordStatus(o)==='shipped').length,before=S.orders.length-shipped;
-  return '<h1>홈</h1><p class="sub">매입처 · 상품 · 주문을 한 곳에서 관리합니다. 모든 데이터는 로그인한 계정의 서버에 저장됩니다.</p>'+
-  '<div class="stats"><div class="stat"><span>매입처</span><b>'+S.suppliers.length+'</b></div><div class="stat"><span>등록 상품</span><b>'+S.products.length.toLocaleString()+'</b></div><div class="stat"><span>매핑이 필요한 주문</span><b style="color:'+(un?'var(--warn)':'inherit')+'">'+un+'</b></div><div class="stat"><span>신규주문(확인 대기)</span><b>'+wait+'</b></div><div class="stat"><span>출고전</span><b>'+before.toLocaleString()+'</b></div><div class="stat"><span>출고완료</span><b>'+shipped.toLocaleString()+'</b></div></div>'+
-  '<div class="hgrid"><div class="card"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">주문통계</h3><span class="mute small" id="hsum"></span><span class="grow"></span><div class="chips"><button class="chip'+(HM.mode==='day'?' on':'')+'" data-act="hmmode" data-m="day">일별 (최근 7일)</button><button class="chip'+(HM.mode==='month'?' on':'')+'" data-act="hmmode" data-m="month">월별 (최근 6개월)</button></div></div><div id="hchart"></div><div class="mute small" style="margin-top:6px">주문 수집일 기준 · 출고전 = 신규주문 + 주문확인(출고완료 전 전체)</div></div><div class="card"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">주문통계 (매입금액)</h3><span class="mute small" id="hsum2"></span><span class="grow"></span><div class="chips"><button class="chip'+(HM.pmode==='day'?' on':'')+'" data-act="hmmode2" data-m="day">일별 (최근 7일)</button><button class="chip'+(HM.pmode==='month'?' on':'')+'" data-act="hmmode2" data-m="month">월별 (최근 6개월)</button></div></div><div id="hchart2"></div><div class="mute small" style="margin-top:6px">주문 수집일 기준 · 매핑된 주문의 매입가 × 수량 (미매핑 주문 제외)</div></div></div>'+
-  '<div class="card"><h3>사용 순서</h3><ol class="steps"><li><a href="#/suppliers/new">매입처 등록</a> — 거래하는 매입처(업체명 등)를 등록합니다.</li><li><a href="#/products/new">신규상품등록</a> · <a href="#/products/bulk">상품대량등록</a> — 상품을 1개씩 입력하거나, 엑셀 파일로 한 번에 등록합니다.</li><li><a href="#/orders/collect">주문 수집</a> — 쇼핑몰에서 받은 주문 엑셀을 올려 저장합니다.</li><li><a href="#/orders/confirm">주문 확정 관리</a> — [매핑하기]로 상품을 연결합니다. 한 번 매핑한 상품은 다음 주문부터 자동 매핑됩니다.</li><li><a href="#/orders/check">주문확인처리</a> — 매핑된 주문을 조회하고, 선택해서 엑셀로 내려받거나 [주문상태변경]으로 신규주문 → 주문확인 처리를 합니다.</li></ol></div>';
-}
-const HM={mode:'day',pmode:'day'};
+/* ===== 홈 대시보드 (판매관리 · 정산관리 · 판매성과 · 판매분석) ===== */
+const HD={perf:'day',set:'month',an:30};
+const HD_WD=['일','월','화','수','목','금','토'];
+const HD_FEE=0.15;   /* 쇼핑몰 수수료율 15% */
+const nz=v=>{const n=Number(v);return isFinite(n)?n:0;};
+const pDate=k=>{const a=String(k).split('-');return new Date(+a[0],+a[1]-1,+a[2]);};
+const addD=(k,n)=>{const d=pDate(k);d.setDate(d.getDate()+n);return localDate(d);};
+const mondayOf=k=>{const d=pDate(k);d.setDate(d.getDate()-((d.getDay()+6)%7));return localDate(d);};
 /* 금액 표시용 축약 (1억·1만 단위) */
 function fmtCompact(v){
-  if(v>=1e8){return String(Math.round(v/1e7)/10).replace(/\.0$/,'')+'억';}
-  if(v>=1e4){return String(Math.round(v/1e3)/10).replace(/\.0$/,'')+'만';}
+  const a=Math.abs(v),s=v<0?'-':'';
+  if(a>=1e8)return s+String(Math.round(a/1e7)/10).replace(/\.0$/,'')+'억';
+  if(a>=1e4)return s+String(Math.round(a/1e3)/10).replace(/\.0$/,'')+'만';
   return Number(v).toLocaleString();
 }
-/* metric: 'cnt'=주문 건수, 'amt'=매입금액(매입가×수량) */
-function homeSeries(mode,metric){
-  const t=new Date(),y=t.getFullYear(),m=t.getMonth(),d=t.getDate(),WD=['일','월','화','수','목','금','토'];
-  const keys=[];
-  if(mode==='day'){
-    for(let i=6;i>=0;i--){const dt=new Date(y,m,d-i);keys.push({k:localDate(dt),l:pad(dt.getMonth()+1)+'-'+pad(dt.getDate()),l2:WD[dt.getDay()]});}
-  }else{
-    for(let i=5;i>=0;i--){const dt=new Date(y,m-i,1);keys.push({k:dt.getFullYear()+'-'+pad(dt.getMonth()+1),l:(dt.getMonth()+1)+'월',l2:(i===5||dt.getMonth()===0)?String(dt.getFullYear()):''});}
-  }
-  const idx=new Map(keys.map((x,i)=>[x.k,i]));
-  keys.forEach(x=>{x.before=0;x.done=0;});
+/* 주문 1건의 금액 계산: 매출=결제금액, 마진=결제금액-수수료(15%)-매입액-배송비 */
+function homeRows(){
+  const out=[];
   S.orders.forEach(o=>{
-    const cd=o.collectedDate||'',i=idx.get(mode==='day'?cd:cd.slice(0,7));
-    if(i==null)return;
-    let v=1;
-    if(metric==='amt'){const {p}=orderInfo(o);v=p?(Number(p.price)||0)*(Number(o.qty)||0):0;}
-    if(ordStatus(o)==='shipped')keys[i].done+=v;else keys[i].before+=v;
+    const d=o.collectedDate||'';if(!d)return;
+    const {p,s}=orderInfo(o),pay=nz(o.payAmount),qty=nz(o.qty)||1;
+    const buy=p?nz(p.price)*qty:0,ship=p&&p.shipFee==='미포함'?nz(p.shipAmount):0,fee=Math.round(pay*HD_FEE);
+    out.push({o,p,s,d,pay,qty,buy,ship,fee,mapped:!!p,margin:p?pay-fee-buy-ship:0});
   });
+  return out;
+}
+const inR=(rows,a,b)=>rows.filter(x=>(!a||x.d>=a)&&(!b||x.d<=b));
+function agg(rows){
+  const r={cnt:0,qty:0,pay:0,buy:0,ship:0,fee:0,margin:0,mpay:0,unm:0,nopay:0};
+  rows.forEach(x=>{
+    r.cnt++;r.qty+=x.qty;r.pay+=x.pay;if(!x.pay)r.nopay++;
+    if(x.mapped){r.buy+=x.buy;r.ship+=x.ship;r.fee+=x.fee;r.margin+=x.margin;r.mpay+=x.pay;}else r.unm++;
+  });
+  return r;
+}
+function perfRanges(mode,t){
+  if(mode==='day')return {cur:[t,t],prev:[addD(t,-7),addD(t,-7)],lab:'전주 동일요일 대비',cl:'오늘'};
+  if(mode==='week'){const m=mondayOf(t);return {cur:[m,t],prev:[addD(m,-7),addD(t,-7)],lab:'전주 동일기간 대비',cl:'이번 주'};}
+  const d=pDate(t),f=localDate(new Date(d.getFullYear(),d.getMonth(),1)),pm=new Date(d.getFullYear(),d.getMonth()-1,1),last=new Date(d.getFullYear(),d.getMonth(),0).getDate();
+  return {cur:[f,t],prev:[localDate(pm),localDate(new Date(pm.getFullYear(),pm.getMonth(),Math.min(d.getDate(),last)))],lab:'전월 동일기간 대비',cl:'이번 달'};
+}
+/* 증감 표시: 플러스=빨강, 마이너스=파랑 */
+function dlt(cur,prev,unit,money){
+  const f=v=>money?won(Math.round(Math.abs(v)))+'원':Math.abs(v).toLocaleString()+unit;
+  if(!prev)return '<div class="hd0">'+(cur?'비교 기간 0 → 비교 불가':'변동 없음')+'</div>';
+  const df=cur-prev,pc=Math.abs(df/prev*100).toFixed(1),sg=df>0?'+':df<0?'−':'';
+  return '<div class="hd '+(df>0?'up':df<0?'dn':'')+'">'+(df>0?'▲ ':df<0?'▼ ':'')+sg+f(df)+' ('+sg+pc+'%)</div>';
+}
+function trendSeries(rows,mode,t){
+  const keys=[];
+  if(mode==='day'){for(let i=13;i>=0;i--){const k=addD(t,-i);keys.push({k,l:k.slice(5),l2:HD_WD[pDate(k).getDay()]});}}
+  else if(mode==='week'){const m=mondayOf(t);for(let i=7;i>=0;i--){const k=addD(m,-7*i);keys.push({k,l:k.slice(5),l2:'주'});}}
+  else{const d=pDate(t);for(let i=11;i>=0;i--){const x=new Date(d.getFullYear(),d.getMonth()-i,1);keys.push({k:x.getFullYear()+'-'+pad(x.getMonth()+1),l:(x.getMonth()+1)+'월',l2:(x.getMonth()===0||i===11)?String(x.getFullYear()):''});}}
+  keys.forEach(x=>{x.pay=0;x.cnt=0;});
+  const ix=new Map(keys.map((x,i)=>[x.k,i]));
+  rows.forEach(r=>{const k=mode==='day'?r.d:mode==='week'?mondayOf(r.d):r.d.slice(0,7),i=ix.get(k);if(i!=null){keys[i].pay+=r.pay;keys[i].cnt++;}});
   return keys;
 }
-function drawBarChart(boxId,sumId,mode,metric){
-  const box=$('#'+boxId);if(!box)return;
-  const amt=metric==='amt';
-  const F=v=>amt?fmtCompact(v):Number(v).toLocaleString();
-  const FL=v=>amt?won(v)+'원':v+'건';
-  const ser=homeSeries(mode,metric),total=ser.reduce((a,x)=>a+x.before+x.done,0);
-  const sm=$('#'+sumId);if(sm)sm.textContent=(mode==='day'?'최근 7일':'최근 6개월')+(amt?' 매입금액 '+won(total)+'원':' 수집 주문 '+total.toLocaleString()+'건');
-  const W=Math.max(260,Math.round(box.clientWidth||520)),H=Math.round(Math.min(300,Math.max(190,W*0.4))),L=amt?48:40,R=8,T=22,B=44,pw=W-L-R,ph=H-T-B,n=ser.length;
-  const max=Math.max(0,...ser.map(x=>x.before+x.done));
-  let step=Math.max(1,Math.ceil(max/4));
-  const mag=Math.pow(10,Math.floor(Math.log10(step)));
-  step=[1,2,5,10].map(f=>f*mag).find(v=>v>=step);
-  const top=step*4,Y=v=>T+ph-(v/top)*ph;
-  const slot=pw/n,bw=Math.min(72,slot*0.58);
-  let g='';
-  for(let i=0;i<=4;i++){const v=step*i,y=Y(v);g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" style="stroke:var(--line2)"/><text x="'+(L-8)+'" y="'+(y+4)+'" text-anchor="end" style="fill:var(--mute);font-size:11px">'+F(v)+'</text>';}
+const niceTop=m=>{if(m<=0)return 4;let s=Math.ceil(m/4);const g=Math.pow(10,Math.floor(Math.log10(s)));s=[1,2,5,10].map(f=>f*g).find(v=>v>=s);return s*4;};
+/* 판매 추이: 막대=판매금액, 선=결제건수 */
+function trendSvg(ser){
+  const W=640,H=250,L=52,R=34,T=24,B=44,pw=W-L-R,ph=H-T-B,n=ser.length;
+  const topP=niceTop(Math.max(0,...ser.map(x=>x.pay))),topC=Math.max(4,Math.max(0,...ser.map(x=>x.cnt)));
+  const slot=pw/n,bw=Math.min(40,slot*.56),Yp=v=>T+ph-v/topP*ph,Yc=v=>T+ph-v/topC*ph;
+  let g='',pts=[];
+  for(let i=0;i<=4;i++){const y=T+ph-ph*i/4;g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="#eef0f4"/><text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end" class="ax">'+fmtCompact(topP*i/4)+'</text><text x="'+(W-R+6)+'" y="'+(y+4)+'" class="ax" style="fill:#e8890c">'+Math.round(topC*i/4)+'</text>';}
   ser.forEach((x,i)=>{
-    const cx=L+slot*i+slot/2,x0=cx-bw/2,tot=x.before+x.done;
-    const hb=(x.before/top)*ph,hd=(x.done/top)*ph,yb=T+ph-hb,yd=yb-hd;
-    g+='<g><title>'+x.l+(x.l2?' '+x.l2:'')+' · 전체 '+FL(tot)+' (출고전 '+FL(x.before)+' / 출고완료 '+FL(x.done)+')</title>';
-    if(x.before)g+='<rect x="'+x0+'" y="'+yb+'" width="'+bw+'" height="'+hb+'" rx="3" style="fill:var(--pri)"/>';
-    if(x.done)g+='<rect x="'+x0+'" y="'+yd+'" width="'+bw+'" height="'+hd+'" rx="3" style="fill:#7048e8"/>';
-    if(x.before&&hb>16)g+='<text x="'+cx+'" y="'+(yb+hb/2+4)+'" text-anchor="middle" style="fill:#fff;font-size:11px;font-weight:600">'+F(x.before)+'</text>';
-    if(x.done&&hd>16)g+='<text x="'+cx+'" y="'+(yd+hd/2+4)+'" text-anchor="middle" style="fill:#fff;font-size:11px;font-weight:600">'+F(x.done)+'</text>';
-    if(tot)g+='<text x="'+cx+'" y="'+(yd-6)+'" text-anchor="middle" style="fill:var(--ink);font-size:12px;font-weight:700">'+F(tot)+'</text>';
-    g+='</g><text x="'+cx+'" y="'+(T+ph+16)+'" text-anchor="middle" style="fill:var(--ink2);font-size:12px">'+esc(x.l)+'</text>';
-    if(x.l2)g+='<text x="'+cx+'" y="'+(T+ph+31)+'" text-anchor="middle" style="fill:var(--mute);font-size:11px">'+esc(x.l2)+'</text>';
+    const cx=L+slot*i+slot/2,h=x.pay/topP*ph;
+    g+='<g><title>'+x.l+' · 판매금액 '+won(x.pay)+'원 · 결제 '+x.cnt+'건</title>';
+    if(x.pay)g+='<rect x="'+(cx-bw/2)+'" y="'+Yp(x.pay)+'" width="'+bw+'" height="'+h+'" rx="3" fill="#3b5bdb" opacity=".88"/><text x="'+cx+'" y="'+(Yp(x.pay)-6)+'" text-anchor="middle" class="av">'+fmtCompact(x.pay)+'</text>';
+    g+='</g><text x="'+cx+'" y="'+(T+ph+16)+'" text-anchor="middle" class="ax2">'+esc(x.l)+'</text>';
+    if(x.l2)g+='<text x="'+cx+'" y="'+(T+ph+30)+'" text-anchor="middle" class="ax">'+esc(x.l2)+'</text>';
+    pts.push(cx+','+Yc(x.cnt));
   });
-  box.innerHTML='<div style="display:flex;gap:14px;font-size:12.5px;margin:2px 0 4px;color:var(--ink2)"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--pri);margin-right:5px"></i>출고전</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#7048e8;margin-right:5px"></i>출고완료</span></div>'+
-    '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="'+(amt?'주문통계(매입금액) 그래프':'주문통계 그래프')+'">'+g+'</svg>'+
-    (total?'':'<div class="mute small" style="text-align:center;margin-top:-6px">'+(amt?'이 기간에 매입금액이 집계된 주문이 없습니다.':'이 기간에 수집된 주문이 없습니다.')+'</div>');
+  g+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#e8890c" stroke-width="2.2" stroke-linejoin="round"/>';
+  ser.forEach((x,i)=>{const cx=L+slot*i+slot/2;g+='<circle cx="'+cx+'" cy="'+Yc(x.cnt)+'" r="3.4" fill="#fff" stroke="#e8890c" stroke-width="2"><title>'+x.l+' 결제 '+x.cnt+'건</title></circle>';});
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="판매 추이 그래프">'+g+'</svg>';
 }
-function drawHomeChart(){drawBarChart('hchart','hsum',HM.mode,'cnt');drawBarChart('hchart2','hsum2',HM.pmode,'amt');}
-/* 창 크기가 바뀌면 각 박스 너비에 맞게 그래프를 다시 그립니다 */
-let _hrz=0,_hw=0;
-window.addEventListener('resize',()=>{
-  clearTimeout(_hrz);
-  _hrz=setTimeout(()=>{const b=$('#hchart');if(b&&b.clientWidth&&Math.abs(b.clientWidth-_hw)>4){_hw=b.clientWidth;drawHomeChart();}},150);
-});
-A.hmmode=el=>{HM.mode=el.dataset.m==='month'?'month':'day';route();};
-A.hmmode2=el=>{HM.pmode=el.dataset.m==='month'?'month':'day';route();};
-ROUTES['/home']=()=>{setTimeout(drawHomeChart,0);return pgHome();};
+/* 요일별 일평균 판매금액 */
+function wdChart(rows,t){
+  const from=HD.an?addD(t,-(HD.an-1)):(rows.length?rows.reduce((m,x)=>x.d<m?x.d:m,t):t);
+  const days=Math.round((pDate(t)-pDate(from))/864e5)+1,occ=Array(7).fill(0);
+  for(let i=0;i<days;i++)occ[pDate(addD(from,i)).getDay()]++;
+  const a=Array.from({length:7},()=>({pay:0,cnt:0}));
+  rows.forEach(r=>{const w=pDate(r.d).getDay();a[w].pay+=r.pay;a[w].cnt++;});
+  const items=[1,2,3,4,5,6,0].map(w=>({w,avg:occ[w]?a[w].pay/occ[w]:0,ac:occ[w]?a[w].cnt/occ[w]:0,pay:a[w].pay,cnt:a[w].cnt}));
+  const best=items.reduce((b,x)=>x.avg>b.avg?x:b,items[0]),mx=Math.max(1,...items.map(x=>x.avg));
+  const W=640,H=230,L=10,R=10,T=26,B=50,pw=W-L-R,ph=H-T-B,slot=pw/7,bw=Math.min(58,slot*.6);
+  let g='';
+  items.forEach((x,i)=>{
+    const cx=L+slot*i+slot/2,h=x.avg/mx*ph,y=T+ph-h,isB=x.avg>0&&x.w===best.w;
+    g+='<g><title>'+HD_WD[x.w]+'요일 · 합계 '+won(x.pay)+'원 · '+x.cnt+'건 (일평균 '+won(Math.round(x.avg))+'원)</title>';
+    if(x.avg)g+='<rect x="'+(cx-bw/2)+'" y="'+y+'" width="'+bw+'" height="'+h+'" rx="4" fill="'+(isB?'#7048e8':'#91a7ff')+'"/><text x="'+cx+'" y="'+(y-6)+'" text-anchor="middle" class="av">'+fmtCompact(Math.round(x.avg))+'</text>';
+    g+='</g><text x="'+cx+'" y="'+(T+ph+17)+'" text-anchor="middle" class="ax2" style="fill:'+(x.w===0?'#e03131':x.w===6?'#1c7ed6':'')+'">'+HD_WD[x.w]+'</text><text x="'+cx+'" y="'+(T+ph+32)+'" text-anchor="middle" class="ax">'+x.ac.toFixed(1)+'건/일</text>';
+  });
+  g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+(T+ph)+'" y2="'+(T+ph)+'" stroke="#e5e7eb"/>';
+  return {svg:'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="요일별 판매 그래프">'+g+'</svg>',best:best.avg>0?HD_WD[best.w]:''};
+}
+function hbars(items,color){
+  if(!items.length)return '<div class="mute small" style="padding:22px 0;text-align:center">데이터가 없습니다.</div>';
+  const mx=Math.max(1,...items.map(x=>Math.abs(x.v)));
+  return '<div class="hb">'+items.map(x=>'<div class="hbr"><div class="hbl" title="'+esc(x.l)+'">'+esc(x.l)+'</div><div class="hbt"><i style="width:'+Math.max(2,Math.abs(x.v)/mx*100)+'%;background:'+(x.v<0?'#e03131':color)+'"></i></div><div class="hbv">'+x.t+'<small>'+(x.s||'')+'</small></div></div>').join('')+'</div>';
+}
+function groupBy(rows,keyFn,labFn){
+  const m=new Map();
+  rows.forEach(r=>{const k=keyFn(r);if(k==null)return;let g=m.get(k);if(!g){g={l:labFn?labFn(r):k,pay:0,cnt:0,qty:0,margin:0};m.set(k,g);}g.pay+=r.pay;g.cnt++;g.qty+=r.qty;g.margin+=r.margin;});
+  return [...m.values()];
+}
+function buildHome(){
+  const t=localDate(),rows=homeRows();
+  /* 판매관리: 주문 상태별 수량 */
+  const st={pre:0,nw:0,cf:0,sh:0};
+  S.orders.forEach(o=>{if(stOf(o)==='none'){st.pre++;return;}const s=ordStatus(o);if(s==='shipped')st.sh++;else if(s==='confirmed')st.cf++;else st.nw++;});
+  const tile=(href,l,n,c,hint)=>'<a class="htile" href="#'+href+'" style="--c:'+c+'"><span>'+l+'</span><b>'+n.toLocaleString()+'<small>건</small></b><em>'+hint+'</em></a>';
+  const sale='<div class="card hbox"><div class="row" style="margin-bottom:12px"><h3 style="margin:0">판매관리</h3><span class="grow"></span><span class="mute small">전체 주문 '+S.orders.length.toLocaleString()+'건</span></div><div class="htiles">'+
+    tile('/orders/confirm','주문확정 전',st.pre,'#e8890c','미매핑 · 상품 연결 필요')+tile('/orders/check','신규주문',st.nw,'#3b5bdb','주문확인 대기')+tile('/orders/check','주문확인',st.cf,'#12a150','출고 대기')+tile('/orders/tracking','출고완료',st.sh,'#7048e8','운송장 입력 완료')+'</div></div>';
+  /* 정산관리 */
+  const sr={day:[t,t],week:[mondayOf(t),t],month:[t.slice(0,8)+'01',t],all:[null,null]}[HD.set];
+  const sa=agg(inR(rows,sr[0],sr[1])),sm=sa.margin,rate=sa.mpay?sm/sa.mpay*100:0;
+  const chip=(act,cur,list)=>'<div class="chips">'+list.map(([k,l])=>'<button class="chip'+(String(cur)===String(k)?' on':'')+'" data-act="'+act+'" data-m="'+k+'">'+l+'</button>').join('')+'</div>';
+  const settle='<div class="card hbox"><div class="row" style="margin-bottom:12px"><h3 style="margin:0">정산관리</h3><span class="grow"></span>'+chip('hset',HD.set,[['day','오늘'],['week','이번 주'],['month','이번 달'],['all','전체']])+'</div><div class="hsets">'+
+    '<div class="hset"><span>매출액</span><b>'+won(sa.pay)+'<small>원</small></b><em>결제금액 합계 · '+sa.cnt.toLocaleString()+'건</em></div>'+
+    '<div class="hset"><span>매입액</span><b>'+won(sa.buy)+'<small>원</small></b><em>매입가 × 수량</em></div>'+
+    '<div class="hset mg"><span>마진</span><b class="'+(sm<0?'neg':'')+'">'+won(sm)+'<small>원</small></b><em>마진율 '+rate.toFixed(1)+'% · 수수료 −'+won(sa.fee)+' · 배송비 −'+won(sa.ship)+'</em></div></div>'+
+    '<div class="hnote">마진 = 결제금액 − 수수료(15%) − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' (<a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외)':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
+  /* 판매성과 */
+  const rg=perfRanges(HD.perf,t),cur=agg(inR(rows,rg.cur[0],rg.cur[1])),prv=agg(inR(rows,rg.prev[0],rg.prev[1]));
+  const cu=cur.qty?cur.pay/cur.qty:0,pu=prv.qty?prv.pay/prv.qty:0;
+  const kpi=(l,v,u,d)=>'<div class="hkpi"><span>'+l+'</span><b>'+v+'<small>'+u+'</small></b>'+d+'</div>';
+  const perf='<div class="card hbox"><div class="row" style="margin-bottom:4px"><h3 style="margin:0">판매성과</h3><span class="mute small">'+rg.cl+' '+(rg.cur[0]===rg.cur[1]?rg.cur[0]:rg.cur[0]+' ~ '+rg.cur[1])+' · '+rg.lab+'</span><span class="grow"></span>'+chip('hperf',HD.perf,[['day','일간'],['week','주간'],['month','월간']])+'</div>'+
+    '<div class="hkpis">'+kpi('상품결제건수',cur.cnt.toLocaleString(),'건',dlt(cur.cnt,prv.cnt,'건'))+kpi('상품결제수량',cur.qty.toLocaleString(),'개',dlt(cur.qty,prv.qty,'개'))+kpi('상품결제단가',won(Math.round(cu)),'원',dlt(Math.round(cu),Math.round(pu),'',1))+kpi('판매금액(총)',won(cur.pay),'원',dlt(cur.pay,prv.pay,'',1))+'</div>'+
+    '<div class="row" style="margin:14px 0 2px"><b style="font-size:13px">'+(HD.perf==='day'?'최근 14일':HD.perf==='week'?'최근 8주 (월요일 시작)':'최근 12개월')+' 판매 추이</b><span class="grow"></span><span class="hleg"><i style="background:#3b5bdb"></i>판매금액</span><span class="hleg"><i style="background:#e8890c;height:3px;border-radius:2px"></i>결제건수</span></div>'+
+    trendSvg(trendSeries(rows,HD.perf,t))+'<div class="mute small" style="margin-top:4px">주문 수집일 기준 · 상품결제단가 = 판매금액 ÷ 수량</div></div>';
+  /* 판매분석 */
+  const ar=inR(rows,HD.an?addD(t,-(HD.an-1)):null,t),aa=agg(ar),wd=wdChart(ar,t);
+  const malls=groupBy(ar,r=>r.o.mall||'미지정').sort((a,b)=>b.pay-a.pay);
+  const mallH=hbars(malls.slice(0,8).map(x=>({l:x.l,v:x.pay,t:won(x.pay)+'원',s:(aa.pay?(x.pay/aa.pay*100).toFixed(1):'0.0')+'% · '+x.cnt.toLocaleString()+'건'})),'#3b5bdb');
+  const tops=groupBy(ar,r=>r.p?r.p.name+(r.p.option?' / '+r.p.option:''):(r.o.itemName||'(상품명 없음)')+(r.o.itemOption?' / '+r.o.itemOption:'')).sort((a,b)=>b.pay-a.pay||b.qty-a.qty).slice(0,10);
+  const topH=hbars(tops.map(x=>({l:x.l,v:x.pay,t:won(x.pay)+'원',s:x.qty.toLocaleString()+'개 · '+x.cnt.toLocaleString()+'건'})),'#12a150');
+  const sups=groupBy(ar.filter(r=>r.mapped&&r.s),r=>r.s.id,r=>r.s.name).sort((a,b)=>b.margin-a.margin).slice(0,8);
+  const supH=hbars(sups.map(x=>({l:x.l,v:x.margin,t:won(x.margin)+'원',s:'마진율 '+(x.pay?(x.margin/x.pay*100).toFixed(1):'0.0')+'% · 매출 '+fmtCompact(x.pay)})),'#7048e8');
+  const anl='<div class="row" style="margin:22px 0 12px"><h3 style="margin:0">판매분석</h3><span class="mute small">수집 주문 '+aa.cnt.toLocaleString()+'건 · 판매금액 '+won(aa.pay)+'원 · 평균 객단가 '+won(aa.cnt?Math.round(aa.pay/aa.cnt):0)+'원</span><span class="grow"></span>'+chip('han',HD.an,[[7,'최근 7일'],[30,'최근 30일'],[90,'최근 90일'],[0,'전체']])+'</div>'+
+    '<div class="hg2"><div class="card hbox"><h3>요일별 판매 <span class="mute small" style="font-weight:500">일평균 판매금액'+(wd.best?' · 가장 강한 요일 <b style="color:#7048e8">'+wd.best+'요일</b>':'')+'</span></h3>'+wd.svg+'</div>'+
+    '<div class="card hbox"><h3>쇼핑몰별 판매 비중 <span class="mute small" style="font-weight:500">판매금액 기준</span></h3>'+mallH+'</div>'+
+    '<div class="card hbox"><h3>상품별 판매 TOP 10 <span class="mute small" style="font-weight:500">판매금액 기준</span></h3>'+topH+'</div>'+
+    '<div class="card hbox"><h3>매입처별 마진 <span class="mute small" style="font-weight:500">매핑된 주문 · 수수료/배송비 반영</span></h3>'+supH+'</div></div>';
+  return '<div class="hgrid2">'+sale+settle+'</div>'+perf+anl;
+}
+function pgHome(){
+  return '<h1>홈 대시보드</h1><p class="sub">판매 · 정산 · 성과를 한눈에 확인합니다. 모든 집계는 주문 수집일 기준이며, 데이터는 로그인한 계정의 서버에 저장됩니다.</p><div id="hdash">'+buildHome()+'</div>';
+}
+function redrawHome(){const b=$('#hdash');if(b)b.innerHTML=buildHome();}
+A.hperf=el=>{HD.perf=el.dataset.m;redrawHome();};
+A.hset=el=>{HD.set=el.dataset.m;redrawHome();};
+A.han=el=>{HD.an=+el.dataset.m;redrawHome();};
+ROUTES['/home']=pgHome;
+
 async function buildDumpDB(){
   const [sup,prod,ord,rules,meta]=await Promise.all(['suppliers','products','orders','rules','meta'].map(getAll));
   const m={};meta.forEach(r=>{m[r.key]=r.value;});

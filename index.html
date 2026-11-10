@@ -529,7 +529,9 @@ select.selsm{height:29px;min-height:29px;padding:0 24px 0 10px;font-size:12px;bo
 .chpick:hover{background:#eef1f6;color:#1f2937}
 .chpick svg{width:17px;height:17px}
 /* 상품변경사항 — 입력 행 표 */
-.chtbl td{padding:8px 8px;vertical-align:top}
+.chtbl table.tbl td{padding:10px 8px;vertical-align:top}
+.chtbl table.tbl td.mute{line-height:34px}
+.chtbl table.tbl td .btn.sm{margin-top:3px}
 .chtbl input[type=text],.chtbl select{width:100%;height:34px;min-height:34px;font-size:13px}
 .chtbl input[readonly]{background:#f7f8fb;color:#4b5563}
 /* 상품변경사항 — 반영여부 체크된 기록 행은 회색 */
@@ -1622,7 +1624,7 @@ function pgChanges(){
       '<td style="min-width:120px">'+inp('before','현재 값',1)+'</td>'+
       '<td style="min-width:120px">'+inp('after','숫자만',1)+'</td>'+
       '<td style="min-width:120px">'+saleOpt+'</td>'+
-      '<td style="text-align:center;min-width:80px;padding-top:14px"><input type="checkbox" data-chg="chf" data-r="'+r.rid+'" data-k="img"'+(r.img?' checked':'')+' title="이미지 변경"></td>'+
+      '<td style="text-align:center;min-width:80px;padding-top:19px"><input type="checkbox" data-chg="chf" data-r="'+r.rid+'" data-k="img"'+(r.img?' checked':'')+' title="이미지 변경"></td>'+
       '<td style="min-width:240px">'+inp('etc','예) 상세페이지·썸네일 변경')+'</td>'+
       '<td class="nw"><button class="btn sm danger" data-act="chRowDel" data-r="'+r.rid+'">행 삭제</button></td></tr>';
   }).join('');

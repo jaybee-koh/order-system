@@ -1289,7 +1289,7 @@ function previewTable(cols,rows){
    홈
 ===================================================================== */
 /* ===== 홈 대시보드 (판매관리 · 정산관리 · 판매성과 · 판매분석) ===== */
-const HD={perf:'day',set:'month',an:30,tm:'pay'};
+const HD={perf:'day',set:'month',an:1,tm:'pay'};
 const HD_WD=['일','월','화','수','목','금','토'];
 const HD_FEE=0.15;   /* 쇼핑몰 수수료율 15% */
 const nz=v=>{const n=Number(v);return isFinite(n)?n:0;};
@@ -1433,7 +1433,7 @@ function buildHome(){
   const topH=hbars(tops.map(x=>({l:x.l,v:x.pay,t:won(x.pay)+'원',s:x.qty.toLocaleString()+'개 · '+x.cnt.toLocaleString()+'건'})),'#12a150');
   const supAll=groupBy(ar.filter(r=>r.mapped&&r.s),r=>r.s.id,r=>r.s.name).sort((a,b)=>b.pay-a.pay),supT=supAll.reduce((a,x)=>a+x.pay,0);
   const supH=hbars(supAll.slice(0,8).map(x=>({l:x.l,v:x.pay,t:won(x.pay)+'원',s:(supT?(x.pay/supT*100).toFixed(1):'0.0')+'% · '+x.cnt.toLocaleString()+'건'})),'#7048e8');
-  const anl='<div class="row" style="margin:22px 0 12px"><h3 style="margin:0">판매분석</h3><span class="mute small">수집 주문 '+aa.cnt.toLocaleString()+'건 · 판매금액 '+won(aa.pay)+'원 · 평균 객단가 '+won(aa.cnt?Math.round(aa.pay/aa.cnt):0)+'원</span><span class="grow"></span>'+chip('han',HD.an,[[7,'최근 7일'],[30,'최근 30일'],[90,'최근 90일'],[0,'전체']])+'</div>'+
+  const anl='<div class="row" style="margin:22px 0 12px"><h3 style="margin:0">판매분석</h3><span class="mute small">수집 주문 '+aa.cnt.toLocaleString()+'건 · 판매금액 '+won(aa.pay)+'원 · 평균 객단가 '+won(aa.cnt?Math.round(aa.pay/aa.cnt):0)+'원</span><span class="grow"></span>'+chip('han',HD.an,[[1,'오늘'],[7,'최근 7일'],[30,'최근 30일'],[90,'최근 90일'],[0,'전체']])+'</div>'+
     '<div class="hg2"><div class="card hbox" id="hwdbox"><h3>요일별 판매 <span class="mute small" style="font-weight:500">일평균 판매금액'+(wd.best?' · 가장 강한 요일 <b style="color:#7048e8">'+wd.best+'요일</b>':'')+'</span></h3><div id="hwdsvg">'+wd.svg+'</div></div>'+
     '<div class="card hbox"><h3>쇼핑몰별 판매 비중 <span class="mute small" style="font-weight:500">판매금액 기준</span></h3>'+mallH+'</div>'+
     '<div class="card hbox"><h3>상품별 판매 TOP 10 <span class="mute small" style="font-weight:500">판매금액 기준</span></h3>'+topH+'</div>'+

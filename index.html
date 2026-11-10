@@ -1817,24 +1817,41 @@ A.collectSave=async()=>{
 /* =====================================================================
    주문 확정 관리
 ===================================================================== */
-const CF={status:'all',q:'',date:'',page:0,incDone:false,sel:new Set(),keep:new Set()};
+const CF={status:'all',q:'',date:'',page:0,incDone:false,sel:new Set(),keep:new Set(),d:{status:'all',q:''}};  /* d = 화면에서 고른 값(검색 버튼을 눌러야 status·q 적용) */
 const PAGE_O=100;
 const scoped=()=>S.orders.filter(o=>!o.confirmed&&(!CF.date||o.collectedDate===CF.date));
+function cfQMatch(o,q){
+  if(!q)return true;
+  const {p,s}=orderInfo(o);
+  const h=norm([o.orderNo,o.ownNo,o.orderer,o.receiver,o.tel1,o.tel2,o.addr,o.itemName,o.itemOption,p?p.name:'',s?s.name:''].join(' '));
+  return h.includes(q);
+}
 function confirmList(){
   const q=norm(CF.q);
   return scoped().filter(o=>{
     if(CF.status!=='all'&&stOf(o)!==CF.status&&!CF.keep.has(o.id))return false;
-    if(q){const {p,s}=orderInfo(o);const h=norm([o.orderNo,o.ownNo,o.orderer,o.receiver,o.tel1,o.tel2,o.addr,o.itemName,o.itemOption,p?p.name:'',s?s.name:''].join(' '));if(!h.includes(q))return false;}
-    return true;
+    return cfQMatch(o,q);
   });
+}
+/* 전체 / 미매핑 / 매핑완료 건수 (수집일·검색어 조건 기준) */
+function confirmCounts(){
+  const q=norm(CF.q),base=scoped().filter(o=>cfQMatch(o,q));
+  const none=base.filter(o=>stOf(o)==='none').length;
+  return {all:base.length,none:none,matched:base.length-none};
+}
+function drawConfirmChips(){
+  const el=$('#cchips');if(!el)return;
+  const c=confirmCounts();
+  el.innerHTML=[['all','전체'],['none','미매핑'],['matched','매핑완료']].map(([k,l])=>'<button class="chip'+(CF.d.status===k?' on':'')+'" data-act="cstat" data-s="'+k+'">'+l+' ('+c[k].toLocaleString()+')</button>').join('');
 }
 function pgConfirm(){
   const sc=scoped();
+  CF.d={status:CF.status,q:CF.q};
     const dates=[...new Set(S.orders.map(o=>o.collectedDate))].sort().reverse();
   return '<h1>주문 확정 관리</h1><p class="sub">각 주문에 [매핑하기]로 상품을 연결하면 매입처가 표시됩니다. 매핑이 끝난 주문은 [주문확인처리]에서 조회·다운로드·상태변경을 할 수 있습니다.</p>'+
-  '<div class="card row"><div class="chips">'+[['all','전체'],['none','미매핑'],['matched','매핑완료']].map(([k,l])=>'<button class="chip'+(CF.status===k?' on':'')+'" data-act="cstat" data-s="'+k+'">'+l+'</button>').join('')+'</div><span class="grow"></span>'+
+  '<div class="card row"><div class="chips" id="cchips"></div><span class="grow"></span>'+
   '<select data-chg="cdate"><option value="">전체 수집일</option>'+dates.map(d=>'<option value="'+d+'"'+(CF.date===d?' selected':'')+'>'+d+'</option>').join('')+'</select>'+
-  '<input type="text" placeholder="자체주문번호 · 주문번호 · 수취인 · 상품명 검색" style="width:240px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
+  '<input type="text" placeholder="자체주문번호 · 주문번호 · 수취인 · 상품명 검색" style="width:240px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn pri" data-act="csearch">검색</button><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
   '<div id="ctbl"></div>';
 }
 ROUTES['/orders/confirm']=pgConfirm;
@@ -1844,6 +1861,7 @@ function drawConfirmTable(keep){
   let y=0,t=0,l=0;
   if(keep&&box){y=window.scrollY;const w=box.querySelector('.tblwrap');if(w){t=w.scrollTop;l=w.scrollLeft;}}
   drawConfirmTableInner();
+  drawConfirmChips();
   if(keep&&box){const w=box.querySelector('.tblwrap');if(w){w.scrollTop=t;w.scrollLeft=l;}window.scrollTo(0,y);}
 }
 function drawConfirmTableInner(){
@@ -1872,10 +1890,12 @@ function drawConfirmTableInner(){
   }).join(''))+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="cpage" data-d="-1"'+(CF.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="cpage" data-d="1"'+(CF.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
-A.cstat=el=>{CF.status=el.dataset.s;CF.page=0;CF.keep.clear();route();};
-C.cdate=el=>{CF.date=el.value;CF.page=0;CF.keep.clear();route();};
+A.cstat=el=>{CF.d.status=el.dataset.s;drawConfirmChips();};   /* 고르기만 하고, [검색]을 눌러야 적용 */
+A.csearch=()=>{CF.status=CF.d.status;CF.q=CF.d.q;CF.page=0;CF.keep.clear();drawConfirmTable();};
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.matches&&e.target.matches('[data-inp="cq"]'))A.csearch();});
+C.cdate=el=>{CF.date=el.value;CF.page=0;CF.keep.clear();drawConfirmTable();};
 C.incdone=el=>{CF.incDone=el.checked;route();};
-I.cq=el=>{CF.q=el.value;CF.page=0;drawConfirmTable();};
+I.cq=el=>{CF.d.q=el.value;};
 A.cpage=el=>{CF.page+=+el.dataset.d;drawConfirmTable();$('#ctbl').scrollIntoView({block:'start'});};
 C.crow=el=>{const id=+el.dataset.id;el.checked?CF.sel.add(id):CF.sel.delete(id);};
 C.csall=el=>{confirmList().forEach(o=>el.checked?CF.sel.add(o.id):CF.sel.delete(o.id));drawConfirmTable(true);};

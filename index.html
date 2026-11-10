@@ -528,6 +528,10 @@ select.selsm{height:29px;min-height:29px;padding:0 24px 0 10px;font-size:12px;bo
 .chpick{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:28px;height:28px;padding:0;border:0;border-radius:6px;background:transparent;color:#6b7280;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
 .chpick:hover{background:#eef1f6;color:#1f2937}
 .chpick svg{width:17px;height:17px}
+/* 상품변경사항 — 입력 행 표 */
+.chtbl td{padding:8px 8px;vertical-align:top}
+.chtbl input[type=text],.chtbl select{width:100%;height:34px;min-height:34px;font-size:13px}
+.chtbl input[readonly]{background:#f7f8fb;color:#4b5563}
 </style>
 </head>
 <body>
@@ -1566,110 +1570,156 @@ A.pbApply=async()=>{
 };
 C.pselall=el=>{const list=filteredProducts().slice(PL.page*PAGE_P,(PL.page+1)*PAGE_P);list.forEach(p=>el.checked?PL.sel.add(p.id):PL.sel.delete(p.id));drawProducts();};
 /* =====================================================================
-   상품변경사항 — 판매가(상품 리스트의 가격)·판매상태 변경 기록. 입력하면 상품 리스트에 바로 반영됩니다.
-   기록은 meta 저장소의 'prodChanges' 키에 보관합니다.
+   상품변경사항 — 판매가(상품 리스트의 가격)·판매상태·기타 변경 기록. 입력하면 판매가·판매상태는 상품 리스트에 바로 반영됩니다.
+   여러 상품을 한 번에 선택해 한꺼번에 입력할 수 있습니다. 기록은 meta 저장소의 'prodChanges' 키에 보관합니다.
 ===================================================================== */
-const CH={date:'',code:'',before:'',after:'',sale:'',etc:'',bt:false};
+const CH={date:'',rows:[]};
+let CHN=0;
+const chBlank=()=>({rid:'r'+(++CHN),code:'',before:'',after:'',sale:'',etc:'',bt:false});
+const chRowOf=rid=>CH.rows.find(r=>r.rid===rid);
 const chProd=code=>{const c=String(code||'').trim();return c?(S.products.find(p=>String(p.code||'')===c)||null):null;};
 const chName=p=>p?p.name+(p.option?' / '+p.option:''):'';
-function chHint(p){
-  if(!CH.code.trim())return '';
+const chQ=(rid,attr)=>document.querySelector('['+attr+'="'+rid+'"]');
+function chHint(r,p){
+  if(!String(r.code).trim())return '';
   if(!p)return '<span class="err">일치하는 상품코드가 없습니다.</span>';
-  return '<span class="mute">현재 판매가 '+(won(p.price)||'-')+'원 · 판매상태 '+saleOf(p)+'</span>';
+  return '<span class="mute">현재 '+(won(p.price)||'-')+'원 · '+saleOf(p)+'</span>';
 }
+function chRedraw(){const y=window.scrollY;route();window.scrollTo(0,y);}
 function pgChanges(){
   if(!CH.date)CH.date=localDate();
-  const p=chProd(CH.code);
-  const fld=(label,req,html)=>'<div><label class="f'+(req?' rq':'')+'">'+label+'</label>'+html+'</div>';
-  const txt=(id,k,ph,num,ro)=>'<input type="text" id="'+id+'" style="width:100%"'+(num?' inputmode="numeric"':'')+(ro?' readonly tabindex="-1"':' data-inp="chf" data-k="'+k+'"')+' value="'+esc(ro?chName(p):CH[k])+'" placeholder="'+(ph||'')+'">';
-  const saleOpt='<select style="width:100%" data-chg="chf" data-k="sale"><option value="">변경 없음</option>'+SALE_ST.map(x=>'<option value="'+x+'"'+(CH.sale===x?' selected':'')+'>'+x+'</option>').join('')+'</select>';
+  if(!CH.rows.length)CH.rows.push(chBlank());
   const list=[...(S.meta.prodChanges||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||'').localeCompare(a.createdAt||''));
+  const draft=CH.rows.map((r,i)=>{
+    const p=chProd(r.code);
+    const inp=(k,ph,num)=>'<input type="text" data-inp="chf" data-r="'+r.rid+'" data-k="'+k+'"'+(num?' inputmode="numeric"':'')+' value="'+esc(r[k])+'" placeholder="'+(ph||'')+'">';
+    const saleOpt='<select data-chg="chf" data-r="'+r.rid+'" data-k="sale"><option value="">변경 없음</option>'+SALE_ST.map(x=>'<option value="'+x+'"'+(r.sale===x?' selected':'')+'>'+x+'</option>').join('')+'</select>';
+    return '<tr><td class="nw mute">'+(i+1)+'</td>'+
+      '<td style="min-width:170px"><div style="position:relative"><input type="text" style="padding-right:40px" data-inp="chf" data-r="'+r.rid+'" data-k="code" value="'+esc(r.code)+'" placeholder="상품코드"><button type="button" class="chpick" data-act="chPick" data-r="'+r.rid+'" title="상품 조회 (여러 개 선택 가능)" aria-label="상품 조회">'+IC('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>')+'</button></div><div class="small" data-h="'+r.rid+'" style="margin-top:4px;min-height:1.2em">'+chHint(r,p)+'</div></td>'+
+      '<td style="min-width:230px"><input type="text" readonly tabindex="-1" data-n="'+r.rid+'" value="'+esc(chName(p))+'" placeholder="상품코드를 넣으면 자동 입력"></td>'+
+      '<td style="min-width:120px">'+inp('before','현재 값',1)+'</td>'+
+      '<td style="min-width:120px">'+inp('after','숫자만',1)+'</td>'+
+      '<td style="min-width:120px">'+saleOpt+'</td>'+
+      '<td style="min-width:240px">'+inp('etc','예) 상세페이지·썸네일 변경')+'</td>'+
+      '<td class="nw"><button class="btn sm danger" data-act="chRowDel" data-r="'+r.rid+'">행 삭제</button></td></tr>';
+  }).join('');
   const rows=list.map(r=>{
     const sale=r.sale?'<b style="color:'+SALE_CLR[r.sale]+'">'+(r.prevSale&&r.prevSale!==r.sale?esc(r.prevSale)+' → ':'')+esc(r.sale)+'</b>':'<span class="mute">-</span>';
     return '<tr><td class="nw">'+esc(r.date)+'</td><td class="nw">'+esc(r.code)+'</td><td>'+esc(r.name+(r.option?' / '+r.option:''))+'</td><td class="num">'+(won(r.before)||'-')+'</td><td class="num">'+(r.after===''||r.after==null?'<span class="mute">-</span>':'<b>'+won(r.after)+'</b>')+'</td><td class="nw">'+sale+'</td><td>'+(r.etc?esc(r.etc):'<span class="mute">-</span>')+'</td><td style="text-align:center"><input type="checkbox" data-chg="chApplied" data-id="'+esc(r.id)+'"'+(r.applied?' checked':'')+'></td><td class="nw"><button class="btn sm danger" data-act="chDel" data-id="'+esc(r.id)+'">삭제</button></td></tr>';
   }).join('');
-  return '<h1>상품변경사항</h1><p class="sub">판매가·판매상태·기타(상세페이지, 썸네일 등) 변경 내용을 입력하면 아래에 기록됩니다. 판매가와 판매상태는 상품 리스트(매입 상품 조회)에도 바로 반영되고, 기타변경사항은 기록만 남습니다. 판매가는 상품 리스트의 가격(매입가 칸)에 반영됩니다. 맨 끝 [반영여부]는 직접 체크해 두는 표시입니다.</p>'+
-  '<div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px">'+
-  fld('일자',1,'<input type="date" style="width:100%" data-chg="chf" data-k="date" value="'+esc(CH.date)+'">')+
-  fld('상품코드',1,'<div style="position:relative">'+txt('ch-code','code','상품코드 입력').replace('style="width:100%"','style="width:100%;padding-right:40px"')+'<button type="button" class="chpick" data-act="chPick" title="상품 조회" aria-label="상품 조회">'+IC('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>')+'</button></div>'+'<div class="small" id="ch-hint" style="margin-top:5px;min-height:1.2em">'+chHint(p)+'</div>')+
-  fld('상품명',0,txt('ch-name','',' 상품코드를 넣으면 자동 입력',0,1))+
-  fld('변경 전 판매가',0,txt('ch-before','before','상품코드 입력 시 현재 값',1))+
-  fld('변경 후 판매가',0,txt('ch-after','after','숫자만 입력',1))+
-  fld('판매상태 변경',0,saleOpt)+
-  '<div style="grid-column:1/-1"><label class="f">기타변경사항</label>'+txt('ch-etc','etc','예) 상세페이지 변경, 썸네일 변경 등 (판매가·판매상태 없이 이것만 입력해도 됩니다)')+'</div>'+
-  '</div><div class="row" style="margin-top:18px"><button class="btn pri" data-act="chAdd">입력</button><span class="mute small">변경 후 판매가, 판매상태, 기타변경사항 중 하나 이상은 입력해야 합니다.</span></div></div>'+
+  return '<h1>상품변경사항</h1><p class="sub">판매가·판매상태·기타(상세페이지, 썸네일 등) 변경 내용을 입력하면 아래에 기록됩니다. 판매가와 판매상태는 상품 리스트(매입 상품 조회)에도 바로 반영되고, 기타변경사항은 기록만 남습니다. 상품코드 칸의 돋보기로 여러 상품을 한 번에 골라 한꺼번에 입력할 수 있습니다. 판매가는 상품 리스트의 가격(매입가 칸)에 반영됩니다.</p>'+
+  '<div class="card"><div class="row" style="margin-bottom:12px"><label class="f rq" style="margin:0">일자</label><input type="date" data-chg="chf" data-k="date" value="'+esc(CH.date)+'"><span class="grow"></span><button class="btn sm" data-act="chRowAdd">+ 행 추가</button></div>'+
+  '<div class="tblwrap chtbl" style="overflow:auto"><table class="tbl"><thead><tr><th>#</th><th>상품코드</th><th>상품명</th><th>변경 전 판매가</th><th>변경 후 판매가</th><th>판매상태 변경</th><th>기타변경사항</th><th></th></tr></thead><tbody>'+draft+'</tbody></table></div>'+
+  '<div class="row" style="margin-top:16px"><button class="btn pri" data-act="chAdd">입력</button><span class="mute small">행마다 변경 후 판매가, 판매상태, 기타변경사항 중 하나 이상은 입력해야 합니다. 비어 있는 행은 무시됩니다.</span></div></div>'+
   '<h3 style="margin:20px 0 8px">변경 기록 <span class="mute small">(총 '+list.length.toLocaleString()+'건)</span></h3>'+
   (list.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>일자</th><th>상품코드</th><th>상품명</th><th class="num">변경 전 판매가</th><th class="num">변경 후 판매가</th><th>판매상태 변경</th><th>기타변경사항</th><th style="text-align:center">반영여부</th><th>관리</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="card mute">입력한 변경사항이 없습니다.</div>');
 }
 ROUTES['/products/changes']=pgChanges;
 const chInput=el=>{
-  const k=el.dataset.k;CH[k]=el.value;
-  if(k==='before')CH.bt=true;
+  const k=el.dataset.k;
+  if(k==='date'){CH.date=el.value;return;}
+  const r=chRowOf(el.dataset.r);if(!r)return;
+  r[k]=el.value;
+  if(k==='before')r.bt=true;
   if(k==='code'){
-    const p=chProd(CH.code);
-    const nm=$('#ch-name');if(nm)nm.value=chName(p);
-    const h=$('#ch-hint');if(h)h.innerHTML=chHint(p);
-    if(p&&!CH.bt){CH.before=p.price===''||p.price==null?'':String(p.price);const b=$('#ch-before');if(b)b.value=CH.before;}
-    if(!p&&!CH.bt){CH.before='';const b=$('#ch-before');if(b)b.value='';}
+    const p=chProd(r.code);
+    const nm=chQ(r.rid,'data-n');if(nm)nm.value=chName(p);
+    const h=chQ(r.rid,'data-h');if(h)h.innerHTML=chHint(r,p);
+    if(!r.bt){
+      r.before=p&&p.price!==''&&p.price!=null?String(p.price):'';
+      const b=document.querySelector('[data-r="'+r.rid+'"][data-k="before"]');if(b)b.value=r.before;
+    }
   }
 };
 I.chf=chInput;C.chf=chInput;
-/* ---- 상품 조회 팝업 (상품명·코드·옵션으로 검색 → 선택하면 상품코드 칸에 입력) ---- */
-function chPickList(q){
-  const k=norm(q);
+A.chRowAdd=()=>{CH.rows.push(chBlank());chRedraw();};
+A.chRowDel=el=>{CH.rows=CH.rows.filter(r=>r.rid!==el.dataset.r);chRedraw();};
+
+/* ---- 상품 조회 팝업 (여러 개 선택 → 적용하면 변경사항 행으로 한꺼번에 채워짐) ---- */
+const CHP={rid:'',set:new Set(),q:''};
+function chPickList(){
+  const k=norm(CHP.q);
   let list=S.products;
   if(k)list=list.filter(p=>(M.hay.get(p.id)||'').includes(k));
   const total=list.length,cur=list.slice(0,100);
-  const rows=cur.map(p=>{const sp=M.sup.get(p.supplierId);return '<tr><td class="nw">'+esc(p.code)+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.option)+'</td><td class="num">'+won(p.price)+'</td><td class="nw">'+esc(sp?sp.name:'')+'</td><td class="nw"><button class="btn sm pri" data-act="chSel" data-id="'+p.id+'">선택</button></td></tr>';}).join('');
+  const usable=cur.filter(p=>String(p.code||''));
+  const allOn=usable.length>0&&usable.every(p=>CHP.set.has(p.id));
+  const rows=cur.map(p=>{
+    const sp=M.sup.get(p.supplierId),has=!!String(p.code||'');
+    return '<tr><td><input type="checkbox" data-chg="chpTog" data-id="'+p.id+'"'+(CHP.set.has(p.id)?' checked':'')+(has?'':' disabled')+'></td><td class="nw">'+(has?esc(p.code):'<span class="mute">코드 없음</span>')+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.option)+'</td><td class="num">'+won(p.price)+'</td><td class="nw">'+esc(sp?sp.name:'')+'</td></tr>';
+  }).join('');
   return '<div class="mute small" style="margin:8px 0 6px">'+(k?'검색 결과 ':'전체 ')+total.toLocaleString()+'개'+(total>100?' · 상위 100개만 표시 (검색어를 더 입력하세요)':'')+'</div>'+
-    (cur.length?'<div class="tblwrap" style="max-height:50vh;overflow:auto"><table class="tbl"><thead><tr><th>상품코드</th><th>상품명</th><th>옵션</th><th class="num">매입가</th><th>매입처</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="card mute">조건에 맞는 상품이 없습니다.</div>');
+    (cur.length?'<div class="tblwrap" style="max-height:50vh;overflow:auto"><table class="tbl"><thead><tr><th style="width:34px"><input type="checkbox" data-chg="chpAll"'+(allOn?' checked':'')+' title="화면에 보이는 상품 전체 선택"></th><th>상품코드</th><th>상품명</th><th>옵션</th><th class="num">매입가</th><th>매입처</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="card mute">조건에 맞는 상품이 없습니다.</div>');
 }
-A.chPick=()=>{
-  openModal('<div style="width:min(760px,88vw)"><h2>상품 조회</h2><input type="text" id="chq" data-inp="chq" style="width:100%" placeholder="상품명 · 코드 · 옵션 검색"><div id="chres">'+chPickList('')+'</div></div><div class="foot"><button class="btn" data-act="close">닫기</button></div>','');
+const chpCount=()=>{const c=$('#chpcnt');if(c)c.textContent=CHP.set.size.toLocaleString();};
+A.chPick=el=>{
+  CHP.rid=el.dataset.r;CHP.set=new Set();CHP.q='';
+  openModal('<h2>상품 조회</h2><input type="text" id="chq" data-inp="chq" style="width:100%" placeholder="상품명 · 코드 · 옵션 검색"><div id="chres">'+chPickList()+'</div><div class="foot"><span class="mute small" style="margin-right:auto;align-self:center">선택 <b id="chpcnt">0</b>개</span><button class="btn" data-act="close">닫기</button><button class="btn pri" data-act="chpApply">적용</button></div>','wide');
   const f=$('#chq');if(f)f.focus();
 };
-I.chq=el=>{const r=$('#chres');if(r)r.innerHTML=chPickList(el.value);};
-A.chSel=el=>{
-  const p=M.prod.get(+el.dataset.id);if(!p)return;
-  if(!String(p.code||'')){toast('이 상품은 자체상품코드가 없습니다. 매입 상품 조회에서 코드를 먼저 지정하세요.','err',5000);return;}
-  CH.code=String(p.code);CH.before=p.price===''||p.price==null?'':String(p.price);CH.bt=false;
-  closeModal();
-  const y=window.scrollY;route();window.scrollTo(0,y);
-  const f=$('#ch-after');if(f)f.focus();
+I.chq=el=>{CHP.q=el.value;const r=$('#chres');if(r)r.innerHTML=chPickList();};
+C.chpTog=el=>{const id=+el.dataset.id;el.checked?CHP.set.add(id):CHP.set.delete(id);chpCount();const r=$('#chres');if(r){const ya=r.querySelector('[data-chg="chpAll"]');if(ya){const boxes=[...r.querySelectorAll('[data-chg="chpTog"]:not(:disabled)')];ya.checked=boxes.length>0&&boxes.every(b=>b.checked);}}};
+C.chpAll=el=>{
+  const r=$('#chres');if(!r)return;
+  r.querySelectorAll('[data-chg="chpTog"]:not(:disabled)').forEach(b=>{b.checked=el.checked;const id=+b.dataset.id;el.checked?CHP.set.add(id):CHP.set.delete(id);});
+  chpCount();
 };
+A.chpApply=()=>{
+  const ps=[...CHP.set].map(id=>M.prod.get(id)).filter(p=>p&&String(p.code||''));
+  if(!ps.length){toast('적용할 상품을 먼저 체크하세요.','err');return;}
+  const idx=CH.rows.findIndex(r=>r.rid===CHP.rid);
+  const mk=(p,r)=>{r.code=String(p.code);r.before=p.price===''||p.price==null?'':String(p.price);r.bt=false;return r;};
+  const first=idx>=0?mk(ps[0],CH.rows[idx]):null;
+  const extra=ps.slice(first?1:0).map(p=>mk(p,chBlank()));
+  if(idx>=0)CH.rows.splice(idx+1,0,...extra);else CH.rows.push(...(first?[first]:[]),...extra);
+  closeModal();chRedraw();
+  toast(ps.length.toLocaleString()+'개 상품을 변경사항 입력 행에 넣었습니다.');
+};
+
 A.chAdd=async()=>{
-  const p=chProd(CH.code);
   if(!CH.date){toast('일자를 입력하세요.','err');return;}
-  if(!CH.code.trim()){toast('상품코드를 입력하세요.','err');return;}
-  if(!p){toast('일치하는 상품코드가 없습니다.','err');return;}
-  const num=(v,label)=>{
+  const num=(v,label,n)=>{
     const raw=String(v||'').replace(/[,원\s]/g,'');
     if(raw==='')return '';
-    if(isNaN(Number(raw))||Number(raw)<0){toast(label+'는 숫자로 입력하세요.','err');return null;}
+    if(isNaN(Number(raw))||Number(raw)<0){toast(n+'번 행: '+label+'는 숫자로 입력하세요.','err',5000);return null;}
     return Number(raw);
   };
-  const after=num(CH.after,'변경 후 판매가');if(after===null)return;
-  let before=num(CH.before,'변경 전 판매가');if(before===null)return;
-  const sale=SALE_ST.includes(CH.sale)?CH.sale:'';
-  const etc=CH.etc.trim();
-  if(after===''&&!sale&&!etc){toast('변경 후 판매가, 판매상태, 기타변경사항 중 하나 이상을 입력하세요.','err');return;}
-  if(before===''&&p.price!==''&&p.price!=null)before=Number(p.price);
-  const prevSale=saleOf(p),prevP={price:p.price,saleStatus:p.saleStatus,updatedAt:p.updatedAt};
-  const touch=after!==''||!!sale;   /* 판매가·판매상태가 있을 때만 상품 리스트를 바꿉니다 (기타변경사항만이면 기록만) */
-  if(after!==''){p.price=after;p.updatedAt=new Date().toISOString();}
-  if(sale)p.saleStatus=sale;
-  const rec={id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),date:CH.date,code:String(p.code||''),productId:p.id,name:p.name,option:p.option||'',before,after,sale,prevSale,etc,applied:false,createdAt:new Date().toISOString()};
+  const items=[];
+  for(let i=0;i<CH.rows.length;i++){
+    const r=CH.rows[i],n=i+1;
+    const etc=String(r.etc||'').trim(),sale=SALE_ST.includes(r.sale)?r.sale:'';
+    if(!String(r.code).trim()&&!String(r.after).trim()&&!String(r.before).trim()&&!sale&&!etc)continue;   /* 빈 행 무시 */
+    const p=chProd(r.code);
+    if(!String(r.code).trim()){toast(n+'번 행: 상품코드를 입력하세요.','err',5000);return;}
+    if(!p){toast(n+'번 행: 일치하는 상품코드가 없습니다.','err',5000);return;}
+    const after=num(r.after,'변경 후 판매가',n);if(after===null)return;
+    const before=num(r.before,'변경 전 판매가',n);if(before===null)return;
+    if(after===''&&!sale&&!etc){toast(n+'번 행: 변경 후 판매가, 판매상태, 기타변경사항 중 하나 이상을 입력하세요.','err',5000);return;}
+    items.push({p,after,before,sale,etc});
+  }
+  if(!items.length){toast('입력할 변경사항이 없습니다.','err');return;}
+  const snap=new Map(),changed=new Set(),recs=[],now=new Date().toISOString();
+  items.forEach((it,i)=>{
+    const {p,after,sale,etc}=it;let before=it.before;
+    if(!snap.has(p.id))snap.set(p.id,{p,v:{price:p.price,saleStatus:p.saleStatus,updatedAt:p.updatedAt}});
+    if(before===''&&p.price!==''&&p.price!=null)before=Number(p.price);
+    const prevSale=saleOf(p);
+    if(after!==''){p.price=after;p.updatedAt=now;changed.add(p);}
+    if(sale){p.saleStatus=sale;changed.add(p);}
+    recs.push({id:'c'+Date.now().toString(36)+i.toString(36)+Math.random().toString(36).slice(2,5),date:CH.date,code:String(p.code||''),productId:p.id,name:p.name,option:p.option||'',before,after,sale,prevSale,etc,applied:false,createdAt:now});
+  });
   const old=S.meta.prodChanges;
   try{
-    if(touch)await putOne('products',p);
-    await setMeta('prodChanges',[...(old||[]),rec]);
+    if(changed.size)await putMany('products',[...changed]);
+    await setMeta('prodChanges',[...(old||[]),...recs]);
   }catch(e){
-    Object.assign(p,prevP);S.meta.prodChanges=old;
+    snap.forEach(x=>Object.assign(x.p,x.v));S.meta.prodChanges=old;
+    if(changed.size){try{await putMany('products',[...changed]);}catch(e2){}}
     toast('저장 실패: '+e.message,'err',6000);return;
   }
-  CH.code=CH.before=CH.after=CH.sale=CH.etc='';CH.bt=false;
-  const y=window.scrollY;route();window.scrollTo(0,y);
-  toast(touch?'변경사항을 입력하고 상품 리스트에 반영했습니다.':'기타변경사항을 기록했습니다.');
+  CH.rows=[];
+  chRedraw();
+  toast(recs.length.toLocaleString()+'건을 변경 기록에 입력했습니다.'+(changed.size?' (판매가·판매상태는 상품 리스트에 반영됨)':''));
 };
 C.chApplied=async el=>{
   const list=S.meta.prodChanges||[],r=list.find(x=>x.id===el.dataset.id);if(!r)return;
@@ -1684,7 +1734,7 @@ A.chDel=async el=>{
   const old=list;
   try{await setMeta('prodChanges',list.filter(x=>x!==r));}
   catch(e){S.meta.prodChanges=old;toast('삭제 실패: '+e.message,'err',5000);return;}
-  const y=window.scrollY;route();window.scrollTo(0,y);toast('삭제했습니다.');
+  chRedraw();toast('삭제했습니다.');
 };
 
 /* ---- 상품 수정 (매입처 / 자체상품코드 / 상품명 / 옵션명 / 카테고리 / 매입가 / 부가세 / 배송비) ---- */

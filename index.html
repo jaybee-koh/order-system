@@ -2928,11 +2928,12 @@ A.ckdlall=()=>ckDownload(ckList(),'다운로드할 주문이 없습니다.');
 async function ckDownload(list,emptyMsg){
   if(!list.length){toast(emptyMsg,'err');return;}
   const tpl=DEFAULT_TPL;
+  const allShip=list.every(o=>ordStatus(o)==='shipped');
   /* 출고완료 주문이 하나라도 있으면 택배사·운송장번호를 함께 내려받습니다 */
   const withTrk=list.some(o=>ordStatus(o)==='shipped'||o.trackingNo);
-  /* 주문번호 열은 항상 자체주문번호로 내려받습니다 */
-  const hdr=tpl.headers.slice();
-  const mapping=tpl.mapping.slice();
+  /* 출고완료만 다운로드할 때는 자체주문번호 대신 쇼핑몰주문번호를 내려받습니다 */
+  const hdr=tpl.headers.map(h=>allShip&&h==='자체주문번호'?'쇼핑몰주문번호':h);
+  const mapping=tpl.mapping.map(m=>allShip&&m.src==='ownNo'?{...m,src:'orderNo'}:m);
   const ti=hdr.indexOf('운송장번호');   /* 기본 양식의 빈 '운송장번호' 칸을 채우고, 그 앞에 '택배사' 칸을 넣습니다 */
   const rows=[];
   if(withTrk){const h=hdr.slice();if(ti>=0)h.splice(ti,0,'택배사');else h.push('택배사','운송장번호');rows.push(h);}

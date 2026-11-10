@@ -1120,11 +1120,11 @@ const A={},C={},I={};
 const NAV=[
   {h:'/home',t:'홈'},
   {parent:'매입처관리'},
-  {h:'/suppliers/new',t:'매입처 등록',sub:1},{h:'/suppliers',t:'매입처 조회/수정',sub:1},
+  {h:'/suppliers/new',t:'매입처등록',sub:1},{h:'/suppliers',t:'매입처조회/수정',sub:1},
   {parent:'상품관리'},
-  {h:'/products/bulk',t:'신규상품등록',sub:1},{h:'/products',t:'매입 상품 조회',sub:1},
+  {h:'/products/bulk',t:'신규상품등록',sub:1},{h:'/products',t:'매입상품조회',sub:1},
   {parent:'주문관리'},
-  {h:'/orders/collect',t:'주문 수집',sub:1},{h:'/orders/confirm',t:'주문 확정 관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1}
+  {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1}
 ];
 const IC=(p)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 const ICONS={
@@ -1818,6 +1818,7 @@ function pgConfirm(){
   '<div class="card row"><div class="chips">'+[['all','전체'],['none','미매핑'],['matched','매핑완료']].map(([k,l])=>'<button class="chip'+(CF.status===k?' on':'')+'" data-act="cstat" data-s="'+k+'">'+l+'</button>').join('')+'</div><span class="grow"></span>'+
   '<select data-chg="cdate"><option value="">전체 수집일</option>'+dates.map(d=>'<option value="'+d+'"'+(CF.date===d?' selected':'')+'>'+d+'</option>').join('')+'</select>'+
   '<input type="text" placeholder="자체주문번호 · 주문번호 · 수취인 · 상품명 검색" style="width:240px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
+  '<div class="row" style="margin:0 0 10px;justify-content:flex-start"><button class="btn pri" data-act="bulkmatch">일괄매핑</button><span class="mute small">주문을 체크한 뒤 누르면 상품명·옵션명이 모두 일치하는 확실한 건만 자동 매핑됩니다.</span></div>'+
   '<div id="ctbl"></div>';
 }
 ROUTES['/orders/confirm']=pgConfirm;
@@ -1909,6 +1910,44 @@ A.pick=async el=>{
   changed.forEach(x=>CF.keep.add(x.id));
   closeModal();MT=null;
   toast('매핑 완료: '+p.name+(extra?' (같은 상품 주문 '+extra+'건도 함께 매핑)':''));
+  redrawConfirm();
+};
+A.bulkmatch=async()=>{
+  const sel=[...CF.sel].map(id=>M.ord.get(id)).filter(Boolean);
+  if(!sel.length){toast('일괄매핑할 주문을 먼저 체크하세요.','err');return;}
+  const targets=sel.filter(o=>stOf(o)==='none');
+  const already=sel.length-targets.length;
+  if(!targets.length){toast('선택한 주문이 모두 이미 매핑되어 있습니다.','err');return;}
+  /* 상품명 + 옵션명 이중 체크용 색인 (정규화한 상품명||옵션명 → 상품 목록) */
+  const idx=new Map();
+  S.products.forEach(p=>{
+    if(!M.sup.has(p.supplierId))return;
+    const k=norm(p.name)+'||'+norm(p.option);
+    if(!idx.has(k))idx.set(k,[]);
+    idx.get(k).push(p);
+  });
+  const changed=[],ruleRows=[];let none=0,multi=0;
+  targets.forEach(o=>{
+    if(!norm(o.itemName)){none++;return;}
+    const hit=idx.get(ruleKey(o))||[];      /* 상품명·옵션명이 둘 다 일치해야 후보 */
+    if(!hit.length){none++;return;}
+    if(hit.length>1){multi++;return;}        /* 후보가 2개 이상이면 불확실 → 제외 */
+    const pr=hit[0];
+    o.productId=pr.id;o.matchedAuto=true;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
+    changed.push(o);
+    const k=ruleKey(o);
+    if(S.rules[k]!==pr.id){S.rules[k]=pr.id;ruleRows.push({key:k,productId:pr.id});}
+  });
+  if(changed.length){
+    await putMany('orders',changed);
+    if(ruleRows.length)await putMany('rules',ruleRows);
+    changed.forEach(o=>{CF.keep.add(o.id);CF.sel.delete(o.id);});
+  }
+  const skipped=none+multi;
+  let msg='일괄매핑 완료: '+changed.length+'건 매핑';
+  if(skipped)msg+=' / '+skipped+'건 제외(상품명·옵션명이 정확히 일치하는 상품이 없거나 2개 이상)';
+  if(already)msg+=' / 이미 매핑된 '+already+'건 건너뜀';
+  toast(msg,changed.length?'ok':'err',7000);
   redrawConfirm();
 };
 A.unmatch=async el=>{

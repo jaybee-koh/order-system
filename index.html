@@ -2449,10 +2449,12 @@ A.collectSave=async()=>{
     await putMany('orders',adds);S.orders.push(...adds);rebuild();
     if(freshOwn.length)await putMany('meta',freshOwn);
     await setMeta(sigOf(clHeaders()),CL.map);await setMeta(mallKey(clHeaders()),CL.mall);
-    toast('주문 '+adds.length+'건 저장 (자동 매핑 '+auto+'건'+(dup?', 중복 제외 '+dup+'건':'')+')',adds.length?'ok':'err',6000);
     CL.sheets=null;CL.fileName='';
     CF.status=adds.length&&adds.length>auto?'none':'all';CF.from='';CF.to='';CF.page=0;CF.q='';
-    location.hash='#/orders/confirm';
+    route();
+    openModal('<h2>주문 수집 완료</h2><div class="card" style="background:#f7f8fb;box-shadow:none;margin-bottom:0"><div><b style="font-size:20px">'+adds.length.toLocaleString()+'건</b>의 주문을 수집했습니다.</div>'+
+      '<div class="mute small" style="margin-top:8px">자동 매핑 '+auto.toLocaleString()+'건'+(dup?' · 중복 제외 '+dup.toLocaleString()+'건':'')+'</div></div>'+
+      '<div class="foot"><button class="btn pri" data-act="close">확인</button></div>');
   }catch(e){toast('저장 실패: '+e.message,'err',6000);}
 };
 

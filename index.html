@@ -747,6 +747,9 @@ function xlDate(n){
 const isXlSerial=v=>/^\d{5}(\.\d+)?$/.test(String(v==null?'':v).trim())&&Number(v)>20000&&Number(v)<80000;
 const DATE_LBL=/주문\s*일|결제\s*일|주문\s*시간|주문일시/;
 const fixDateVal=v=>isXlSerial(v)?xlDate(Number(v)):v;
+/* 신세계 전용: 주문번호 앞 8자리가 날짜 (예: 2026110867114F → 2026-11-08, 2027로 시작해도 적용) */
+const DATE8=/^(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?=[0-9A-Za-z]|$)/;
+const fixDate8=v=>{const m=DATE8.exec(String(v==null?'':v).trim());return m?m[1]+'-'+m[2]+'-'+m[3]:v;};
 /* 여러 날짜 표기를 YYYY-MM-DD 로 통일 (알아볼 수 없으면 빈 문자열) */
 function normDay(v){
   v=String(v==null?'':v).trim();if(!v)return '';
@@ -1210,14 +1213,14 @@ function fixPhone(v){
   return v;
 }
 function fixZip(v){v=String(v||'').trim();if(/^\d{4}$/.test(v))v='0'+v;return v;}
-function extractOrders(rows,hdrIdx,map){
+function extractOrders(rows,hdrIdx,map,mall){
   const get=(r,f)=>(map[f]||[]).map(i=>String(r[i]==null?'':r[i]).trim()).filter(Boolean);
   const out=[];
   for(let i=hdrIdx+1;i<rows.length;i++){
     const r=rows[i];
     const o={
       orderNo:get(r,'orderNo')[0]||'',
-      orderDate:fixDateVal(get(r,'orderDate')[0]||''),
+      orderDate:mall==='신세계'?fixDate8(get(r,'orderDate')[0]||''):fixDateVal(get(r,'orderDate')[0]||''),
       orderer:get(r,'orderer')[0]||'',
       receiver:get(r,'receiver')[0]||'',
       tel1:fixPhone(get(r,'tel1')[0]),
@@ -2261,7 +2264,7 @@ function pgCollect(){
   let body='<div class="filebox"><input type="file" accept=".xlsx,.csv,.xls,.txt" data-chg="cfile"><div class="mute small" style="margin-top:6px">쇼핑몰에서 다운받은 주문내역 파일(엑셀/CSV)을 선택하세요.</div></div>';
   let orders=[];
   if(CL.sheets){
-    orders=extractOrders(clRows(),CL.headerRow-1,CL.map);orders.forEach(o=>{o.mall=CL.mall;customFields().forEach(c=>{o['c_'+c.key]=(o.ex||{})[c.key]||'';});});
+    orders=extractOrders(clRows(),CL.headerRow-1,CL.map,CL.mall);orders.forEach(o=>{o.mall=CL.mall;customFields().forEach(c=>{o['c_'+c.key]=(o.ex||{})[c.key]||'';});});
     body+='<div class="row" style="margin-top:12px"><span class="tag ok">불러옴</span><b>'+esc(CL.fileName)+'</b>'+
     (CL.sheets.length>1?'<span class="mute small">시트:</span><select data-chg="csheet">'+CL.sheets.map((s,i)=>'<option value="'+i+'"'+(i===CL.sheetIdx?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select>':'')+
     '<span class="mute small">제목 행:</span><input type="number" min="1" style="width:70px" value="'+CL.headerRow+'" data-chg="chdr"><span class="mute small">번째 줄</span></div>'+
@@ -2424,7 +2427,7 @@ A.collectSave=async()=>{
   if(!(CL.map.itemName||[]).length){toast('"주문 상품명"에 해당하는 열을 선택하세요. (상품 매핑에 필요합니다)','err',6000);return;}
   if(!(CL.map.orderNo||[]).length&&!confirm('"주문번호" 열이 선택되지 않았습니다. 이대로 저장하면 중복 주문을 걸러낼 수 없습니다. 계속할까요?'))return;
   if(!CL.mall&&!confirm('"쇼핑몰"이 선택되지 않았습니다. 이대로 저장할까요?'))return;
-  const list=extractOrders(clRows(),CL.headerRow-1,CL.map);
+  const list=extractOrders(clRows(),CL.headerRow-1,CL.map,CL.mall);
   if(!list.length){toast('저장할 주문이 없습니다.','err');return;}
   const sets=collectedSets(),seenLine=new Set();
   const now=new Date().toISOString(),day=localDate();

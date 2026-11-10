@@ -1818,7 +1818,7 @@ function pgConfirm(){
   '<div class="card row"><div class="chips">'+[['all','전체'],['none','미매핑'],['matched','매핑완료']].map(([k,l])=>'<button class="chip'+(CF.status===k?' on':'')+'" data-act="cstat" data-s="'+k+'">'+l+'</button>').join('')+'</div><span class="grow"></span>'+
   '<select data-chg="cdate"><option value="">전체 수집일</option>'+dates.map(d=>'<option value="'+d+'"'+(CF.date===d?' selected':'')+'>'+d+'</option>').join('')+'</select>'+
   '<input type="text" placeholder="자체주문번호 · 주문번호 · 수취인 · 상품명 검색" style="width:240px" data-inp="cq" value="'+esc(CF.q)+'"><button class="btn danger" data-act="cdel">선택 삭제</button></div>'+
-  '<div class="row" style="margin:0 0 10px;justify-content:flex-start"><button class="btn pri" data-act="bulkmatch">일괄매핑</button><span class="mute small">주문을 체크한 뒤 누르면 상품명·옵션명이 모두 일치하는 확실한 건만 자동 매핑됩니다.</span></div>'+
+  '<div class="row" style="margin:0 0 10px"><span class="mute small">주문을 체크한 뒤 [일괄매핑]은 상품명·옵션명이 일치하는 확실한 건만 자동 매핑하고, [매핑해제]는 체크한 주문의 매핑을 해제합니다.</span><span class="grow"></span><button class="btn pri" data-act="bulkmatch">일괄매핑</button><button class="btn" data-act="bulkunmatch">매핑해제</button></div>'+
   '<div id="ctbl"></div>';
 }
 ROUTES['/orders/confirm']=pgConfirm;
@@ -1926,15 +1926,31 @@ A.bulkmatch=async()=>{
     if(!byName.has(k))byName.set(k,[]);
     byName.get(k).push(p);
   });
+  const byOpt=new Map();
+  S.products.forEach(p=>{
+    if(!M.sup.has(p.supplierId))return;
+    const k=norm(p.option);if(!k)return;
+    if(!byOpt.has(k))byOpt.set(k,[]);
+    byOpt.get(k).push(p);
+  });
+  const tok=t=>new Set((String(t||'').toLowerCase().match(/[가-힣]+|[a-z]+|\d+/g)||[]).filter(x=>!(x.length===1&&/[a-z]/.test(x))));
+  /* 한쪽 상품명의 모든 단어가 다른 쪽 상품명에 들어 있으면 같은 상품명으로 봄 (숫자는 같은 숫자여야 함) */
+  const nameCover=(a,b)=>{
+    const A=tok(a),B=tok(b);if(A.size<3||B.size<3)return false;
+    const covered=(x,y,ytxt)=>[...x].every(t=>/^\d+$/.test(t)?y.has(t):ytxt.includes(t));
+    return covered(B,A,norm(a))||covered(A,B,norm(b));
+  };
   const changed=[],ruleRows=[];let none=0,multi=0;
   targets.forEach(o=>{
     const nk=norm(o.itemName);
     if(!nk){none++;return;}
     const cands=byName.get(nk)||[];           /* 1차: 상품명 일치 */
-    if(!cands.length){none++;return;}
     const oo=norm(o.itemOption);
     let hit;
-    if(!oo){
+    if(!cands.length){
+      /* 상품명이 완전히 같지 않아도, 옵션명이 완전히 같고 상품명 단어가 서로 포함되면 확실한 건으로 처리 */
+      hit=oo?(byOpt.get(oo)||[]).filter(p=>nameCover(o.itemName,p.name)):[];
+    }else if(!oo){
       hit=cands;                              /* 주문에 옵션이 없으면 상품명이 유일할 때만 */
     }else{                                    /* 2차: 옵션명 확인 */
       hit=cands.filter(p=>norm(p.option)===oo);
@@ -1958,6 +1974,24 @@ A.bulkmatch=async()=>{
   if(skipped)msg+=' / '+skipped+'건 제외(일치하는 상품이 없거나 후보가 2개 이상)';
   if(already)msg+=' / 이미 매핑된 '+already+'건 건너뜀';
   toast(msg,changed.length?'ok':'err',7000);
+  redrawConfirm();
+};
+A.bulkunmatch=async()=>{
+  const sel=[...CF.sel].map(id=>M.ord.get(id)).filter(Boolean);
+  if(!sel.length){toast('매핑을 해제할 주문을 먼저 체크하세요.','err');return;}
+  const targets=sel.filter(o=>stOf(o)!=='none');
+  if(!targets.length){toast('선택한 주문 중 매핑된 주문이 없습니다.','err');return;}
+  if(!confirm('선택한 주문 중 매핑된 '+targets.length+'건의 매핑을 해제할까요?'))return;
+  const delKeys=new Set();
+  targets.forEach(o=>{
+    const k=ruleKey(o);
+    if(o.itemName&&S.rules[k]===o.productId){delete S.rules[k];delKeys.add(k);}
+    o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
+    CF.keep.add(o.id);
+  });
+  await putMany('orders',targets);
+  if(delKeys.size)await delMany('rules',[...delKeys]);
+  toast('매핑 해제 완료: '+targets.length+'건');
   redrawConfirm();
 };
 A.unmatch=async el=>{

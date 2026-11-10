@@ -981,9 +981,23 @@ const setMeta=(key,value)=>{S.meta[key]=value;return putOne('meta',{key,value});
 /* ===== 도메인 도우미 ===== */
 const ruleKey=o=>norm(o.itemName)+'||'+norm(o.itemOption);
 function orderInfo(o){
-  const p=o.productId?M.prod.get(o.productId):null;
-  const s=p?M.sup.get(p.supplierId):null;
+  let p=o.productId?M.prod.get(o.productId):null;
+  let s=p?M.sup.get(p.supplierId):null;
+  /* 상품(또는 매입처)이 삭제됐어도 삭제 전에 주문에 보관해 둔 정보로 매핑을 유지 */
+  if(!p&&o.productId&&o.snapP){p=o.snapP;s=M.sup.get(p.supplierId)||o.snapS||null;}
   return {p:s?p:null,s:s||null};
+}
+/* 삭제될 상품에 매핑된 주문에 상품·매입처 정보를 복사해 둠 (삭제 전에 호출) */
+async function snapMapped(pidSet){
+  const list=[];
+  S.orders.forEach(o=>{
+    if(!o.productId||!pidSet.has(o.productId))return;
+    const p=M.prod.get(o.productId);if(!p)return;
+    const s=M.sup.get(p.supplierId);
+    o.snapP=Object.assign({},p);o.snapS=s?Object.assign({},s):null;
+    list.push(o);
+  });
+  await putMany('orders',list);
 }
 function stOf(o){const {p}=orderInfo(o);if(!p)return 'none';return 'matched';}
 const ST_LABEL={none:'미매핑',matched:'매핑완료',done:'발주완료'};
@@ -1368,7 +1382,8 @@ A.supEdit=el=>{
 A.supDel=async el=>{
   const id=+el.dataset.id,s=M.sup.get(id);
   const pids=S.products.filter(p=>p.supplierId===id).map(p=>p.id);
-  if(!confirm('"'+s.name+'" 매입처를 삭제할까요?\n이 매입처의 등록 상품 '+pids.length+'개도 함께 삭제되고, 해당 상품과 매핑된 주문은 미매핑으로 돌아갑니다.'))return;
+  if(!confirm('"'+s.name+'" 매입처를 삭제할까요?\n이 매입처의 등록 상품 '+pids.length+'개도 함께 삭제됩니다. (이미 매핑된 주문의 매핑은 유지됩니다)'))return;
+  await snapMapped(new Set(pids));
   await delMany('products',pids);await delMany('suppliers',[id]);
   const pset=new Set(pids);
   const rk=Object.keys(S.rules).filter(k=>pset.has(S.rules[k]));
@@ -1467,8 +1482,9 @@ A.pSave=async()=>{
 A.pdelOne=async el=>{
   const p=M.prod.get(+el.dataset.id);if(!p)return;
   const n=S.orders.filter(o=>o.productId===p.id).length;
-  if(!confirm('"'+p.name+(p.option?' / '+p.option:'')+'" 상품을 삭제할까요?'+(n?'\n이 상품과 매핑된 주문 '+n+'건은 미매핑으로 돌아갑니다.':'')))return;
+  if(!confirm('"'+p.name+(p.option?' / '+p.option:'')+'" 상품을 삭제할까요?'+(n?'\n이 상품과 매핑된 주문 '+n+'건의 매핑은 유지됩니다.':'')))return;
   try{
+    await snapMapped(new Set([p.id]));
     await delMany('products',[p.id]);
     const rk=Object.keys(S.rules).filter(k=>S.rules[k]===p.id);
     await delMany('rules',rk);rk.forEach(k=>delete S.rules[k]);
@@ -1479,9 +1495,10 @@ A.pdelOne=async el=>{
 A.pdel=async()=>{
   const ids=[...PL.sel].filter(id=>M.prod.has(id));
   if(!ids.length){toast('삭제할 상품을 체크하세요.','err');return;}
-  if(!confirm(ids.length+'개 상품을 삭제할까요? 매핑된 주문은 미매핑으로 돌아갑니다.'))return;
-  await delMany('products',ids);
+  if(!confirm(ids.length+'개 상품을 삭제할까요? 이미 매핑된 주문의 매핑은 유지됩니다.'))return;
   const set=new Set(ids);
+  await snapMapped(set);
+  await delMany('products',ids);
   const rk=Object.keys(S.rules).filter(k=>set.has(S.rules[k]));await delMany('rules',rk);rk.forEach(k=>delete S.rules[k]);
   S.products=S.products.filter(p=>!set.has(p.id));PL.sel.clear();rebuild();toast('삭제했습니다.');drawProducts();
 };
@@ -1906,7 +1923,7 @@ A.pick=async el=>{
   const pid=+el.dataset.id,p=M.prod.get(pid),o=M.ord.get(MT.orderId);
   if(!p||!o)return;
   const changed=[];
-  o.productId=pid;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;changed.push(o);
+  delete o.snapP;delete o.snapS;o.productId=pid;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;changed.push(o);
   let extra=0;
   if(o.itemName){
     const k=ruleKey(o);
@@ -1967,6 +1984,7 @@ A.bulkmatch=async()=>{
     if(!hit.length){none++;return;}
     if(hit.length>1){multi++;return;}         /* 후보가 2개 이상이면 불확실 → 제외 */
     const pr=hit[0];
+    delete o.snapP;delete o.snapS;
     o.productId=pr.id;o.matchedAuto=true;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
     changed.push(o);
     const k=ruleKey(o);
@@ -1994,6 +2012,7 @@ A.bulkunmatch=async()=>{
   targets.forEach(o=>{
     const k=ruleKey(o);
     if(o.itemName&&S.rules[k]===o.productId){delete S.rules[k];delKeys.add(k);}
+    delete o.snapP;delete o.snapS;
     o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
     CF.keep.add(o.id);
   });
@@ -2006,6 +2025,7 @@ A.unmatch=async el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;
   const k=ruleKey(o);
   if(o.itemName&&S.rules[k]===o.productId){delete S.rules[k];await delMany('rules',[k]);}
+  delete o.snapP;delete o.snapS;
   o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
   await putOne('orders',o);CF.keep.add(o.id);redrawConfirm();
 };
@@ -2272,6 +2292,7 @@ function tkList(){
   return S.orders.filter(o=>{
     const {p,s}=orderInfo(o);
     if(!p)return false;
+    if(ordStatus(o)==='new')return false;   /* 신규주문은 운송장 입력 불가 (주문확인 이후만) */
     if(a.mall==='__none'){if(o.mall)return false;}else if(a.mall&&o.mall!==a.mall)return false;
     if(a.sup&&s.id!==+a.sup)return false;
     if(a.reg?!o.trackingNo:!!o.trackingNo)return false; /* 기본: 운송장 미입력만 / 체크 시: 송장 등록된 주문만 */
@@ -2288,7 +2309,7 @@ function pgTrack(){
   const malls=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];
   const sm='style="padding:2px 8px;font-size:12px"';
   const lb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
-  return '<h1>운송장입력(건별)</h1><p class="sub">조회된 주문마다 택배사를 고르고 운송장번호를 입력한 뒤, 주문을 체크하고 [선택저장]을 누르세요. 입력한 택배사·운송장번호는 [주문확인처리]의 거래선 옆에 표시됩니다. 조회 기준 일자는 주문 수집일입니다.</p>'+
+  return '<h1>운송장입력(건별)</h1><p class="sub">주문확인 상태의 주문만 조회됩니다. 조회된 주문마다 택배사를 고르고 운송장번호를 입력한 뒤, 주문을 체크하고 [선택저장]을 누르세요. 입력한 택배사·운송장번호는 [주문확인처리]의 거래선 옆에 표시됩니다. 조회 기준 일자는 주문 수집일입니다.</p>'+
   '<div class="card">'+
   '<div class="row" style="margin-bottom:10px">'+lb('수집일자')+'<input type="date" id="tkfrom" data-chg="tkf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="tkto" data-chg="tkf" data-k="to" value="'+esc(d.to)+'">'+
   [['today','오늘'],['7d','1주일'],['month','당월'],['1','1개월'],['3','3개월']].map(x=>'<button class="btn sm" '+sm+' data-act="tkrange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+
@@ -2378,7 +2399,7 @@ C.tkcar=el=>{
 };
 I.tkno=el=>{const id=+el.dataset.id;TK.edit[id]=Object.assign({},TK.edit[id],{no:el.value});tkMark(id);};
 A.tksave=async()=>{
-  const ids=[...TK.sel].filter(id=>M.ord.has(id));
+  const ids=[...TK.sel].filter(id=>M.ord.has(id)&&ordStatus(M.ord.get(id))!=='new');
   if(!ids.length){toast('저장할 주문을 체크하세요.','err');return;}
   const now=new Date().toISOString(),list=[];let bad=0;
   for(const id of ids){
@@ -2405,7 +2426,7 @@ function pgTrackBulk(){
   const cars=carrierList();
   const info=BT.err?'<div class="err" style="margin-top:10px">'+esc(BT.err)+'</div>':
     BT.items?'<div class="row" style="margin-top:12px"><span class="tag ok">불러옴</span><b>'+esc(BT.fileName)+'</b><span class="mute small">'+BT.items.length.toLocaleString()+'건의 운송장 데이터를 읽었습니다.</span></div>':'';
-  return '<h1>운송장입력(대량)</h1><p class="sub">송장업로드양식(엑셀)에 자체주문번호, 운송장번호, 택배사를 입력해 올리면 한 번에 저장됩니다. 저장한 택배사·운송장번호는 [주문확인처리]의 거래선 옆에 표시됩니다.</p>'+
+  return '<h1>운송장입력(대량)</h1><p class="sub">송장업로드양식(엑셀)에 자체주문번호, 운송장번호, 택배사를 입력해 올리면 한 번에 저장됩니다. 저장한 택배사·운송장번호는 [주문확인처리]의 거래선 옆에 표시됩니다. 신규주문 상태의 주문은 입력되지 않고, 주문확인 상태의 주문만 입력됩니다.</p>'+
   '<div class="card">'+
   '<div class="row"><span class="mute small" style="min-width:56px;display:inline-block">택배사</span><select data-chg="btcar" style="min-width:160px"><option value="">택배사 선택</option>'+cars.map(c=>'<option value="'+esc(c)+'"'+(BT.carrier===c?' selected':'')+'>'+esc(c)+'</option>').join('')+'<option value="__add">＋ 택배사 추가…</option></select>'+
   '<span class="mute small">엑셀의 택배사 칸이 비어 있는 행에 적용됩니다. (칸에 적혀 있으면 그 택배사가 우선)</span></div>'+
@@ -2474,6 +2495,7 @@ A.btsave=async()=>{
     let why='';
     if(!own)why='자체주문번호가 비어 있습니다.';
     else if(!byOwn.has(own))why='해당 자체주문번호의 주문이 없습니다.';
+    else if(!byOwn.get(own).some(o=>ordStatus(o)!=='new'))why='신규주문 상태입니다. [주문확인처리]에서 주문확인으로 변경한 뒤 입력하세요.';
     else if(!no)why='운송장번호가 비어 있습니다.';
     else if(it.car&&!car)why='등록되지 않은 택배사입니다. ('+it.car+')';
     else if(!car)why='택배사가 없습니다. 택배사를 선택하거나 파일에 입력하세요.';
@@ -2481,7 +2503,7 @@ A.btsave=async()=>{
     last.set(own,{carrier:car,no});
   }
   const list=[];let shipped=0;
-  last.forEach((v,own)=>{byOwn.get(own).forEach(o=>{o.carrier=v.carrier;o.trackingNo=v.no;o.trackedAt=now;if(autoShip(o,now))shipped++;list.push(o);});});
+  last.forEach((v,own)=>{byOwn.get(own).filter(o=>ordStatus(o)!=='new').forEach(o=>{o.carrier=v.carrier;o.trackingNo=v.no;o.trackedAt=now;if(autoShip(o,now))shipped++;list.push(o);});});
   try{if(list.length)await putMany('orders',list);}
   catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
   const ok=last.size;

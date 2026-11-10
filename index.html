@@ -1370,25 +1370,23 @@ function trendSvg(ser,W,m){
   });
   return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="판매 추이 그래프">'+g+'</svg>';
 }
-/* 요일별 일평균 판매금액 */
+/* 요일별 판매: 오늘 기준 최근 7일 고정 (맨 오른쪽 = 오늘) */
 function wdChart(rows,t,W,H0){
-  const from=HD.an?addD(t,-(HD.an-1)):(rows.length?rows.reduce((m,x)=>x.d<m?x.d:m,t):t);
-  const days=Math.round((pDate(t)-pDate(from))/864e5)+1,occ=Array(7).fill(0);
-  for(let i=0;i<days;i++)occ[pDate(addD(from,i)).getDay()]++;
-  const a=Array.from({length:7},()=>({pay:0,cnt:0}));
-  rows.forEach(r=>{const w=pDate(r.d).getDay();a[w].pay+=r.pay;a[w].cnt++;});
-  const items=[1,2,3,4,5,6,0].map(w=>({w,avg:occ[w]?a[w].pay/occ[w]:0,ac:occ[w]?a[w].cnt/occ[w]:0,pay:a[w].pay,cnt:a[w].cnt}));
-  const best=items.reduce((b,x)=>x.avg>b.avg?x:b,items[0]),mx=Math.max(1,...items.map(x=>x.avg));
+  const days=[];
+  for(let i=6;i>=0;i--){const k=addD(t,-i);days.push({k,w:pDate(k).getDay(),pay:0,cnt:0});}
+  const ix=new Map(days.map((x,i)=>[x.k,i]));
+  rows.forEach(r=>{const i=ix.get(r.d);if(i!=null){days[i].pay+=r.pay;days[i].cnt++;}});
+  const best=days.reduce((b,x)=>x.pay>b.pay?x:b,days[0]),mx=Math.max(1,...days.map(x=>x.pay));
   const H=H0||190,L=10,R=10,T=22,B=44,pw=W-L-R,ph=H-T-B,slot=pw/7,bw=Math.min(44,slot*.5);
   let g='';
-  items.forEach((x,i)=>{
-    const cx=L+slot*i+slot/2,h=x.avg/mx*ph,y=T+ph-h,isB=x.avg>0&&x.w===best.w;
-    g+='<g><title>'+HD_WD[x.w]+'요일 · 합계 '+won(x.pay)+'원 · '+x.cnt+'건 (일평균 '+won(Math.round(x.avg))+'원)</title>';
-    if(x.avg)g+='<rect x="'+(cx-bw/2)+'" y="'+y+'" width="'+bw+'" height="'+h+'" rx="4" fill="'+(isB?'#7048e8':'#91a7ff')+'"/><text x="'+cx+'" y="'+(y-6)+'" text-anchor="middle" class="av">'+fmtCompact(Math.round(x.avg))+'</text>';
-    g+='</g><text x="'+cx+'" y="'+(T+ph+17)+'" text-anchor="middle" class="ax2" style="fill:'+(x.w===0?'#e03131':x.w===6?'#1c7ed6':'')+'">'+HD_WD[x.w]+'</text><text x="'+cx+'" y="'+(T+ph+32)+'" text-anchor="middle" class="ax">'+x.ac.toFixed(1)+'건/일</text>';
+  days.forEach((x,i)=>{
+    const cx=L+slot*i+slot/2,h=x.pay/mx*ph,y=T+ph-h,isB=x.pay>0&&x===best,isT=i===6;
+    g+='<g><title>'+x.k+' ('+HD_WD[x.w]+') · 판매금액 '+won(x.pay)+'원 · '+x.cnt+'건</title>';
+    if(x.pay)g+='<rect x="'+(cx-bw/2)+'" y="'+y+'" width="'+bw+'" height="'+h+'" rx="4" fill="'+(isB?'#7048e8':'#91a7ff')+'"/><text x="'+cx+'" y="'+(y-6)+'" text-anchor="middle" class="av">'+fmtCompact(x.pay)+'</text>';
+    g+='</g><text x="'+cx+'" y="'+(T+ph+17)+'" text-anchor="middle" class="ax2" style="font-weight:'+(isT?700:400)+';fill:'+(x.w===0?'#e03131':x.w===6?'#1c7ed6':'')+'">'+HD_WD[x.w]+'</text><text x="'+cx+'" y="'+(T+ph+32)+'" text-anchor="middle" class="ax"'+(isT?' style="font-weight:700;fill:#3b5bdb"':'')+'>'+(isT?'오늘':x.k.slice(5))+'</text>';
   });
   g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+(T+ph)+'" y2="'+(T+ph)+'" stroke="#e5e7eb"/>';
-  return {svg:'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="요일별 판매 그래프">'+g+'</svg>',best:best.avg>0?HD_WD[best.w]:''};
+  return {svg:'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="요일별 판매 그래프 (최근 7일)">'+g+'</svg>',best:best.pay>0?HD_WD[best.w]:''};
 }
 function hbars(items,color){
   if(!items.length)return '<div class="mute small" style="padding:22px 0;text-align:center">데이터가 없습니다.</div>';
@@ -1426,7 +1424,7 @@ function buildHome(){
     '<div class="row" style="margin:14px 0 2px"><b style="font-size:13px">'+(HD.perf==='day'?'최근 14일':HD.perf==='week'?'최근 8주 (월요일 시작)':'최근 12개월')+' '+HD_TM[HD.tm].l+' 추이</b><span class="grow"></span>'+chip('htm',HD.tm,[['pay','판매금액'],['buy','매입금액'],['cnt','주문건수']])+'</div>'+
     trendSvg(trendSeries(rows,HD.perf,t),hcw(false),HD.tm)+'<div class="mute small" style="margin-top:4px">주문 수집일 기준 · 상품결제단가 = 판매금액 ÷ 수량 · 매입금액은 매핑된 주문만 집계</div></div>';
   /* 판매분석 */
-  const ar=inR(rows,HD.an?addD(t,-(HD.an-1)):null,t),aa=agg(ar),wd=wdChart(ar,t,hcw(true));HD.wdFn=H=>wdChart(ar,t,hcw(true),H).svg;
+  const ar=inR(rows,HD.an?addD(t,-(HD.an-1)):null,t),aa=agg(ar),wd=wdChart(rows,t,hcw(true));HD.wdFn=H=>wdChart(rows,t,hcw(true),H).svg;
   const malls=groupBy(ar,r=>r.o.mall||'미지정').sort((a,b)=>b.pay-a.pay);
   const mallH=hbars(malls.slice(0,8).map(x=>({l:x.l,v:x.pay,t:won(x.pay)+'원',s:(aa.pay?(x.pay/aa.pay*100).toFixed(1):'0.0')+'% · '+x.cnt.toLocaleString()+'건'})),'#3b5bdb');
   const tops=groupBy(ar,r=>r.p?r.p.name+(r.p.option?' / '+r.p.option:''):(r.o.itemName||'(상품명 없음)')+(r.o.itemOption?' / '+r.o.itemOption:'')).sort((a,b)=>b.pay-a.pay||b.qty-a.qty).slice(0,10);
@@ -1434,7 +1432,7 @@ function buildHome(){
   const supAll=groupBy(ar.filter(r=>r.mapped&&r.s),r=>r.s.id,r=>r.s.name).sort((a,b)=>b.pay-a.pay),supT=supAll.reduce((a,x)=>a+x.pay,0);
   const supH=hbars(supAll.slice(0,8).map(x=>({l:x.l,v:x.pay,t:won(x.pay)+'원',s:(supT?(x.pay/supT*100).toFixed(1):'0.0')+'% · '+x.cnt.toLocaleString()+'건'})),'#7048e8');
   const anl='<div class="row" style="margin:22px 0 12px"><h3 style="margin:0">판매분석</h3><span class="mute small">수집 주문 '+aa.cnt.toLocaleString()+'건 · 판매금액 '+won(aa.pay)+'원 · 평균 객단가 '+won(aa.cnt?Math.round(aa.pay/aa.cnt):0)+'원</span><span class="grow"></span>'+chip('han',HD.an,[[1,'오늘'],[7,'최근 7일'],[30,'최근 30일'],[90,'최근 90일'],[0,'전체']])+'</div>'+
-    '<div class="hg2"><div class="card hbox" id="hwdbox"><h3>요일별 판매 <span class="mute small" style="font-weight:500">일평균 판매금액'+(wd.best?' · 가장 강한 요일 <b style="color:#7048e8">'+wd.best+'요일</b>':'')+'</span></h3><div id="hwdsvg">'+wd.svg+'</div></div>'+
+    '<div class="hg2"><div class="card hbox" id="hwdbox"><h3>요일별 판매 <span class="mute small" style="font-weight:500">최근 7일 · 오늘 기준 · 판매금액'+(wd.best?' · 최고 <b style="color:#7048e8">'+wd.best+'요일</b>':'')+'</span></h3><div id="hwdsvg">'+wd.svg+'</div></div>'+
     '<div class="card hbox"><h3>쇼핑몰별 판매 비중 <span class="mute small" style="font-weight:500">판매금액 기준</span></h3>'+mallH+'</div>'+
     '<div class="card hbox"><h3>상품별 판매 TOP 10 <span class="mute small" style="font-weight:500">판매금액 기준</span></h3>'+topH+'</div>'+
     '<div class="card hbox"><h3>매입처별 판매 비중 <span class="mute small" style="font-weight:500">판매금액 기준 · 매핑된 주문</span></h3>'+supH+'</div></div>';

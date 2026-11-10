@@ -1706,6 +1706,17 @@ A.pbulk=el=>{
   if(!list.length){toast('변경할 상품을 먼저 체크하세요.','err');return;}
   const k=el.dataset.k;PB=k;
   const titles={sale:'판매상태 일괄변경',tax:'과면세 일괄변경',ship:'배송비 일괄변경',sup:'매입처 일괄변경'};
+  const cnt=new Map();
+  list.forEach(p=>{
+    let key;
+    if(k==='sale')key=saleOf(p);
+    else if(k==='tax')key=p.taxType||'미지정';
+    else if(k==='sup'){const x=M.sup.get(p.supplierId);key=x?x.name:'(매입처 없음)';}
+    else key=p.shipFee==='미포함'?'미포함 '+won(nz(p.shipAmount))+'원':p.shipFee==='포함'?'포함 (0원)':'미지정';
+    cnt.set(key,(cnt.get(key)||0)+1);
+  });
+  const ents=[...cnt.entries()].sort((a,b)=>b[1]-a[1]);
+  const cur='<div class="notice" style="margin:12px 0 0;background:#f4f6fb;border-color:#dfe4f1;color:#374151"><b>현재 상태</b> · '+ents.slice(0,8).map(e=>esc(e[0])+' <b>'+e[1].toLocaleString()+'</b>개').join(' / ')+(ents.length>8?' / 외 '+(ents.length-8)+'종':'')+'</div>';
   let body='';
   if(k==='sale')body='<label class="f">판매상태</label><select id="pb-val" style="width:100%">'+SALE_ST.map(x=>'<option value="'+x+'">'+x+'</option>').join('')+'</select>';
   else if(k==='tax')body='<label class="f">과면세</label><select id="pb-val" style="width:100%"><option value="과세">과세</option><option value="면세">면세</option></select>';
@@ -1716,7 +1727,7 @@ A.pbulk=el=>{
       (n?'<div class="mute small" style="margin-top:6px">선택한 상품과 매핑된 주문 '+n.toLocaleString()+'건의 매입처도 함께 바뀝니다.</div>':'');
   }
   else body='<label class="f">배송비 (원)</label><input type="text" id="pb-val" inputmode="numeric" style="width:100%" placeholder="숫자만 입력 (0이면 배송비 포함)"><div class="mute small" style="margin-top:6px">0원이면 \'배송비 포함\', 1원 이상이면 \'배송비 미포함\'으로 저장됩니다.</div>';
-  openModal('<h2>'+titles[k]+'</h2><div class="mute small">선택한 상품 <b>'+list.length.toLocaleString()+'개</b>에 적용됩니다.</div>'+body+
+  openModal('<h2>'+titles[k]+'</h2><div class="mute small">선택한 상품 <b>'+list.length.toLocaleString()+'개</b>에 적용됩니다.</div>'+cur+body+
     '<div class="foot"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="pbApply">적용</button></div>','');
   const f=$('#pb-val');if(f)f.focus();
 };

@@ -1116,6 +1116,7 @@ const ST_LABEL={none:'미매핑',matched:'매핑완료',done:'발주완료'};
    컬럼 자동 인식
 ===================================================================== */
 const ORDER_FIELDS=[
+  {key:'orderDate',label:'주문일'},
   {key:'orderer',label:'주문자'},
   {key:'receiver',label:'수취인'},
   {key:'tel1',label:'연락처1'},
@@ -1125,7 +1126,6 @@ const ORDER_FIELDS=[
   {key:'qty',label:'수량'},
   {key:'memo',label:'배송메모'},
   {key:'orderNo',label:'주문번호',req:1},
-  {key:'orderDate',label:'주문일'},
   {key:'itemName',label:'상품명 (매핑에 사용)',req:1},
   {key:'itemOption',label:'옵션명 (매핑에 사용)'},
   {key:'payAmount',label:'결제금액'},
@@ -3274,6 +3274,14 @@ document.addEventListener('dblclick',e=>{
         o4.v4=true;await setMeta('orderFields',o4);
       }
     }catch(e){console.warn('주문일 항목 이전 실패',e);}
+    try{
+      const o5=S.meta.orderFields;
+      if(o5&&Array.isArray(o5.order)&&!o5.v5){
+        const di=o5.order.indexOf('orderDate');
+        if(di>=0){o5.order.splice(di,1);const oi=o5.order.indexOf('orderer');o5.order.splice(oi>=0?oi:0,0,'orderDate');}
+        o5.v5=true;await setMeta('orderFields',o5);
+      }
+    }catch(e){console.warn('주문일 순서 이동 실패',e);}
     {
       const OLD=['G마켓','옥션'];
       const chg=S.orders.filter(o=>OLD.includes(o.mall));

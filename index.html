@@ -1821,7 +1821,15 @@ function pgConfirm(){
   '<div id="ctbl"></div>';
 }
 ROUTES['/orders/confirm']=pgConfirm;
-function drawConfirmTable(){
+/* keep=true 이면 다시 그린 뒤에도 페이지·표의 스크롤 위치를 유지 */
+function drawConfirmTable(keep){
+  const box=$('#ctbl');
+  let y=0,t=0,l=0;
+  if(keep&&box){y=window.scrollY;const w=box.querySelector('.tblwrap');if(w){t=w.scrollTop;l=w.scrollLeft;}}
+  drawConfirmTableInner();
+  if(keep&&box){const w=box.querySelector('.tblwrap');if(w){w.scrollTop=t;w.scrollLeft=l;}window.scrollTo(0,y);}
+}
+function drawConfirmTableInner(){
   const box=$('#ctbl');if(!box)return;
   const list=confirmList();
   const pages=Math.max(1,Math.ceil(list.length/PAGE_O));if(CF.page>=pages)CF.page=pages-1;
@@ -1853,7 +1861,7 @@ C.incdone=el=>{CF.incDone=el.checked;route();};
 I.cq=el=>{CF.q=el.value;CF.page=0;drawConfirmTable();};
 A.cpage=el=>{CF.page+=+el.dataset.d;drawConfirmTable();$('#ctbl').scrollIntoView({block:'start'});};
 C.crow=el=>{const id=+el.dataset.id;el.checked?CF.sel.add(id):CF.sel.delete(id);};
-C.csall=el=>{confirmList().forEach(o=>el.checked?CF.sel.add(o.id):CF.sel.delete(o.id));drawConfirmTable();};
+C.csall=el=>{confirmList().forEach(o=>el.checked?CF.sel.add(o.id):CF.sel.delete(o.id));drawConfirmTable(true);};
 A.cdel=async()=>{
   const ids=[...CF.sel].filter(id=>M.ord.has(id));
   if(!ids.length){toast('삭제할 주문을 체크하세요.','err');return;}
@@ -1862,7 +1870,7 @@ A.cdel=async()=>{
 };
 
 /* ===== 매핑 팝업 ===== */
-function redrawConfirm(){const cur=(location.hash||'#/home').slice(1);if(ROUTES[cur]===pgConfirm)drawConfirmTable();else route();}
+function redrawConfirm(){const cur=(location.hash||'#/home').slice(1);if(ROUTES[cur]===pgConfirm)drawConfirmTable(true);else route();}
 let MT=null;
 A.match=el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;

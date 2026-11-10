@@ -734,6 +734,37 @@ function buildXlsx(rows,sheetName){
   ]);
 }
 
+/* ===== 날짜 도우미: 엑셀 날짜 숫자(예: 46336.35) → 2026-11-10 08:27 ===== */
+function xlDate(n){
+  const p=x=>String(x).padStart(2,'0');
+  let days=Math.floor(n),secs=Math.round((n-days)*86400);if(secs>=86400){days++;secs=0;}
+  const hh=Math.floor(secs/3600),mm=Math.floor(secs%3600/60),ss=secs%60,tm=p(hh)+':'+p(mm)+(ss?':'+p(ss):'');
+  if(n<1)return secs?tm:'';
+  const d=new Date(Math.round((days-25569)*864e5));
+  const ds=d.getUTCFullYear()+'-'+p(d.getUTCMonth()+1)+'-'+p(d.getUTCDate());
+  return secs?ds+' '+tm:ds;
+}
+const isXlSerial=v=>/^\d{5}(\.\d+)?$/.test(String(v==null?'':v).trim())&&Number(v)>20000&&Number(v)<80000;
+const DATE_LBL=/주문\s*일|결제\s*일|주문\s*시간|주문일시/;
+const fixDateVal=v=>isXlSerial(v)?xlDate(Number(v)):v;
+/* 여러 날짜 표기를 YYYY-MM-DD 로 통일 (알아볼 수 없으면 빈 문자열) */
+function normDay(v){
+  v=String(v==null?'':v).trim();if(!v)return '';
+  if(isXlSerial(v))return xlDate(Number(v)).slice(0,10);
+  let m=/^(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/.exec(v)||/^(\d{4})(\d{2})(\d{2})(?:\D|$)/.exec(v);
+  if(!m)return '';
+  const mo=+m[2],da=+m[3];if(mo<1||mo>12||da<1||da>31)return '';
+  return m[1]+'-'+String(mo).padStart(2,'0')+'-'+String(da).padStart(2,'0');
+}
+/* 주문일자로 쓸 추가 항목 (항목 이름에 "주문일"/"결제일"이 들어간 것) */
+function ordDateField(){const c=(S.meta.orderFields&&S.meta.orderFields.custom)||[];return c.find(x=>DATE_LBL.test(x.label||''))||null;}
+/* 주문 1건의 기준 날짜: 주문일자가 있으면 그 날짜, 없으면 수집일 */
+function ordDateOnly(o){
+  const d=normDay(o.orderDate);if(d)return d;
+  const f=ordDateField();
+  return f?normDay((o.ex||{})[f.key]):'';
+}
+function ordDayOf(o){return ordDateOnly(o)||o.collectedDate||'';}
 function fixNum(s){
   if(/^-?\d+\.0+$/.test(s))return s.replace(/\.0+$/,'');
   if(/e/i.test(s)||/\.\d{9,}/.test(s)){
@@ -764,6 +795,21 @@ async function parseXlsx(buf){
       sst.push(s);
     });
   }
+  const dateXf=[];
+  try{
+    const stXml=await z.text('xl/styles.xml');
+    if(stXml){
+      const sd=X(stXml),cust={};
+      [...sd.getElementsByTagName('numFmt')].forEach(n=>{cust[n.getAttribute('numFmtId')]=n.getAttribute('formatCode')||'';});
+      const cx=sd.getElementsByTagName('cellXfs')[0];
+      if(cx)[...cx.children].forEach((xf,i)=>{
+        const id=+xf.getAttribute('numFmtId')||0;
+        let dt=(id>=14&&id<=22)||(id>=27&&id<=36)||(id>=45&&id<=47)||(id>=50&&id<=58);
+        if(!dt&&cust[id]!=null){const code=cust[id].replace(/"[^"]*"|\[[^\]]*\]|\\./g,'');dt=/[ymdhs]/i.test(code);}
+        dateXf[i]=dt;
+      });
+    }
+  }catch(e){}
   const RNS='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   const sheets=[];
   for(const sh of [...wb.getElementsByTagName('sheet')]){
@@ -785,7 +831,7 @@ async function parseXlsx(buf){
       else if(t==='str'){val=vEl?vEl.textContent:'';}
       else if(t==='b'){val=vEl&&vEl.textContent==='1'?'TRUE':'FALSE';}
       else if(t==='e'){val='';}
-      else{val=vEl?fixNum(vEl.textContent):'';}
+      else{const si=c.getAttribute('s'),raw=vEl?vEl.textContent:'';val=vEl?((si!=null&&dateXf[+si]&&isFinite(Number(raw))&&raw.trim()!=='')?xlDate(Number(raw)):fixNum(raw)):'';}
       if(val==='')continue;
       (grid[ri]||(grid[ri]=[]))[ci]=val;
       if(ci+1>maxC)maxC=ci+1;
@@ -1079,6 +1125,7 @@ const ORDER_FIELDS=[
   {key:'qty',label:'수량'},
   {key:'memo',label:'배송메모'},
   {key:'orderNo',label:'주문번호',req:1},
+  {key:'orderDate',label:'주문일'},
   {key:'itemName',label:'상품명 (매핑에 사용)',req:1},
   {key:'itemOption',label:'옵션명 (매핑에 사용)'},
   {key:'payAmount',label:'결제금액'},
@@ -1123,6 +1170,7 @@ function guessOrderCols(headers){
   exact('orderNo','주문번호');
   if(!map.orderNo)take('orderNo',/주문번호|주문no|orderno|orderid|ordernumber|주문코드/,/상품주문/);
   if(!map.orderNo)take('orderNo',/주문번호|orderno/);
+  take('orderDate',/주문일시|주문일자|주문일|결제일시|결제일자|결제일|주문시간|주문날짜|결제시간|구매일/,/취소|배송|발송|출고|수집|정산|입금|환불|번호/);
   take('zip',/우편번호|우편|zip/,/구매자|주문자/);
   take('tel2',/(수취인|수령|받는|수신|배송).*(연락처|전화|휴대|핸드폰).*2$|^(연락처|전화번호|휴대폰|핸드폰)2$/,/구매자|주문자/);
   take('tel1',/(수취인|수령|받는|수신|배송).*(연락처|전화|휴대|핸드폰)1?$|^(연락처|전화번호|휴대폰|핸드폰|휴대전화)1?$/,/구매자|주문자|2$/);
@@ -1169,6 +1217,7 @@ function extractOrders(rows,hdrIdx,map){
     const r=rows[i];
     const o={
       orderNo:get(r,'orderNo')[0]||'',
+      orderDate:fixDateVal(get(r,'orderDate')[0]||''),
       orderer:get(r,'orderer')[0]||'',
       receiver:get(r,'receiver')[0]||'',
       tel1:fixPhone(get(r,'tel1')[0]),
@@ -1183,7 +1232,7 @@ function extractOrders(rows,hdrIdx,map){
       settleAmount:(()=>{const raw=get(r,'settleAmount')[0]||'',c=raw.replace(/[,원\s]/g,'');return c!==''&&!isNaN(Number(c))?Number(c):raw;})()
     };
     const cf=customFields();
-    if(cf.length){o.ex={};cf.forEach(c=>{const v=get(r,c.key)[0];if(v)o.ex[c.key]=v;});}
+    if(cf.length){o.ex={};cf.forEach(c=>{const v=get(r,c.key)[0];if(v)o.ex[c.key]=DATE_LBL.test(c.label||'')?fixDateVal(v):v;});}
     if(!o.orderNo&&!o.receiver&&!o.itemName)continue;
     out.push(o);
   }
@@ -1307,7 +1356,7 @@ function fmtCompact(v){
 function homeRows(){
   const out=[];
   S.orders.forEach(o=>{
-    const d=o.collectedDate||'';if(!d)return;
+    const d=ordDayOf(o);if(!d)return;
     const {p,s}=orderInfo(o),pay=nz(o.payAmount),qty=nz(o.qty)||1;
     const buy=p?nz(p.price)*qty:0,ship=p&&p.shipFee==='미포함'?nz(p.shipAmount):0,fee=Math.round(pay*HD_FEE);
     out.push({o,p,s,d,pay,qty,buy,ship,fee,mapped:!!p,nobuy:!!p&&!(nz(p.price)>0),margin:p?pay-fee-buy-ship:0});
@@ -1422,7 +1471,7 @@ function buildHome(){
   const perf='<div class="card hbox"><div class="row" style="margin-bottom:4px"><h3 style="margin:0">판매성과</h3><span class="mute small">'+rg.cl+' '+(rg.cur[0]===rg.cur[1]?rg.cur[0]:rg.cur[0]+' ~ '+rg.cur[1])+' · '+rg.lab+'</span><span class="grow"></span>'+chip('hperf',HD.perf,[['day','일간'],['week','주간'],['month','월간']])+'</div>'+
     '<div class="hkpis">'+kpi('상품결제건수',cur.cnt.toLocaleString(),'건',dlt(cur.cnt,prv.cnt,'건'))+kpi('상품결제수량',cur.qty.toLocaleString(),'개',dlt(cur.qty,prv.qty,'개'))+kpi('상품결제단가',won(Math.round(cu)),'원',dlt(Math.round(cu),Math.round(pu),'',1))+kpi('판매금액(총)',won(cur.pay),'원',dlt(cur.pay,prv.pay,'',1))+'</div>'+
     '<div class="row" style="margin:14px 0 2px"><b style="font-size:13px">'+(HD.perf==='day'?'최근 14일':HD.perf==='week'?'최근 8주 (월요일 시작)':'최근 12개월')+' '+HD_TM[HD.tm].l+' 추이</b><span class="grow"></span>'+chip('htm',HD.tm,[['pay','판매금액'],['buy','매입금액'],['cnt','주문건수']])+'</div>'+
-    trendSvg(trendSeries(rows,HD.perf,t),hcw(false),HD.tm)+'<div class="mute small" style="margin-top:4px">주문 수집일 기준 · 상품결제단가 = 판매금액 ÷ 수량 · 매입금액은 매핑된 주문만 집계</div></div>';
+    trendSvg(trendSeries(rows,HD.perf,t),hcw(false),HD.tm)+'<div class="mute small" style="margin-top:4px">주문일자 기준(없으면 수집일) · 상품결제단가 = 판매금액 ÷ 수량 · 매입금액은 매핑된 주문만 집계</div></div>';
   /* 판매분석 */
   const ar=inR(rows,HD.an?addD(t,-(HD.an-1)):null,t),aa=agg(ar),wd=wdChart(rows,t,hcw(true));HD.wdFn=H=>wdChart(rows,t,hcw(true),H).svg;
   const malls=groupBy(ar,r=>r.o.mall||'미지정').sort((a,b)=>b.pay-a.pay);
@@ -1439,7 +1488,8 @@ function buildHome(){
   return '<div class="hgrid2">'+sale+settle+'</div>'+perf+anl;
 }
 function pgHome(){
-  return '<h1>홈 대시보드</h1><p class="sub">판매 · 정산 · 성과를 한눈에 확인합니다. 모든 집계는 주문 수집일 기준이며, 데이터는 로그인한 계정의 서버에 저장됩니다.</p><div id="hdash">'+buildHome()+'</div>';
+  const nod=S.orders.filter(o=>!ordDateOnly(o)).length;
+  return '<h1>홈 대시보드</h1><p class="sub">판매 · 정산 · 성과를 한눈에 확인합니다. 집계 기준일은 <b>주문일자</b>입니다.'+(nod?' 주문일자가 없는 주문 '+nod.toLocaleString()+'건은 수집일로 집계합니다.':'')+' 데이터는 로그인한 계정의 서버에 저장됩니다.</p><div id="hdash">'+buildHome()+'</div>';
 }
 function fitWd(){
   const bx=$('#hwdbox'),sv=$('#hwdsvg');if(!bx||!sv||!HD.wdFn)return;
@@ -2698,7 +2748,7 @@ function ckRange(k){
 function ckInit(){
   if(CK.init)return;
   const r=ckRange('7');
-  CK.d={status:'',mall:'',sup:'',from:r[0],to:r[1],field:'orderNo',q:''};
+  CK.d={dtype:'collected',status:'',mall:'',sup:'',from:r[0],to:r[1],field:'orderNo',q:''};
   CK.a=Object.assign({},CK.d);CK.init=true;
 }
 function ckList(skipStatus){
@@ -2709,7 +2759,7 @@ function ckList(skipStatus){
     if(!skipStatus&&a.status&&ordStatus(o)!==a.status)return false;
     if(a.mall==='__none'){if(o.mall)return false;}else if(a.mall&&o.mall!==a.mall)return false;
     if(a.sup&&s.id!==+a.sup)return false;
-    const cd=o.collectedDate||'';
+    const cd=a.dtype==='order'?ordDateOnly(o):(o.collectedDate||'');
     if(a.from&&cd<a.from)return false;
     if(a.to&&cd>a.to)return false;
     if(q&&!norm(o[a.field]).includes(q))return false;
@@ -2722,12 +2772,12 @@ function pgCheck(){
   const malls=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];
   const sm='style="padding:2px 8px;font-size:12px"';
   const lb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
-  return '<h1>주문확인처리</h1><p class="sub">매핑이 끝난 주문만 조회됩니다. 조회 기준 일자는 주문 수집일입니다. 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
+  return '<h1>주문확인처리</h1><p class="sub">매핑이 끝난 주문만 조회됩니다. 조회 기준 일자는 수집일자 또는 주문일자 중에서 선택할 수 있습니다. (주문일자가 없는 주문은 주문일자 조회에서 제외됩니다) 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
   '<div class="card">'+
   '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value=""'+(d.status===''?' selected':'')+'>전체</option><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option></select>'+
   '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="ckf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
   '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="ckf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+
-  '<div class="row" style="margin-bottom:10px">'+lb('수집일자')+'<input type="date" id="ckfrom" data-chg="ckf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ckto" data-chg="ckf" data-k="to" value="'+esc(d.to)+'">'+
+  '<div class="row" style="margin-bottom:10px">'+'<select data-chg="ckf" data-k="dtype" style="min-width:86px"><option value="collected"'+(d.dtype!=='order'?' selected':'')+'>수집일자</option><option value="order"'+(d.dtype==='order'?' selected':'')+'>주문일자</option></select>'+'<input type="date" id="ckfrom" data-chg="ckf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ckto" data-chg="ckf" data-k="to" value="'+esc(d.to)+'">'+
   [['today','오늘'],['yesterday','어제'],['7','7일'],['30','30일'],['month','당월'],['prev','전월']].map(x=>'<button class="btn sm" '+sm+' data-act="ckrange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>'+
   '<div class="row">'+lb('검색')+'<select data-chg="ckf" data-k="field"><option value="orderNo"'+(d.field==='orderNo'?' selected':'')+'>쇼핑몰주문번호</option><option value="ownNo"'+(d.field==='ownNo'?' selected':'')+'>자체주문번호</option><option value="orderer"'+(d.field==='orderer'?' selected':'')+'>주문자명</option><option value="receiver"'+(d.field==='receiver'?' selected':'')+'>수취인명</option></select>'+
   '<input type="text" placeholder="검색어 입력" style="width:240px" data-inp="ckq" value="'+esc(d.q)+'"><button class="btn" data-act="cksearch">검색</button><button class="btn pri" data-act="cksearch">조회</button></div>'+
@@ -3180,6 +3230,10 @@ document.addEventListener('dblclick',e=>{
     db=await openDB();await pullFromServer();await loadAll();
     try{await ownNoBackfill();}catch(e){console.warn('자체주문번호 생성 실패',e);}
     try{const nowIso=new Date().toISOString();const mv=S.orders.filter(o=>autoShip(o,nowIso));if(mv.length)await putMany('orders',mv);}catch(e){console.warn('출고완료 자동 이동 실패',e);}
+    try{
+      const odf=ordDateField();
+      if(odf){const chg=[];S.orders.forEach(o=>{const v=o.ex&&o.ex[odf.key];if(isXlSerial(v)){o.ex[odf.key]=xlDate(Number(v));chg.push(o);}});if(chg.length)await putMany('orders',chg);}
+    }catch(e){console.warn('주문일자 정리 실패',e);}
     const oc=S.meta.orderFields;
     if(oc&&Array.isArray(oc.order)&&!oc.v2){
       if(!oc.order.includes('payAmount')){const i=oc.order.indexOf('itemOption');oc.order.splice(i>=0?i+1:oc.order.length,0,'payAmount');}
@@ -3189,6 +3243,28 @@ document.addEventListener('dblclick',e=>{
       if(!oc.order.includes('settleAmount')){let i=oc.order.indexOf('payAmount');if(i<0)i=oc.order.indexOf('itemOption');oc.order.splice(i>=0?i+1:oc.order.length,0,'settleAmount');}
       oc.v3=true;await setMeta('orderFields',oc);
     }
+    try{
+      const o4=S.meta.orderFields;
+      if(o4&&Array.isArray(o4.order)&&!o4.v4){
+        const cu=Array.isArray(o4.custom)?o4.custom:[],odf=cu.find(x=>DATE_LBL.test(x.label||''));
+        if(odf){
+          const pos=o4.order.indexOf(odf.key);
+          if(!o4.order.includes('orderDate')){if(pos>=0)o4.order[pos]='orderDate';else o4.order.push('orderDate');}
+          else if(pos>=0)o4.order.splice(pos,1);
+          o4.custom=cu.filter(x=>x!==odf);
+          const chg=[];
+          S.orders.forEach(o=>{if(o.ex&&o.ex[odf.key]!=null){if(!o.orderDate)o.orderDate=fixDateVal(String(o.ex[odf.key]));delete o.ex[odf.key];chg.push(o);}});
+          if(chg.length)await putMany('orders',chg);
+          for(const k of Object.keys(S.meta)){
+            const m=S.meta[k];
+            if(k.startsWith('omap:')&&m&&m[odf.key]){if(!m.orderDate)m.orderDate=m[odf.key];delete m[odf.key];await setMeta(k,m);}
+          }
+        }else if(!o4.order.includes('orderDate')){
+          const i=o4.order.indexOf('orderNo');o4.order.splice(i>=0?i+1:o4.order.length,0,'orderDate');
+        }
+        o4.v4=true;await setMeta('orderFields',o4);
+      }
+    }catch(e){console.warn('주문일 항목 이전 실패',e);}
     {
       const OLD=['G마켓','옥션'];
       const chg=S.orders.filter(o=>OLD.includes(o.mall));

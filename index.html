@@ -1310,16 +1310,16 @@ function homeRows(){
     const d=o.collectedDate||'';if(!d)return;
     const {p,s}=orderInfo(o),pay=nz(o.payAmount),qty=nz(o.qty)||1;
     const buy=p?nz(p.price)*qty:0,ship=p&&p.shipFee==='미포함'?nz(p.shipAmount):0,fee=Math.round(pay*HD_FEE);
-    out.push({o,p,s,d,pay,qty,buy,ship,fee,mapped:!!p,margin:p?pay-fee-buy-ship:0});
+    out.push({o,p,s,d,pay,qty,buy,ship,fee,mapped:!!p,nobuy:!!p&&!(nz(p.price)>0),margin:p?pay-fee-buy-ship:0});
   });
   return out;
 }
 const inR=(rows,a,b)=>rows.filter(x=>(!a||x.d>=a)&&(!b||x.d<=b));
 function agg(rows){
-  const r={cnt:0,qty:0,pay:0,buy:0,ship:0,fee:0,margin:0,mpay:0,unm:0,orph:0,nopay:0};
+  const r={cnt:0,qty:0,pay:0,buy:0,ship:0,fee:0,margin:0,mpay:0,unm:0,orph:0,nopay:0,nobuy:0};
   rows.forEach(x=>{
     r.cnt++;r.qty+=x.qty;r.pay+=x.pay;if(!x.pay)r.nopay++;
-    if(x.mapped){r.buy+=x.buy;r.ship+=x.ship;r.fee+=x.fee;r.margin+=x.margin;r.mpay+=x.pay;}else if(x.o.confirmed)r.orph++;else r.unm++;
+    if(x.mapped){r.buy+=x.buy;r.ship+=x.ship;r.fee+=x.fee;r.margin+=x.margin;r.mpay+=x.pay;if(x.nobuy)r.nobuy++;}else if(x.o.confirmed)r.orph++;else r.unm++;
   });
   return r;
 }
@@ -1416,7 +1416,7 @@ function buildHome(){
     '<div class="hset"><span>매출액</span><b>'+won(sa.pay)+'<small>원</small></b><em>결제금액 합계 · '+sa.cnt.toLocaleString()+'건</em></div>'+
     '<div class="hset"><span>매입액</span><b>'+won(sa.buy)+'<small>원</small></b><em>매입가 × 수량</em></div>'+
     '<div class="hset mg"><span>마진</span><b class="'+(sm<0?'neg':'')+'">'+won(sm)+'<small>원</small></b><em>마진율 '+rate.toFixed(1)+'% · 수수료 −'+won(sa.fee)+' · 배송비 −'+won(sa.ship)+'</em></div></div>'+
-    '<div class="hnote">마진 = 결제금액 − 수수료(15%) − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
+    '<div class="hnote">마진 = 결제금액 − 수수료(15%) − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nobuy?' · <b style="color:#e03131">매입가가 비어 있는 상품 주문 '+sa.nobuy.toLocaleString()+'건 포함 (매입액 0원으로 계산되어 마진이 크게 나올 수 있음)</b>':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
   /* 판매성과 */
   const rg=perfRanges(HD.perf,t),cur=agg(inR(rows,rg.cur[0],rg.cur[1])),prv=agg(inR(rows,rg.prev[0],rg.prev[1]));
   const cu=cur.qty?cur.pay/cur.qty:0,pu=prv.qty?prv.pay/prv.qty:0;

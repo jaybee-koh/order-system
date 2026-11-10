@@ -1279,12 +1279,15 @@ const NAV=[
   {parent:'상품관리'},
   {h:'/products/changes',t:'상품변경사항',sub:1},{h:'/products/new',t:'신규상품등록',sub:1},{h:'/products/bulk',t:'상품대량등록',sub:1},{h:'/products',t:'매입상품조회',sub:1},
   {parent:'주문관리'},
-  {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1}
+  {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/auto',t:'주문수집(자동)',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1},
+  {parent:'계정관리'},
+  {h:'/accounts/malls',t:'쇼핑몰관리',sub:1}
 ];
 const IC=(p)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 const ICONS={
   '/home':IC('<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/>'),
   'p_주문관리':IC('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 12h6M9 16h4"/>'),
+  'p_계정관리':IC('<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>'),
   'p_상품관리':IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>'),
   'parent':IC('<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/><path d="M8 10h.01M12 10h.01M16 10h.01"/>'),
   '/suppliers/new':IC('<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>'),
@@ -1312,6 +1315,7 @@ function route(){
   if(ROUTES[cur]===pgConfirm)drawConfirmTable();
   if(ROUTES[cur]===pgCheck)drawCheckTable();
   if(ROUTES[cur]===pgTrack)drawTrackTable();
+  if(ROUTES[cur]===pgAuto)maStart();
 }
 window.addEventListener('hashchange',()=>{CF.keep.clear();if(location.hash==='#/suppliers/new'){if(SF.edit)SF.edit=false;else SF=blankSF();}route();window.scrollTo(0,0);});
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&A[el.dataset.act]){A[el.dataset.act](el,e);}});
@@ -2378,7 +2382,7 @@ A.freset=async()=>{
   route();
 };
 C.cfile=async el=>{
-  const f=el.files[0];if(!f)return;
+  const f=el.files[0];if(!f)return;CL.jobId='';
   try{CL.sheets=await parseAny(await readFileBuf(f));CL.fileName=f.name;CL.sheetIdx=firstNonEmptySheet(CL.sheets);clRecalc(true);}
   catch(e){toast(e.message,'err',8000);}
   route();
@@ -2460,6 +2464,7 @@ A.collectSave=async()=>{
     await putMany('orders',adds);S.orders.push(...adds);rebuild();
     if(freshOwn.length)await putMany('meta',freshOwn);
     await setMeta(sigOf(clHeaders()),CL.map);await setMeta(mallKey(clHeaders()),CL.mall);
+    if(CL.jobId){mpost('/api/mall/applied',{id:CL.jobId,state:'done',added:adds.length,dup}).catch(()=>{});CL.jobId='';}
     CL.sheets=null;CL.fileName='';
     CF.status=adds.length&&adds.length>auto?'none':'all';CF.from='';CF.to='';CF.page=0;CF.q='';
     route();
@@ -2467,6 +2472,212 @@ A.collectSave=async()=>{
       '<div class="mute small" style="margin-top:8px">자동 매핑 '+auto.toLocaleString()+'건'+(dup?' · 중복 제외 '+dup.toLocaleString()+'건':'')+'</div></div>'+
       '<div class="foot"><button class="btn pri" data-act="close">확인</button></div>');
   }catch(e){toast('저장 실패: '+e.message,'err',6000);}
+};
+
+/* ===================================================================
+   계정관리 > 쇼핑몰관리  /  주문관리 > 주문수집(자동)
+=================================================================== */
+async function mpost(path,body){
+  let r;
+  try{r=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(body||{})});}catch(e){throw new Error('서버에 연결할 수 없습니다.');}
+  if(r.status===401){alert('로그인이 만료되었습니다. 다시 로그인해 주세요.');location.reload();throw new Error('로그인이 만료되었습니다.');}
+  let j=null;try{j=await r.json();}catch(e){throw new Error('서버 응답 오류 ('+r.status+')');}
+  if(!r.ok)throw new Error((j&&j.error)||'서버 오류 ('+r.status+')');
+  return j;
+}
+const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const dayAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);return ymd(d);};
+const fmtTs=ts=>{if(!ts)return '';const d=new Date(ts);return String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+const b64ToBuf=s=>{const bin=atob(s);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u.buffer;};
+
+/* ---------- 쇼핑몰관리 ---------- */
+const MG={q:'',st:'거래중',malls:null,loading:false};
+async function mgLoad(){
+  MG.loading=true;
+  try{MG.malls=(await api('/api/mall/list')).malls;}
+  catch(e){toast(e.message,'err',6000);MG.malls=[];}
+  MG.loading=false;
+  if(location.hash==='#/accounts/malls')route();
+}
+function mgRows(){
+  const q=norm(MG.q);
+  return (MG.malls||[]).filter(m=>(MG.st==='전체'||m.status===MG.st)&&(!q||norm(m.name).includes(q)));
+}
+function mgBody(){
+  if(!MG.malls)return '<div class="mute" style="padding:18px 4px">불러오는 중…</div>';
+  const rows=mgRows();
+  if(!rows.length)return '<div class="mute" style="padding:18px 4px">조건에 맞는 쇼핑몰이 없습니다.</div>';
+  return '<div class="tblwrap" style="max-height:none"><table class="tbl"><thead><tr><th>쇼핑몰명</th><th style="width:100px">거래상태</th><th>아이디</th><th style="width:120px">비밀번호</th><th style="width:110px">설정</th></tr></thead><tbody>'+
+  rows.map(m=>'<tr><td><b>'+esc(m.name)+'</b></td><td><span class="tag '+(m.status==='거래중'?'ok':'gray')+'">'+m.status+'</span></td><td>'+(m.loginId?esc(m.loginId):'<span class="mute">미설정</span>')+'</td><td>'+(m.hasPw?'<span class="tag ok">●●●●●● 저장됨</span>':'<span class="mute">미설정</span>')+'</td><td><button class="btn sm" data-act="mgEdit" data-id="'+esc(m.id)+'">ID세팅</button></td></tr>').join('')+
+  '</tbody></table></div>';
+}
+function pgMalls(){
+  if(!MG.malls&&!MG.loading)mgLoad();
+  return '<h1>쇼핑몰관리</h1><p class="sub">거래 중인 쇼핑몰의 판매자 아이디·비밀번호를 등록해 두면 [주문수집(자동)]에서 주문을 자동으로 가져옵니다. 비밀번호는 암호화되어 서버에만 저장됩니다.</p>'+
+  '<div class="card"><div class="row" style="margin-bottom:12px"><input type="text" data-inp="mgq" placeholder="쇼핑몰명 검색" value="'+esc(MG.q)+'" style="width:240px">'+
+  '<select data-chg="mgst">'+['거래중','거래정지','전체'].map(s=>'<option value="'+s+'"'+(MG.st===s?' selected':'')+'>'+s+'</option>').join('')+'</select></div>'+
+  '<div id="mgbody">'+mgBody()+'</div></div>';
+}
+ROUTES['/accounts/malls']=pgMalls;
+I.mgq=el=>{MG.q=el.value;const b=$('#mgbody');if(b)b.innerHTML=mgBody();};
+C.mgst=el=>{MG.st=el.value;const b=$('#mgbody');if(b)b.innerHTML=mgBody();};
+A.mgEdit=el=>{
+  const m=(MG.malls||[]).find(x=>x.id===el.dataset.id);if(!m)return;
+  openModal('<h2>'+esc(m.name)+' ID 세팅</h2>'+
+  '<div class="mute small" style="margin-bottom:14px">판매자(셀러) 로그인 정보를 입력하세요. 비밀번호는 암호화되어 저장되며, 저장한 뒤에는 이 화면에서 다시 볼 수 없습니다.</div>'+
+  '<label class="f">거래 상태</label><select id="mgS" style="width:100%"><option value="거래중"'+(m.status==='거래중'?' selected':'')+'>거래중</option><option value="거래정지"'+(m.status==='거래정지'?' selected':'')+'>거래정지</option></select>'+
+  '<label class="f rq" style="margin-top:12px">아이디</label><input type="text" id="mgI" autocomplete="off" style="width:100%" value="'+esc(m.loginId)+'">'+
+  '<label class="f'+(m.hasPw?'':' rq')+'" style="margin-top:12px">비밀번호</label><input type="password" id="mgP" autocomplete="new-password" style="width:100%" placeholder="'+(m.hasPw?'변경할 때만 입력하세요':'')+'">'+
+  '<div class="foot">'+(m.hasPw?'<button class="btn danger" data-act="mgClrPw" data-id="'+esc(m.id)+'" style="margin-right:auto">비밀번호 삭제</button>':'')+'<button class="btn" data-act="close">취소</button><button class="btn pri" data-act="mgSave" data-id="'+esc(m.id)+'">저장</button></div>');
+  setTimeout(()=>{const i=$('#mgI');if(i)i.focus();},30);
+};
+A.mgSave=async el=>{
+  const m=(MG.malls||[]).find(x=>x.id===el.dataset.id);if(!m)return;
+  const loginId=$('#mgI').value.trim(),password=$('#mgP').value,status=$('#mgS').value;
+  if(!loginId){toast('아이디를 입력하세요.','err');return;}
+  if(!m.hasPw&&!password){toast('비밀번호를 입력하세요.','err');return;}
+  try{
+    await mpost('/api/mall/save',{id:m.id,status,loginId,password});
+    closeModal();toast(m.name+' 정보를 저장했습니다.');
+    MG.malls=null;MA.malls=null;route();
+  }catch(e){toast(e.message,'err',6000);}
+};
+A.mgClrPw=async el=>{
+  const m=(MG.malls||[]).find(x=>x.id===el.dataset.id);if(!m)return;
+  if(!confirm(m.name+'의 저장된 비밀번호를 삭제할까요?'))return;
+  try{await mpost('/api/mall/save',{id:m.id,clearPassword:true});closeModal();toast('비밀번호를 삭제했습니다.');MG.malls=null;MA.malls=null;route();}
+  catch(e){toast(e.message,'err',6000);}
+};
+
+/* ---------- 주문수집(자동) ---------- */
+const MA={from:dayAgo(2),to:ymd(new Date()),sel:new Set(),malls:null,jobs:[],workerSeen:null,now:0,timer:0,busy:false,sig:'',applying:new Set()};
+function maLast(id){return MA.jobs.find(j=>j.mall===id)||null;}
+function maStatusTag(j){
+  if(!j)return '<span class="mute small">-</span>';
+  if(j.status==='pending')return '<span class="tag gray">대기중</span>';
+  if(j.status==='running')return '<span class="tag warn">수집중…</span>';
+  if(j.status==='failed')return '<span class="tag warn">실패</span> <span class="small" style="color:var(--err)">'+esc(j.error||'')+'</span>';
+  if(j.applied==='needmap')return '<span class="tag warn">열 확인 필요</span> <button class="btn sm" data-act="maOpen" data-id="'+esc(j.id)+'">열 확인하고 저장</button>';
+  if(j.applied==='done')return '<span class="tag ok">완료</span> <span class="small">'+(j.added?j.added.toLocaleString()+'건 수집':'새 주문 없음')+(j.dup?' · 중복 '+j.dup.toLocaleString()+'건 제외':'')+'</span>';
+  return '<span class="tag gray">반영 중…</span>';
+}
+function maMallsHtml(){
+  if(!MA.malls)return '<div class="mute" style="padding:14px 4px">불러오는 중…</div>';
+  const rows=MA.malls.filter(m=>m.status==='거래중');
+  if(!rows.length)return '<div class="notice">거래 중인 쇼핑몰이 없습니다. <a href="#/accounts/malls">쇼핑몰관리</a>에서 설정해 주세요.</div>';
+  const ok=rows.filter(m=>m.loginId&&m.hasPw);
+  return '<div class="tblwrap" style="max-height:none"><table class="tbl"><thead><tr><th style="width:44px"><input type="checkbox" data-chg="maall"'+(ok.length&&ok.every(m=>MA.sel.has(m.id))?' checked':'')+'></th><th>쇼핑몰명</th><th>아이디</th><th>최근 수집</th></tr></thead><tbody>'+
+  rows.map(m=>{const rdy=m.loginId&&m.hasPw;const j=maLast(m.id);
+    return '<tr><td><input type="checkbox" data-chg="masel" data-id="'+esc(m.id)+'"'+(MA.sel.has(m.id)?' checked':'')+(rdy?'':' disabled')+'></td><td><b>'+esc(m.name)+'</b></td><td>'+(rdy?esc(m.loginId):'<a href="#/accounts/malls">아이디/비밀번호 설정 필요</a>')+'</td><td>'+(j?'<span class="mute small">'+fmtTs(j.createdAt)+' · '+esc(j.from)+' ~ '+esc(j.to)+'</span> ':'')+maStatusTag(j)+'</td></tr>';}).join('')+
+  '</tbody></table></div>';
+}
+function maJobsHtml(){
+  if(!MA.jobs.length)return '<div class="mute" style="padding:10px 4px">아직 수집 내역이 없습니다.</div>';
+  return '<div class="tblwrap" style="max-height:380px"><table class="tbl"><thead><tr><th style="width:110px">요청 시각</th><th>쇼핑몰</th><th>수집 기간</th><th>상태</th></tr></thead><tbody>'+
+  MA.jobs.slice(0,30).map(j=>'<tr><td>'+fmtTs(j.createdAt)+'</td><td>'+esc(j.mallName)+'</td><td>'+esc(j.from)+' ~ '+esc(j.to)+'</td><td>'+maStatusTag(j)+'</td></tr>').join('')+'</tbody></table></div>';
+}
+function maWorkerHtml(){
+  const on=MA.workerSeen&&(MA.now-MA.workerSeen)<45000;
+  return on?'<span class="tag ok">● 도우미 프로그램 연결됨</span>':'<span class="tag warn">● 도우미 프로그램 꺼짐</span> <span class="mute small">PC에서 도우미를 실행해야 수집이 진행됩니다</span>';
+}
+function maCount(){const n=MA.sel.size;const e=$('#macnt');if(e)e.textContent='선택 '+n+'개';}
+function maDraw(force){
+  const w=$('#maworker');if(w)w.innerHTML=maWorkerHtml();
+  const sig=MA.jobs.map(j=>j.id+j.status+(j.applied||'')).join()+'|'+(MA.malls?MA.malls.length:'x');
+  if(!force&&sig===MA.sig)return;
+  MA.sig=sig;
+  const a=$('#mamalls');if(a)a.innerHTML=maMallsHtml();
+  const b=$('#majobs');if(b)b.innerHTML=maJobsHtml();
+  maCount();
+}
+async function maRefresh(first){
+  if(MA.busy)return;MA.busy=true;
+  try{
+    if(!MA.malls)MA.malls=(await api('/api/mall/list')).malls;
+    const r=await api('/api/mall/jobs');
+    MA.jobs=r.jobs;MA.workerSeen=r.workerSeen;MA.now=r.now;
+    MA.malls.forEach(m=>{if(!(m.loginId&&m.hasPw&&m.status==='거래중'))MA.sel.delete(m.id);});
+    maDraw(first);
+  }catch(e){if(first)toast(e.message,'err',6000);}
+  MA.busy=false;
+  for(const j of MA.jobs){if(j.status==='done'&&!j.applied&&!MA.applying.has(j.id))await maApply(j);}
+}
+function maStart(){
+  maRefresh(true);
+  clearInterval(MA.timer);
+  MA.timer=setInterval(()=>{if(location.hash!=='#/orders/auto'){clearInterval(MA.timer);MA.timer=0;return;}maRefresh(false);},5000);
+}
+function pgAuto(){
+  const q=(d)=>'<button class="btn sm" data-act="maRange" data-d="'+d[1]+'">'+d[0]+'</button>';
+  return '<h1>주문수집(자동)</h1><p class="sub">수집 기간과 쇼핑몰을 고르고 [주문수집]을 누르면, 도우미 프로그램이 쇼핑몰에서 주문을 받아와 [주문 확정 관리]에 올려 줍니다. 수집이 끝날 때까지 이 화면을 열어 두세요.</p>'+
+  '<div class="card"><h3>① 수집 기간</h3><div class="row"><input type="date" data-chg="mad" data-k="from" value="'+esc(MA.from)+'"><span>~</span><input type="date" data-chg="mad" data-k="to" value="'+esc(MA.to)+'">'+[['오늘',0],['어제',1],['최근 3일',2],['최근 7일',6],['최근 30일',29]].map(q).join('')+'</div></div>'+
+  '<div class="card"><div class="row" style="margin-bottom:10px"><h3 style="margin:0">② 수집할 쇼핑몰</h3><span class="grow"></span><span id="maworker">'+maWorkerHtml()+'</span></div><div id="mamalls">'+maMallsHtml()+'</div>'+
+  '<div class="row" style="margin-top:14px"><button class="btn pri" data-act="maRun">주문수집</button><span class="mute small" id="macnt">선택 '+MA.sel.size+'개</span></div></div>'+
+  '<div class="card"><h3>수집 내역</h3><div id="majobs">'+maJobsHtml()+'</div></div>';
+}
+ROUTES['/orders/auto']=pgAuto;
+C.mad=el=>{MA[el.dataset.k]=el.value;};
+A.maRange=el=>{MA.from=dayAgo(+el.dataset.d);MA.to=ymd(new Date());document.querySelectorAll('[data-chg="mad"]').forEach(i=>{i.value=MA[i.dataset.k];});};
+C.masel=el=>{if(el.checked)MA.sel.add(el.dataset.id);else MA.sel.delete(el.dataset.id);maCount();};
+C.maall=el=>{(MA.malls||[]).filter(m=>m.status==='거래중'&&m.loginId&&m.hasPw).forEach(m=>{if(el.checked)MA.sel.add(m.id);else MA.sel.delete(m.id);});maDraw(true);};
+A.maRun=async()=>{
+  if(!MA.from||!MA.to){toast('수집 기간을 입력하세요.','err');return;}
+  if(MA.from>MA.to){toast('시작일이 종료일보다 늦습니다.','err');return;}
+  if(!MA.sel.size){toast('수집할 쇼핑몰을 선택하세요.','err');return;}
+  try{
+    const r=await mpost('/api/mall/collect',{from:MA.from,to:MA.to,malls:[...MA.sel]});
+    if(r.created.length)toast(r.created.length+'개 쇼핑몰 수집을 요청했습니다.');
+    if(r.skipped.length)toast('제외: '+r.skipped.map(s=>s.mall+'('+s.why+')').join(', '),'err',6000);
+    MA.sel.clear();MA.sig='';await maRefresh(true);
+  }catch(e){toast(e.message,'err',6000);}
+};
+
+/* 받아온 파일을 주문으로 저장 (열 매핑을 이미 확인한 양식이면 자동 저장, 처음 보는 양식이면 열 확인 화면으로) */
+function maEnsureMall(name){
+  if(!name||mallList().includes(name))return;
+  const cur=Array.isArray(S.meta.malls)?S.meta.malls.slice():[];cur.push(name);setMeta('malls',cur);
+}
+async function maLoadIntoCL(job){
+  const r=await api('/api/mall/file?id='+encodeURIComponent(job.id));
+  CL.sheets=await parseAny(b64ToBuf(r.b64));CL.fileName=r.name;CL.sheetIdx=firstNonEmptySheet(CL.sheets);clRecalc(true);
+  CL.mall=job.orderMall||job.mallName;maEnsureMall(CL.mall);CL.jobId=job.id;
+}
+async function maApply(job){
+  MA.applying.add(job.id);
+  const snap={...CL};
+  try{
+    await maLoadIntoCL(job);
+    const known=!!S.meta[sigOf(clHeaders())]&&(CL.map.itemName||[]).length>0;
+    if(!known){
+      await mpost('/api/mall/applied',{id:job.id,state:'needmap'});
+      Object.assign(CL,snap);MA.sig='';return;
+    }
+    const list=extractOrders(clRows(),CL.headerRow-1,CL.map,CL.mall);
+    const sets=collectedSets(),seenLine=new Set(),now=new Date().toISOString(),day=localDate();
+    const adds=[];let dup=0;
+    for(const o of list){
+      if(isCollected(o,sets)){dup++;continue;}
+      if(o.orderNo){const lk=[o.orderNo,o.receiver,o.itemName,o.itemOption].map(norm).join('|');if(seenLine.has(lk)){dup++;continue;}seenLine.add(lk);}
+      o.collectedAt=now;o.collectedDate=day;o.mallFile=CL.fileName;o.mall=CL.mall;o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
+      if(o.itemName){const pid=S.rules[ruleKey(o)];if(pid&&M.prod.has(pid)&&M.sup.has(M.prod.get(pid).supplierId)){o.productId=pid;o.matchedAuto=true;}}
+      adds.push(o);
+    }
+    if(adds.length){const own=ownNoAssign(adds);await putMany('orders',adds);S.orders.push(...adds);rebuild();if(own.length)await putMany('meta',own);}
+    await mpost('/api/mall/applied',{id:job.id,state:'done',added:adds.length,dup});
+    Object.assign(CL,snap);
+    toast(job.mallName+': '+(adds.length?adds.length.toLocaleString()+'건 수집 완료':'새 주문이 없습니다.'));
+    MA.sig='';
+  }catch(e){
+    Object.assign(CL,snap);
+    toast(job.mallName+' 반영 실패: '+e.message,'err',7000);
+    try{await mpost('/api/mall/applied',{id:job.id,state:'needmap'});}catch(_){}
+    MA.sig='';
+  }
+}
+A.maOpen=async el=>{
+  const j=MA.jobs.find(x=>x.id===el.dataset.id);if(!j)return;
+  try{await maLoadIntoCL(j);location.hash='#/orders/collect';}
+  catch(e){toast(e.message,'err',6000);}
 };
 
 /* =====================================================================

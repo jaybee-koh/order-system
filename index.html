@@ -1211,13 +1211,14 @@ function fieldMalls(f){
   if(!_fmC.m[f.key]){const ms=new Set();S.orders.forEach(o=>{if(o.ex&&o.ex[f.key]&&o.mall)ms.add(o.mall);});_fmC.m[f.key]={v:ms.size?[...ms]:null};}
   return _fmC.m[f.key].v;   /* null = 값이 어느 몰에도 없음 → 모든 몰에서 보임 */
 }
-const fieldOfMall=(f,mall)=>{if(!mall)return true;const m=fieldMalls(f);return !m||m.includes(mall);};
+const mallBase=m=>String(m||'').replace(/\s*\(.*\)\s*$/,'');   /* 스마트스토어(에이시즈)·스마트스토어(올곧은건강)는 같은 수집 양식 → 같은 그룹 */
+const fieldOfMall=(f,mall)=>{if(!mall)return true;const m=fieldMalls(f);return !m||m.some(x=>mallBase(x)===mallBase(mall));};
 function dropCustomForMall(c,mall,keys){
   c.custom=(c.custom||[]).filter(f=>{
     if(keys&&!keys.includes(f.key))return true;
     if(!fieldOfMall(f,mall))return true;
     const m=fieldMalls(f);if(!m)return false;
-    const rest=m.filter(x=>x!==mall);if(!rest.length)return false;
+    const rest=m.filter(x=>mallBase(x)!==mallBase(mall));if(!rest.length)return false;
     f.malls=rest;return true;
   });
   const ck=new Set((c.custom||[]).map(x=>x.key));
@@ -3122,8 +3123,8 @@ function drawCheckTable(){
   const allSel=list.length&&list.every(o=>CK.sel.has(o.id));
   const isConf=CK.a.status==='confirmed';
   const bar='<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(CK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="ksel">'+CK.sel.size+'</b>건</span><span class="grow"></span>'+
-    '<button class="btn sm danger" data-act="ckdel">선택 삭제</button>'+
-    '<button class="btn sm ok" data-act="ckdl">선택 다운로드</button><button class="btn sm ok" data-act="ckdlall">전체 다운로드</button><button class="btn sm pri" data-act="ckstatus">주문상태변경</button>'+(CK.a.status==='shipped'?'<button class="btn sm" data-act="ckmall">쇼핑몰수정</button>':'')+(CK.a.status==='shipped'?'<button class="btn sm" data-act="dltpl">송장양식 설정</button>':'')+'</div>';
+    (CK.a.status==='shipped'?'<button class="btn sm" data-act="dltpl">송장양식 설정</button>':'')+
+    '<button class="btn sm ok" data-act="ckdl">선택 다운로드</button><button class="btn sm ok" data-act="ckdlall">전체 다운로드</button><button class="btn sm pri" data-act="ckstatus">주문상태변경</button>'+'<button class="btn sm danger" data-act="ckdel">선택 삭제</button></div>';
   if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 매핑 주문이 없습니다. 수집일자·주문상태를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
   box.innerHTML=bar+
   checkTableHtml(cur,allSel)+

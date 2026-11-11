@@ -357,6 +357,13 @@ table.tbl.fit td{overflow-wrap:anywhere}
 .rz::after{content:"";position:absolute;right:4px;top:22%;bottom:22%;width:1px;background:#d3d8e2;transition:background .12s}
 .rz:hover::after,body.rzing .rz::after{background:var(--pri);width:2px;right:3px}
 body.rzing{cursor:col-resize;user-select:none}
+/* 모바일: 표를 화면 폭에 욱여넣지 않고 최소 너비를 주어 가로 스크롤로 보게 함 */
+@media(max-width:800px){
+  .tblwrap{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  table.tbl.fit{min-width:1100px}
+  table.tbl.fit[data-colkey="check"]{min-width:1300px}
+  table.tbl.fit[data-colkey="track"]{min-width:1200px}
+}
 
 /* C/S 버튼 · 메모 팝업 */
 .stcell{display:flex;align-items:center;gap:5px;flex-wrap:wrap}

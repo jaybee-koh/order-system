@@ -1191,6 +1191,7 @@ const ORDER_FIELDS=[
   {key:'settleAmount',label:'정산예정금액'}
 ];
 const BASE_KEYS=ORDER_FIELDS.map(f=>f.key);
+const SS_MALL='스마트스토어',SS_SHIP_COL=6;   /* 스마트스토어 주문내역 파일: G열(0부터 세면 6)이 배송방법 */
 const FC={sel:new Set()};
 function fcfg(){const c=S.meta.orderFields;return c&&Array.isArray(c.order)?c:{order:BASE_KEYS.slice(),custom:[]};}
 function fcopy(){return JSON.parse(JSON.stringify(fcfg()));}
@@ -2387,6 +2388,11 @@ function clRecalc(detect){
   if(S.meta[sigOf(h)]&&!CL.map._st){const g=guessOrderCols(h);if(g.settleAmount&&!CL.map.settleAmount)CL.map.settleAmount=g.settleAmount;CL.map._st=1;}
   Object.keys(CL.map).forEach(k=>{if(!keep.has(k))delete CL.map[k];});
   CL.mall=S.meta[mallKey(h)]||'';
+  applyMallCols();
+}
+/* 쇼핑몰별 고정 열: 스마트스토어는 G열을 배송방법으로 사용 */
+function applyMallCols(){
+  if(CL.mall===SS_MALL&&CL.sheets&&clHeaders().length>SS_SHIP_COL&&curFields().some(f=>f.key==='shipMethod'))CL.map.shipMethod=[SS_SHIP_COL];
 }
 function mallRow(){
   return '<tr><td></td><td></td><td><b>쇼핑몰</b></td><td><select data-chg="cmall"><option value="">(선택 안 함)</option>'+mallList().map(m=>'<option value="'+esc(m)+'"'+(CL.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__add">＋ 직접 입력…</option></select> <span class="mute small">(이 파일의 주문이 어느 쇼핑몰 것인지 선택)</span></td></tr>';
@@ -2591,6 +2597,7 @@ C.cmall=el=>{
     const n=(prompt('쇼핑몰 이름을 입력하세요.')||'').trim();
     if(n){const cur=Array.isArray(S.meta.malls)?S.meta.malls.slice():[];if(!DEFAULT_MALLS.includes(n)&&!cur.includes(n)){cur.push(n);setMeta('malls',cur);}CL.mall=n;}
   }else CL.mall=el.value;
+  applyMallCols();
   route();
 };
 C.csheet=el=>{CL.sheetIdx=+el.value;clRecalc(true);route();};
@@ -2645,9 +2652,25 @@ A.collectSave=async()=>{
   if(!list.length){toast('저장할 주문이 없습니다.','err');return;}
   const sets=collectedSets(),seenLine=new Set();
   const now=new Date().toISOString(),day=localDate();
-  const adds=[];let dup=0,auto=0;
+  const adds=[];let dup=0,auto=0,fill=0;
+  /* 예전에 수집해서 상품주문번호·배송방법이 비어 있는 주문은 같은 파일을 다시 올리면 채워 줍니다 */
+  const lineKey=o=>[o.orderNo,o.receiver,o.itemName,o.itemOption].map(norm).join('|');
+  const need=new Map(),upd=[];
+  S.orders.forEach(x=>{if(x.orderNo&&(!x.prodOrderNo||!x.shipMethod)){const k=lineKey(x);if(!need.has(k))need.set(k,[]);need.get(k).push(x);}});
   for(const o of list){
-    if(isCollected(o,sets)){dup++;continue;}
+    if(isCollected(o,sets)){
+      dup++;
+      if(o.prodOrderNo||o.shipMethod){
+        const arr=need.get(lineKey(o));
+        const t=arr&&arr.find(x=>(!x.prodOrderNo&&o.prodOrderNo)||(!x.shipMethod&&o.shipMethod));
+        if(t){
+          if(!t.prodOrderNo&&o.prodOrderNo)t.prodOrderNo=o.prodOrderNo;
+          if(!t.shipMethod&&o.shipMethod)t.shipMethod=o.shipMethod;
+          arr.splice(arr.indexOf(t),1);upd.push(t);fill++;
+        }
+      }
+      continue;
+    }
     if(o.orderNo){
       const lk=[o.orderNo,o.receiver,o.itemName,o.itemOption].map(norm).join('|');
       if(seenLine.has(lk)){dup++;continue;}
@@ -2657,7 +2680,11 @@ A.collectSave=async()=>{
     if(o.itemName){const pid=S.rules[ruleKey(o)];if(pid&&M.prod.has(pid)&&M.sup.has(M.prod.get(pid).supplierId)){o.productId=pid;o.matchedAuto=true;auto++;}}
     adds.push(o);
   }
-  if(!adds.length){toast('이미 수집된 주문입니다. (같은 주문번호 '+dup.toLocaleString()+'건은 수집되지 않았습니다)','err',6000);return;}
+  if(upd.length){try{await putMany('orders',upd);rebuild();}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}}
+  if(!adds.length){
+    if(fill){try{await setMeta(sigOf(clHeaders()),CL.map);await setMeta(mallKey(clHeaders()),CL.mall);}catch(_){}toast('이미 수집된 주문입니다. 새로 수집된 주문은 없고, 기존 주문 '+fill.toLocaleString()+'건에 상품주문번호·배송방법을 채워 넣었습니다.','',7000);return;}
+    toast('이미 수집된 주문입니다. (같은 주문번호 '+dup.toLocaleString()+'건은 수집되지 않았습니다)','err',6000);return;
+  }
   try{
     const freshOwn=ownNoAssign(adds);
     await putMany('orders',adds);S.orders.push(...adds);rebuild();
@@ -2667,7 +2694,7 @@ A.collectSave=async()=>{
     CF.status=adds.length&&adds.length>auto?'none':'all';CF.from='';CF.to='';CF.page=0;CF.q='';
     route();
     openModal('<h2>주문 수집 완료</h2><div class="card" style="background:#f7f8fb;box-shadow:none;margin-bottom:0"><div><b style="font-size:20px">'+adds.length.toLocaleString()+'건</b>의 주문을 수집했습니다.</div>'+
-      '<div class="mute small" style="margin-top:8px">자동 매핑 '+auto.toLocaleString()+'건'+(dup?' · 중복 제외 '+dup.toLocaleString()+'건':'')+'</div></div>'+
+      '<div class="mute small" style="margin-top:8px">자동 매핑 '+auto.toLocaleString()+'건'+(dup?' · 중복 제외 '+dup.toLocaleString()+'건':'')+(fill?' · 기존 주문 상품주문번호·배송방법 보완 '+fill.toLocaleString()+'건':'')+'</div></div>'+
       '<div class="foot"><button class="btn pri" data-act="close">확인</button></div>');
   }catch(e){toast('저장 실패: '+e.message,'err',6000);}
 };
@@ -2957,7 +2984,7 @@ function autoShip(o,now){
   if(o.confirmed&&!o.shipped&&o.trackingNo){setOrdStatus(o,'shipped',now);return true;}
   return false;
 }
-const CK={fmt:'all',init:false,d:{},a:{},page:0,sel:new Set()};
+const CK={init:false,d:{},a:{},page:0,sel:new Set()};
 function ckRange(k){
   const t=new Date(),y=t.getFullYear(),m=t.getMonth(),day=t.getDate();
   const dd=n=>new Date(y,m,day+n);
@@ -3025,7 +3052,6 @@ function drawCheckTable(){
   const isConf=CK.a.status==='confirmed';
   const bar='<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(CK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="ksel">'+CK.sel.size+'</b>건</span><span class="grow"></span>'+
     '<button class="btn sm danger" data-act="ckdel">선택 삭제</button>'+
-    (CK.a.status==='shipped'?'<span class="mute small" style="margin-left:6px">양식</span><select class="selsm" data-chg="ckfmt" style="min-width:110px"><option value="all"'+(CK.fmt!=='smartstore'?' selected':'')+'>전체</option><option value="smartstore"'+(CK.fmt==='smartstore'?' selected':'')+'>스마트스토어</option></select>':'')+
     '<button class="btn sm ok" data-act="ckdl">선택 다운로드</button><button class="btn sm ok" data-act="ckdlall">전체 다운로드</button><button class="btn sm pri" data-act="ckstatus">주문상태변경</button></div>';
   if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 매핑 주문이 없습니다. 수집일자·주문상태를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
   box.innerHTML=bar+
@@ -3043,7 +3069,6 @@ function drawCheckTable(){
   (pages>1?'<div class="pager"><button class="btn sm" data-act="ckpage" data-d="-1"'+(CK.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="ckpage" data-d="1"'+(CK.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
 C.ckf=el=>{CK.d[el.dataset.k]=el.value;};
-C.ckfmt=el=>{CK.fmt=el.value==='smartstore'?'smartstore':'all';};
 I.ckq=el=>{CK.d.q=el.value;};
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.matches&&e.target.matches('[data-inp="ckq"]'))A.cksearch();});
 A.ckrange=el=>{const r=ckRange(el.dataset.r);CK.d.from=r[0];CK.d.to=r[1];const f=$('#ckfrom'),t=$('#ckto');if(f)f.value=r[0];if(t)t.value=r[1];};
@@ -3159,8 +3184,8 @@ async function ckDownload(list0,emptyMsg){
   /* 신규주문은 엑셀 다운로드 불가 */
   const list=list0.filter(o=>ordStatus(o)!=='new'),skipped=list0.length-list.length;
   if(!list.length){toast(list0.length?'신규주문은 엑셀을 다운로드할 수 없습니다. 주문확인으로 변경한 뒤 다운로드하세요.':emptyMsg,'err',5000);return;}
-  /* 출고완료 조회 + 양식=스마트스토어: 상품주문번호·배송방법·택배사·송장번호만 */
-  const ss=CK.a.status==='shipped'&&CK.fmt==='smartstore';
+  /* 출고완료 조회 + 쇼핑몰=스마트스토어: 스마트스토어 대량 발송처리 양식(상품주문번호·배송방법·택배사·송장번호) */
+  const ss=CK.a.status==='shipped'&&CK.a.mall===SS_MALL;
   /* 출고완료 주문이 포함되어 있으면 모든 항목을 다 담아서 내려받습니다 */
   const full=!ss&&list.some(o=>ordStatus(o)==='shipped');
   let rows;

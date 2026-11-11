@@ -470,7 +470,11 @@ body{background:var(--bg);color:var(--ink);letter-spacing:-.018em}
 }
 #nav a.on::before{left:-14px;background:#72b9aa;width:3px}
 #nav a.on svg{color:#9bd5c9}
-#nav .nparent{color:#d0dcde}
+#nav .nparent{color:#d0dcde;cursor:pointer;user-select:none;border-radius:10px;transition:background .15s}
+#nav .nparent:hover{background:rgba(255,255,255,.06);color:#fff}
+#nav .nparent svg.nchev{width:14px;height:14px;margin-left:auto;opacity:.6;transition:transform .18s}
+#nav .nparent.open svg.nchev{transform:rotate(180deg)}
+#nav a.nsub.hid{display:none}
 #nav .navfoot{color:#71888e}
 #view{padding:38px 44px 76px;max-width:1720px}
 h1{font-size:25px;letter-spacing:-.045em;font-weight:750;margin-bottom:7px}
@@ -1328,11 +1332,21 @@ const NAV=[
   {h:'/suppliers',t:'매입거래선관리',sub:1},
   {parent:'상품관리'},
   {h:'/products/changes',t:'상품변경사항',sub:1},{h:'/products/new',t:'신규상품등록',sub:1},{h:'/products/bulk',t:'상품대량등록',sub:1},{h:'/products',t:'매입상품조회',sub:1},
-  {parent:'C/S관리'},
-  {h:'/cs/claims',t:'클레임접수관리',sub:1},{h:'/cs/memos',t:'C/S메모관리',sub:1},
   {parent:'주문관리'},
-  {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1}
+  {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1},
+  {parent:'C/S관리'},
+  {h:'/cs/claims',t:'클레임접수관리',sub:1},{h:'/cs/memos',t:'C/S메모관리',sub:1}
 ];
+/* 메뉴 그룹 펼침 상태: 기본은 모두 접힘, 클릭하면 펼쳐진 채 고정되고 다시 클릭하면 접힘 (브라우저에 기억) */
+const NAV_KEY='nav_open_'+window.__USER;
+let NAVOPEN={};
+try{NAVOPEN=JSON.parse(localStorage.getItem(NAV_KEY)||'{}')||{};}catch(e){NAVOPEN={};}
+A.navgrp=el=>{
+  const g=el.dataset.g;NAVOPEN[g]=!NAVOPEN[g];
+  try{localStorage.setItem(NAV_KEY,JSON.stringify(NAVOPEN));}catch(e){}
+  el.classList.toggle('open',!!NAVOPEN[g]);el.setAttribute('aria-expanded',NAVOPEN[g]?'true':'false');
+  $$('#nav a[data-g]').forEach(a=>{if(a.dataset.g===g)a.classList.toggle('hid',!NAVOPEN[g]);});
+};
 const IC=(p)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 const ICONS={
   '/home':IC('<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/>'),
@@ -1350,7 +1364,12 @@ const ICONS={
 };
 function drawNav(cur){
   $('#nav').innerHTML='<div class="logo"><span class="mark">'+IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/>')+'</span><div>OpsDesk<small>Operations Desk · 운영 데스크</small></div></div>'+
-  NAV.map(n=>n.parent?'<div class="nparent">'+(ICONS['p_'+n.parent]||ICONS.parent)+n.parent+'</div>':n.g?'<div class="grp">'+n.g+'</div>':'<a href="#'+n.h+'" class="'+(n.sub?'nsub ':'')+(n.h===cur?'on':'')+'">'+(n.sub?'':(ICONS[n.h]||''))+n.t+'</a>').join('')+
+  (()=>{let grp='';return NAV.map(n=>{
+    if(n.parent){grp=n.parent;const o=!!NAVOPEN[grp];return '<div class="nparent'+(o?' open':'')+'" data-act="navgrp" data-g="'+esc(grp)+'" role="button" tabindex="0" aria-expanded="'+o+'">'+(ICONS['p_'+n.parent]||ICONS.parent)+n.parent+'<svg class="nchev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>';}
+    if(n.g)return '<div class="grp">'+n.g+'</div>';
+    const sub=!!n.sub;
+    return '<a href="#'+n.h+'" class="'+(sub?'nsub ':'')+(n.h===cur?'on':'')+(sub&&!NAVOPEN[grp]?' hid':'')+'"'+(sub?' data-g="'+esc(grp)+'"':'')+'>'+(sub?'':(ICONS[n.h]||''))+n.t+'</a>';
+  }).join('');})()+
   '<div class="navfoot"><div class="acct">'+esc(window.__USER)+'</div>데이터는 서버에 계정별로 저장됩니다.<div id="syncst"></div><button type="button" class="logout" onclick="zianLogout()">로그아웃</button></div>';
   const on=document.querySelector('#nav a.on');const tt=document.getElementById('mtop-ttl');if(tt)tt.textContent=on?on.textContent.trim():'OpsDesk';
   SYNC.paint();

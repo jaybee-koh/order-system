@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>발주 관리 시스템</title>
+<title>OpsDesk</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
@@ -631,7 +631,7 @@ table.tbl tr.chdone td b,table.tbl tr.chdone td span{opacity:.75}
   <div class="box" id="lg-box" style="visibility:hidden">
     <div class="lg">
       <span class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg></span>
-      <div><h2>발주 관리 시스템</h2><small>내 아이디로 로그인하면 내 데이터가 열립니다</small></div>
+      <div><h2>OpsDesk</h2><small>내 아이디로 로그인하면 내 데이터가 열립니다</small></div>
     </div>
     <div class="tabs">
       <button type="button" class="tab on" data-m="login">로그인</button>
@@ -659,7 +659,7 @@ table.tbl tr.chdone td b,table.tbl tr.chdone td span{opacity:.75}
     <button type="button" class="mbtn" id="nav-toggle" aria-label="메뉴 열기" aria-controls="nav" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
-    <span class="mttl" id="mtop-ttl">발주 관리</span>
+    <span class="mttl" id="mtop-ttl">OpsDesk</span>
   </header>
   <div id="nav-ov"></div>
   <nav id="nav"></nav>
@@ -1343,10 +1343,10 @@ const ICONS={
   '/orders/check':IC('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="m9 14 2 2 4-4"/>')
 };
 function drawNav(cur){
-  $('#nav').innerHTML='<div class="logo"><span class="mark">'+IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/>')+'</span><div>발주 관리<small>Order Management</small></div></div>'+
+  $('#nav').innerHTML='<div class="logo"><span class="mark">'+IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/>')+'</span><div>OpsDesk<small>Operations Desk · 운영 데스크</small></div></div>'+
   NAV.map(n=>n.parent?'<div class="nparent">'+(ICONS['p_'+n.parent]||ICONS.parent)+n.parent+'</div>':n.g?'<div class="grp">'+n.g+'</div>':'<a href="#'+n.h+'" class="'+(n.sub?'nsub ':'')+(n.h===cur?'on':'')+'">'+(n.sub?'':(ICONS[n.h]||''))+n.t+'</a>').join('')+
   '<div class="navfoot"><div class="acct">'+esc(window.__USER)+'</div>데이터는 서버에 계정별로 저장됩니다.<div id="syncst"></div><button type="button" class="logout" onclick="zianLogout()">로그아웃</button></div>';
-  const on=document.querySelector('#nav a.on');const tt=document.getElementById('mtop-ttl');if(tt)tt.textContent=on?on.textContent.trim():'발주 관리';
+  const on=document.querySelector('#nav a.on');const tt=document.getElementById('mtop-ttl');if(tt)tt.textContent=on?on.textContent.trim():'OpsDesk';
   SYNC.paint();
 }
 const ROUTES={};

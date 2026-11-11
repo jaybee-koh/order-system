@@ -3308,9 +3308,9 @@ function tplShow(html,cls){
 }
 /* 선택한 쇼핑몰의 주문수집 업로드 항목(숨김 포함)만 '들어갈 값' 후보로 보여줌 */
 function tplSrcOpts(mall,cur){
-  const os=S.orders.filter(o=>o.mall===mall),hid=hideSet();
-  const has=f=>!os.length||os.some(o=>f.custom?(o.ex&&o.ex[f.key]):(o[f.key]!=null&&o[f.key]!==''));
-  const col=curFields(mall).filter(has).map(f=>[f.custom?'cf:'+f.key:f.key,f.label.replace(' (매핑에 사용)','')+(hid.has(f.key)?' (숨김)':'')]);
+  const hid=hideSet();
+  const col=curFields(mall).map(f=>[f.custom?'cf:'+f.key:f.key,f.label.replace(' (매핑에 사용)','')+(hid.has(f.key)?' (숨김)':'')]);
+  if(isSSMall(mall))[['prodOrderNo','상품주문번호'],['shipMethod','배송방법']].forEach(x=>{if(!col.some(y=>y[0]===x[0]))col.push(x);});   /* 스마트스토어 발송처리에 필요 */
   col.push(['ownNo','자체주문번호']);
   if(mall===ESM_MALL)col.push(['sellerId','판매아이디(계정)'],['esmNo','ESM 주문번호']);
   const g1=[['','(빈칸)'],['__fixed','고정값']],g2=[['__carrierCode','택배사 코드(11번가 등)'],['carrier','택배사'],['trackingNo','운송장번호'],['shippedAt','출고일시']];

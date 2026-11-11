@@ -1192,6 +1192,7 @@ const ORDER_FIELDS=[
 ];
 const BASE_KEYS=ORDER_FIELDS.map(f=>f.key);
 const SS_MALL='스마트스토어',SS_SHIP_COL=6;
+const ESM_MALL='ESM';   /* ESM 주문서: A열=판매아이디(계정), B열=주문번호 */
 const isSSMall=m=>/^스마트스토어/.test(String(m||''));   /* 스마트스토어(에이시즈)·스마트스토어(올곧은건강) 등 */
 /* 쇼핑몰 표시: '스마트스토어(에이시즈)' → 스마트스토어 + 아래에 작은 글씨로 에이시즈 */
 function mallHtml(m,tag){
@@ -1289,6 +1290,8 @@ function extractOrders(rows,hdrIdx,map,mall){
     const o={
       orderNo:get(r,'orderNo')[0]||'',
       prodOrderNo:get(r,'prodOrderNo')[0]||'',
+      sellerId:mall===ESM_MALL?String(r[0]==null?'':r[0]).trim():'',
+      esmNo:mall===ESM_MALL?String(r[1]==null?'':r[1]).trim():'',
       shipMethod:isSSMall(mall)?String(r[SS_SHIP_COL]==null?'':r[SS_SHIP_COL]).trim():(get(r,'shipMethod')[0]||''),
       orderDate:mall==='신세계'?fixDate8(get(r,'orderDate')[0]||''):fixDateVal(get(r,'orderDate')[0]||''),
       orderer:get(r,'orderer')[0]||'',
@@ -2665,17 +2668,17 @@ A.collectSave=async()=>{
   const lineKey=o=>[o.orderNo,o.receiver,o.itemName,o.itemOption].map(norm).join('|');
   const need=new Map(),upd=[];
   const needNo=new Map();
-  S.orders.forEach(x=>{if(x.orderNo&&(!x.prodOrderNo||!x.shipMethod)){const k=lineKey(x);if(!need.has(k))need.set(k,[]);need.get(k).push(x);const n=norm(x.orderNo);if(!needNo.has(n))needNo.set(n,[]);needNo.get(n).push(x);}});
+  const FILL=['prodOrderNo','shipMethod','sellerId','esmNo'];
+  S.orders.forEach(x=>{if(x.orderNo&&FILL.some(f=>!x[f])){const k=lineKey(x);if(!need.has(k))need.set(k,[]);need.get(k).push(x);const n=norm(x.orderNo);if(!needNo.has(n))needNo.set(n,[]);needNo.get(n).push(x);}});
   for(const o of list){
     if(isCollected(o,sets)){
       dup++;
-      if(o.prodOrderNo||o.shipMethod){
-        const lack=x=>(!x.prodOrderNo&&o.prodOrderNo)||(!x.shipMethod&&o.shipMethod);
+      if(FILL.some(f=>o[f])){
+        const lack=x=>FILL.some(f=>!x[f]&&o[f]);
         let arr=need.get(lineKey(o)),t=arr&&arr.find(lack);
         if(!t){arr=needNo.get(norm(o.orderNo));t=arr&&arr.find(lack);}
         if(t){
-          if(!t.prodOrderNo&&o.prodOrderNo)t.prodOrderNo=o.prodOrderNo;
-          if(!t.shipMethod&&o.shipMethod)t.shipMethod=o.shipMethod;
+          FILL.forEach(f=>{if(!t[f]&&o[f])t[f]=o[f];});
           arr.splice(arr.indexOf(t),1);if(!upd.includes(t))upd.push(t);fill++;
         }
       }
@@ -2692,7 +2695,7 @@ A.collectSave=async()=>{
   }
   if(upd.length){try{await putMany('orders',upd);rebuild();}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}}
   if(!adds.length){
-    if(fill){try{await setMeta(sigOf(clHeaders()),CL.map);await setMeta(mallKey(clHeaders()),CL.mall);}catch(_){}toast('이미 수집된 주문입니다. 새로 수집된 주문은 없고, 기존 주문 '+fill.toLocaleString()+'건에 상품주문번호·배송방법을 채워 넣었습니다.','',7000);return;}
+    if(fill){try{await setMeta(sigOf(clHeaders()),CL.map);await setMeta(mallKey(clHeaders()),CL.mall);}catch(_){}toast('이미 수집된 주문입니다. 새로 수집된 주문은 없고, 기존 주문 '+fill.toLocaleString()+'건에 상품주문번호·배송방법·판매아이디를 채워 넣었습니다.','',7000);return;}
     toast('이미 수집된 주문입니다. (같은 주문번호 '+dup.toLocaleString()+'건은 수집되지 않았습니다)','err',6000);return;
   }
   try{
@@ -3217,9 +3220,14 @@ async function ckDownload(list0,emptyMsg){
   /* 출고완료 조회 + 쇼핑몰=스마트스토어: 스마트스토어 대량 발송처리 양식(상품주문번호·배송방법·택배사·송장번호) */
   const ss=CK.a.status==='shipped'&&isSSMall(CK.a.mall);
   /* 출고완료 주문이 포함되어 있으면 모든 항목을 다 담아서 내려받습니다 */
-  const full=!ss&&list.some(o=>ordStatus(o)==='shipped');
+  /* 출고완료 조회 + 쇼핑몰=ESM: ESM 송장 대량업로드 양식(계정·주문번호·택배사·운송장/등기번호) */
+  const esm=CK.a.status==='shipped'&&CK.a.mall===ESM_MALL;
+  const full=!ss&&!esm&&list.some(o=>ordStatus(o)==='shipped');
   let rows;
-  if(ss){
+  if(esm){
+    rows=[['계정','주문번호','택배사','운송장/등기번호']];
+    list.forEach(o=>{rows.push([o.sellerId||'',o.esmNo||o.orderNo||'',o.carrier||'',o.trackingNo||'']);});
+  }else if(ss){
     rows=[['상품주문번호','배송방법','택배사','송장번호']];
     list.forEach(o=>{rows.push([o.prodOrderNo||o.orderNo||'',o.shipMethod||'택배,등기,소포',o.carrier||'',o.trackingNo||'']);});
   }else if(full){
@@ -3235,12 +3243,12 @@ async function ckDownload(list0,emptyMsg){
     rows=[tpl.headers];
     list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(tpl.mapping.map(m=>cellVal(o,p,s,i+1,m)));});
   }
-  download(buildXlsx(rows,ss?'발송처리':full?'주문내역':'발주서'),(ss?'스마트스토어_발송처리_':full?'출고완료_주문_':'주문확인_발주_')+localDate().replace(/-/g,'')+'.xlsx');
+  download(buildXlsx(rows,esm?'송장업로드':ss?'발송처리':full?'주문내역':'발주서'),(esm?'ESM_송장대량업로드_':ss?'스마트스토어_발송처리_':full?'출고완료_주문_':'주문확인_발주_')+localDate().replace(/-/g,'')+'.xlsx');
   const now=new Date().toISOString();
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});
   await putMany('orders',list);
-  const noPo=ss?list.filter(o=>!o.prodOrderNo).length:0;
-  toast(list.length+'건을 다운로드했습니다.'+(ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(skipped?' · 신규주문 '+skipped+'건 제외':'')+(noPo?' · 상품주문번호가 없어 쇼핑몰주문번호로 대체한 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':''),noPo?'err':'ok',noPo?8000:3500);
+  const noPo=ss?list.filter(o=>!o.prodOrderNo).length:0,noSeller=esm?list.filter(o=>!o.sellerId).length:0;
+  toast(list.length+'건을 다운로드했습니다.'+(esm?' (ESM 송장 대량업로드 양식)':ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(skipped?' · 신규주문 '+skipped+'건 제외':'')+(noPo?' · 상품주문번호가 없어 쇼핑몰주문번호로 대체한 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':'')+(noSeller?' · 계정(판매아이디)이 비어 있는 주문 '+noSeller+'건 (주문수집에서 ESM 주문서를 다시 올려 저장하면 채워집니다)':''),(noPo||noSeller)?'err':'ok',(noPo||noSeller)?8000:3500);
 }
 
 

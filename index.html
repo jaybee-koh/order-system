@@ -1182,7 +1182,9 @@ const ORDER_FIELDS=[
   {key:'addr',label:'주소',multi:1},
   {key:'qty',label:'수량'},
   {key:'memo',label:'배송메모'},
+  {key:'shipMethod',label:'배송방법'},
   {key:'orderNo',label:'주문번호',req:1},
+  {key:'prodOrderNo',label:'상품주문번호'},
   {key:'itemName',label:'상품명 (매핑에 사용)',req:1},
   {key:'itemOption',label:'옵션명 (매핑에 사용)'},
   {key:'payAmount',label:'결제금액'},
@@ -1227,6 +1229,10 @@ function guessOrderCols(headers){
   exact('orderNo','주문번호');
   if(!map.orderNo)take('orderNo',/주문번호|주문no|orderno|orderid|ordernumber|주문코드/,/상품주문/);
   if(!map.orderNo)take('orderNo',/주문번호|orderno/);
+  take('prodOrderNo',/상품주문번호|상품주문no|productorderid|productorderno/);
+  /* 상품주문번호 열밖에 없는 파일이면 주문번호와 같은 열을 함께 사용 */
+  if(!map.prodOrderNo&&map.orderNo&&/상품주문/.test(norm(headers[map.orderNo[0]]||'')))map.prodOrderNo=map.orderNo.slice();
+  take('shipMethod',/배송방법|배송유형|배송형태/,/비$|메시지|메세지|요청|메모/);
   take('orderDate',/주문일시|주문일자|주문일|결제일시|결제일자|결제일|주문시간|주문날짜|결제시간|구매일/,/취소|배송|발송|출고|수집|정산|입금|환불|번호/);
   take('zip',/우편번호|우편|zip/,/구매자|주문자/);
   take('tel2',/(수취인|수령|받는|수신|배송).*(연락처|전화|휴대|핸드폰).*2$|^(연락처|전화번호|휴대폰|핸드폰)2$/,/구매자|주문자/);
@@ -1274,6 +1280,8 @@ function extractOrders(rows,hdrIdx,map,mall){
     const r=rows[i];
     const o={
       orderNo:get(r,'orderNo')[0]||'',
+      prodOrderNo:get(r,'prodOrderNo')[0]||'',
+      shipMethod:get(r,'shipMethod')[0]||'',
       orderDate:mall==='신세계'?fixDate8(get(r,'orderDate')[0]||''):fixDateVal(get(r,'orderDate')[0]||''),
       orderer:get(r,'orderer')[0]||'',
       receiver:get(r,'receiver')[0]||'',
@@ -2373,8 +2381,9 @@ function clRecalc(detect){
   if(detect)CL.headerRow=detectHeaderRow(clRows(),ORDER_HDR_RE)+1;
   const h=clHeaders();
   CL.map=S.meta[sigOf(h)]?JSON.parse(JSON.stringify(S.meta[sigOf(h)])):guessOrderCols(h);
-  const keep=new Set(curFields().map(f=>f.key));keep.add('_pay');keep.add('_st');
+  const keep=new Set(curFields().map(f=>f.key));keep.add('_pay');keep.add('_st');keep.add('_po');
   if(S.meta[sigOf(h)]&&!CL.map._pay){const g=guessOrderCols(h);if(g.payAmount&&!CL.map.payAmount)CL.map.payAmount=g.payAmount;CL.map._pay=1;}
+  if(S.meta[sigOf(h)]&&!CL.map._po){const g=guessOrderCols(h);['prodOrderNo','shipMethod'].forEach(k=>{if(g[k]&&!CL.map[k])CL.map[k]=g[k];});CL.map._po=1;}
   if(S.meta[sigOf(h)]&&!CL.map._st){const g=guessOrderCols(h);if(g.settleAmount&&!CL.map.settleAmount)CL.map.settleAmount=g.settleAmount;CL.map._st=1;}
   Object.keys(CL.map).forEach(k=>{if(!keep.has(k))delete CL.map[k];});
   CL.mall=S.meta[mallKey(h)]||'';
@@ -2948,7 +2957,7 @@ function autoShip(o,now){
   if(o.confirmed&&!o.shipped&&o.trackingNo){setOrdStatus(o,'shipped',now);return true;}
   return false;
 }
-const CK={init:false,d:{},a:{},page:0,sel:new Set()};
+const CK={fmt:'all',init:false,d:{},a:{},page:0,sel:new Set()};
 function ckRange(k){
   const t=new Date(),y=t.getFullYear(),m=t.getMonth(),day=t.getDate();
   const dd=n=>new Date(y,m,day+n);
@@ -3015,7 +3024,9 @@ function drawCheckTable(){
   const allSel=list.length&&list.every(o=>CK.sel.has(o.id));
   const isConf=CK.a.status==='confirmed';
   const bar='<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(CK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="ksel">'+CK.sel.size+'</b>건</span><span class="grow"></span>'+
-    '<button class="btn danger" data-act="ckdel">선택 삭제</button><button class="btn ok" data-act="ckdl">선택 다운로드(엑셀)</button><button class="btn ok" data-act="ckdlall">전체 다운로드(엑셀)</button><button class="btn pri" data-act="ckstatus">주문상태변경</button></div>';
+    '<button class="btn sm danger" data-act="ckdel">선택 삭제</button>'+
+    (CK.a.status==='shipped'?'<span class="mute small" style="margin-left:6px">양식</span><select class="selsm" data-chg="ckfmt" style="min-width:110px"><option value="all"'+(CK.fmt!=='smartstore'?' selected':'')+'>전체</option><option value="smartstore"'+(CK.fmt==='smartstore'?' selected':'')+'>스마트스토어</option></select>':'')+
+    '<button class="btn sm ok" data-act="ckdl">선택 다운로드</button><button class="btn sm ok" data-act="ckdlall">전체 다운로드</button><button class="btn sm pri" data-act="ckstatus">주문상태변경</button></div>';
   if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 매핑 주문이 없습니다. 수집일자·주문상태를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
   box.innerHTML=bar+
   fitTable('check',[{t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>'},{t:'주문상태'},{t:'수집일'},{t:'쇼핑몰'},{t:'주문번호 <span style="color:#1c7ed6">자체주문번호</span>'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메모'},{t:'상품명'},{t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>'},{t:'수량',c:'num'},{t:'거래선'},{t:'택배사 / 운송장번호'}],
@@ -3032,6 +3043,7 @@ function drawCheckTable(){
   (pages>1?'<div class="pager"><button class="btn sm" data-act="ckpage" data-d="-1"'+(CK.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="ckpage" data-d="1"'+(CK.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
 C.ckf=el=>{CK.d[el.dataset.k]=el.value;};
+C.ckfmt=el=>{CK.fmt=el.value==='smartstore'?'smartstore':'all';};
 I.ckq=el=>{CK.d.q=el.value;};
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.matches&&e.target.matches('[data-inp="ckq"]'))A.cksearch();});
 A.ckrange=el=>{const r=ckRange(el.dataset.r);CK.d.from=r[0];CK.d.to=r[1];const f=$('#ckfrom'),t=$('#ckto');if(f)f.value=r[0];if(t)t.value=r[1];};
@@ -3143,29 +3155,37 @@ A.ckstatusSave=async()=>{
 };
 A.ckdl=()=>ckDownload(ckPicked(),'다운로드할 주문을 체크하세요.');
 A.ckdlall=()=>ckDownload(ckList(),'다운로드할 주문이 없습니다.');
-async function ckDownload(list,emptyMsg){
-  if(!list.length){toast(emptyMsg,'err');return;}
+async function ckDownload(list0,emptyMsg){
+  /* 신규주문은 엑셀 다운로드 불가 */
+  const list=list0.filter(o=>ordStatus(o)!=='new'),skipped=list0.length-list.length;
+  if(!list.length){toast(list0.length?'신규주문은 엑셀을 다운로드할 수 없습니다. 주문확인으로 변경한 뒤 다운로드하세요.':emptyMsg,'err',5000);return;}
+  /* 출고완료 조회 + 양식=스마트스토어: 상품주문번호·배송방법·택배사·송장번호만 */
+  const ss=CK.a.status==='shipped'&&CK.fmt==='smartstore';
   /* 출고완료 주문이 포함되어 있으면 모든 항목을 다 담아서 내려받습니다 */
-  const full=list.some(o=>ordStatus(o)==='shipped');
+  const full=!ss&&list.some(o=>ordStatus(o)==='shipped');
   let rows;
-  if(full){
+  if(ss){
+    rows=[['상품주문번호','배송방법','택배사','송장번호']];
+    list.forEach(o=>{rows.push([o.prodOrderNo||'',o.shipMethod||'',o.carrier||'',o.trackingNo||'']);});
+  }else if(full){
     const cf=customFields();
     const num=v=>{if(v===''||v==null)return '';const n=Number(v);return isFinite(n)?n:String(v);};
-    rows=[['번호','주문상태','수집일','주문일','쇼핑몰','쇼핑몰주문번호','자체주문번호','주문자','수취인','연락처1','연락처2','우편번호','주소','배송메모','수집상품명','수집옵션명','확정상품코드','확정상품명','확정옵션명','수량','결제금액','정산예정금액','매입처','매입가','택배사','운송장번호','출고일시','C/S 내용','C/S 처리내용'].concat(cf.map(c=>c.label))];
+    rows=[['번호','주문상태','수집일','주문일','쇼핑몰','쇼핑몰주문번호','상품주문번호','배송방법','자체주문번호','주문자','수취인','연락처1','연락처2','우편번호','주소','배송메모','수집상품명','수집옵션명','확정상품코드','확정상품명','확정옵션명','수량','결제금액','정산예정금액','매입처','매입가','택배사','운송장번호','출고일시','C/S 내용','C/S 처리내용'].concat(cf.map(c=>c.label))];
     list.forEach((o,i)=>{
       const {p,s}=orderInfo(o);
-      rows.push([i+1,ST_NAME[ordStatus(o)],o.collectedDate||'',ordDateOnly(o)||o.orderDate||'',o.mall||'',o.orderNo||'',o.ownNo||'',o.orderer||'',o.receiver||'',o.tel1||'',o.tel2||'',o.zip||'',o.addr||'',o.memo||'',o.itemName||'',o.itemOption||'',p?p.code||'':'',p?p.name||'':'',p?p.option||'':'',o.qty,num(o.payAmount),num(o.settleAmount),s?s.name:'',p?num(p.price):'',o.carrier||'',o.trackingNo||'',o.shippedAt?fmtDT(o.shippedAt):'',o.csContent||'',o.csAction||''].concat(cf.map(c=>(o.ex||{})[c.key]||'')));
+      rows.push([i+1,ST_NAME[ordStatus(o)],o.collectedDate||'',ordDateOnly(o)||o.orderDate||'',o.mall||'',o.orderNo||'',o.prodOrderNo||'',o.shipMethod||'',o.ownNo||'',o.orderer||'',o.receiver||'',o.tel1||'',o.tel2||'',o.zip||'',o.addr||'',o.memo||'',o.itemName||'',o.itemOption||'',p?p.code||'':'',p?p.name||'':'',p?p.option||'':'',o.qty,num(o.payAmount),num(o.settleAmount),s?s.name:'',p?num(p.price):'',o.carrier||'',o.trackingNo||'',o.shippedAt?fmtDT(o.shippedAt):'',o.csContent||'',o.csAction||''].concat(cf.map(c=>(o.ex||{})[c.key]||'')));
     });
   }else{
     const tpl=DEFAULT_TPL;
     rows=[tpl.headers];
     list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(tpl.mapping.map(m=>cellVal(o,p,s,i+1,m)));});
   }
-  download(buildXlsx(rows,full?'주문내역':'발주서'),(full?'출고완료_주문_':'주문확인_발주_')+localDate().replace(/-/g,'')+'.xlsx');
+  download(buildXlsx(rows,ss?'발송처리':full?'주문내역':'발주서'),(ss?'스마트스토어_발송처리_':full?'출고완료_주문_':'주문확인_발주_')+localDate().replace(/-/g,'')+'.xlsx');
   const now=new Date().toISOString();
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});
   await putMany('orders',list);
-  toast(list.length+'건을 다운로드했습니다.'+(full?' (모든 항목 포함)':''));
+  const noPo=ss?list.filter(o=>!o.prodOrderNo).length:0;
+  toast(list.length+'건을 다운로드했습니다.'+(ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(skipped?' · 신규주문 '+skipped+'건 제외':'')+(noPo?' · 상품주문번호가 없는 '+noPo+'건 포함 (주문수집 때 해당 열이 선택되지 않은 주문)':''),noPo?'err':'ok',noPo?8000:3500);
 }
 
 
@@ -3732,6 +3752,14 @@ document.addEventListener('dblclick',e=>{
         o5.v5=true;await setMeta('orderFields',o5);
       }
     }catch(e){console.warn('주문일 순서 이동 실패',e);}
+    try{   /* 상품주문번호·배송방법 항목 추가 (스마트스토어 발송처리 양식용) */
+      const o6=S.meta.orderFields;
+      if(o6&&Array.isArray(o6.order)&&!o6.v6){
+        if(!o6.order.includes('shipMethod')){const i=o6.order.indexOf('memo');o6.order.splice(i>=0?i+1:o6.order.length,0,'shipMethod');}
+        if(!o6.order.includes('prodOrderNo')){const i=o6.order.indexOf('orderNo');o6.order.splice(i>=0?i+1:o6.order.length,0,'prodOrderNo');}
+        o6.v6=true;await setMeta('orderFields',o6);
+      }
+    }catch(e){console.warn('상품주문번호 항목 추가 실패',e);}
     {
       const OLD=['G마켓','옥션'];
       const chg=S.orders.filter(o=>OLD.includes(o.mall));

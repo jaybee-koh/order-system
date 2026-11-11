@@ -3193,7 +3193,7 @@ async function ckDownload(list0,emptyMsg){
   let rows;
   if(ss){
     rows=[['상품주문번호','배송방법','택배사','송장번호']];
-    list.forEach(o=>{rows.push([o.orderNo||o.prodOrderNo||'',o.shipMethod||'',o.carrier||'',o.trackingNo||'']);});
+    list.forEach(o=>{rows.push([o.orderNo||o.prodOrderNo||'',o.shipMethod||'택배,등기,소포',o.carrier||'',o.trackingNo||'']);});
   }else if(full){
     const cf=customFields();
     const num=v=>{if(v===''||v==null)return '';const n=Number(v);return isFinite(n)?n:String(v);};

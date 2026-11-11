@@ -1203,11 +1203,32 @@ function mallHtml(m,tag){
 const FC={sel:new Set()};
 function fcfg(){const c=S.meta.orderFields;return c&&Array.isArray(c.order)?c:{order:BASE_KEYS.slice(),custom:[]};}
 function fcopy(){return JSON.parse(JSON.stringify(fcfg()));}
-function curFields(){
-  const c=fcfg(),base=new Map(ORDER_FIELDS.map(f=>[f.key,f])),cu=new Map((c.custom||[]).map(x=>[x.key,{key:x.key,label:x.label,custom:1}]));
+/* 직접 추가한 항목은 쇼핑몰별로 구분: malls 태그가 있으면 그 몰에서만, 옛 항목(태그 없음)은 그 항목 값이 실제 들어간 몰에서만 보임 */
+let _fmC={n:-1,o:null,m:{}};
+function fieldMalls(f){
+  if(Array.isArray(f.malls))return f.malls;
+  if(_fmC.n!==S.orders.length||_fmC.o!==S.orders){_fmC={n:S.orders.length,o:S.orders,m:{}};}
+  if(!_fmC.m[f.key]){const ms=new Set();S.orders.forEach(o=>{if(o.ex&&o.ex[f.key]&&o.mall)ms.add(o.mall);});_fmC.m[f.key]={v:ms.size?[...ms]:null};}
+  return _fmC.m[f.key].v;   /* null = 값이 어느 몰에도 없음 → 모든 몰에서 보임 */
+}
+const fieldOfMall=(f,mall)=>{if(!mall)return true;const m=fieldMalls(f);return !m||m.includes(mall);};
+function dropCustomForMall(c,mall,keys){
+  c.custom=(c.custom||[]).filter(f=>{
+    if(keys&&!keys.includes(f.key))return true;
+    if(!fieldOfMall(f,mall))return true;
+    const m=fieldMalls(f);if(!m)return false;
+    const rest=m.filter(x=>x!==mall);if(!rest.length)return false;
+    f.malls=rest;return true;
+  });
+  const ck=new Set((c.custom||[]).map(x=>x.key));
+  c.order=c.order.filter(k=>BASE_KEYS.includes(k)||ck.has(k));
+  c.hidden=(c.hidden||[]).filter(k=>BASE_KEYS.includes(k)||ck.has(k));
+}
+function curFields(mall){
+  const c=fcfg(),base=new Map(ORDER_FIELDS.map(f=>[f.key,f])),cu=new Map((c.custom||[]).filter(x=>fieldOfMall(x,mall)).map(x=>[x.key,{key:x.key,label:x.label,custom:1}]));
   return c.order.map(k=>base.get(k)||cu.get(k)).filter(Boolean);
 }
-const customFields=()=>((fcfg().custom)||[]);
+const customFields=mall=>((fcfg().custom)||[]).filter(f=>fieldOfMall(f,mall));
 const saveCfg=c=>setMeta('orderFields',c);
 const PROD_FIELDS=[
   {key:'supplier',label:'매입처',req:1},
@@ -1308,7 +1329,7 @@ function extractOrders(rows,hdrIdx,map,mall){
       payAmount:(()=>{const raw=get(r,'payAmount')[0]||'',c=raw.replace(/[,원\s]/g,'');return c!==''&&!isNaN(Number(c))?Number(c):raw;})(),
       settleAmount:(()=>{const raw=get(r,'settleAmount')[0]||'',c=raw.replace(/[,원\s]/g,'');return c!==''&&!isNaN(Number(c))?Number(c):raw;})()
     };
-    const cf=customFields();
+    const cf=customFields(mall);
     if(cf.length){o.ex={};cf.forEach(c=>{const v=get(r,c.key)[0];if(v)o.ex[c.key]=DATE_LBL.test(c.label||'')?fixDateVal(v):v;});}
     if(!o.orderNo&&!o.receiver&&!o.itemName)continue;
     out.push(o);
@@ -2393,7 +2414,7 @@ function clRecalc(detect){
   if(detect)CL.headerRow=detectHeaderRow(clRows(),ORDER_HDR_RE)+1;
   const h=clHeaders();
   CL.map=S.meta[sigOf(h)]?JSON.parse(JSON.stringify(S.meta[sigOf(h)])):guessOrderCols(h);
-  const keep=new Set(curFields().map(f=>f.key));keep.add('_pay');keep.add('_st');keep.add('_po');
+  const keep=new Set(curFields(CL.mall).map(f=>f.key));keep.add('_pay');keep.add('_st');keep.add('_po');
   if(S.meta[sigOf(h)]&&!CL.map._pay){const g=guessOrderCols(h);if(g.payAmount&&!CL.map.payAmount)CL.map.payAmount=g.payAmount;CL.map._pay=1;}
   if(S.meta[sigOf(h)]&&!CL.map._po){const g=guessOrderCols(h);['prodOrderNo','shipMethod'].forEach(k=>{if(g[k]&&!CL.map[k])CL.map[k]=g[k];});CL.map._po=1;}
   if(S.meta[sigOf(h)]&&!CL.map._st){const g=guessOrderCols(h);if(g.settleAmount&&!CL.map.settleAmount)CL.map.settleAmount=g.settleAmount;CL.map._st=1;}
@@ -2421,7 +2442,7 @@ function pgCollect(){
     mapTableCollect(clHeaders(),CL.map,mallRow())+
     (function(){const sets=collectedSets(),n=orders.filter(o=>isCollected(o,sets)).length;return n?'<div class="notice" style="margin-top:14px"><b>이미 수집된 주문입니다.</b> 이 파일의 '+orders.length.toLocaleString()+'건 중 '+n.toLocaleString()+'건은 이미 수집된 주문번호라 저장할 때 제외됩니다.</div>':'';})()+
     '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+orders.length.toLocaleString()+'건)</span></h3>'+
-    previewTable(curFields().filter(f=>!hideSet().has(f.key)).map(f=>[f.custom?'c_'+f.key:f.key,f.label.replace(' (매핑에 사용)','')]).concat([['mall','쇼핑몰']]),orders);
+    previewTable(curFields(CL.mall).filter(f=>!hideSet().has(f.key)).map(f=>[f.custom?'c_'+f.key:f.key,f.label.replace(' (매핑에 사용)','')]).concat([['mall','쇼핑몰']]),orders);
   }
   return '<h1>주문 수집</h1><p class="sub">쇼핑몰 주문내역 파일을 올리고 저장하면 [주문 확정 관리]에 표시됩니다. 이전에 매핑한 상품은 자동으로 매핑됩니다. 도소매·전화주문처럼 파일이 없는 주문은 ② 주문 직접 등록으로 입력하세요.</p>'+
   '<div class="card"><h3>① 주문내역 파일 업로드</h3>'+body+
@@ -2514,7 +2535,7 @@ A.moSave=async()=>{
 /* ===== 열 확인 표: 드래그 순서 변경 · 항목 추가 · 선택 삭제 ===== */
 function mapTableCollect(headers,map,extra){
   const opt=sel=>'<option value="">(선택 안 함)</option>'+headers.map((h,i)=>'<option value="'+i+'"'+(sel===i?' selected':'')+'>'+esc(colName(i)+'열 · '+(h||'(빈 제목)'))+'</option>').join('');
-  const fs=curFields(),hid=hideSet();
+  const fs=curFields(CL.mall),hid=hideSet();
   return '<div class="row" style="margin-bottom:8px"><button class="btn sm" data-act="fadd">＋ 항목 추가</button><button class="btn sm danger" data-act="fdel">선택 삭제</button><button class="btn sm" data-act="freset">기본 항목으로 초기화</button><span class="mute small">☰ 를 끌어서 순서를 바꿀 수 있습니다.</span></div>'+
   '<div class="tblwrap" style="max-height:none"><table class="tbl"><thead><tr><th style="width:36px"></th><th style="width:36px"></th><th style="width:230px">필요한 항목</th><th>업로드한 파일의 어느 열인가요?</th><th style="width:48px" title="체크하면 주문 확정 관리·주문확인처리 화면과 아래 미리보기에서 숨깁니다. 엑셀 다운로드에는 그대로 포함됩니다.">숨김</th></tr></thead><tbody>'+
   fs.map(f=>{
@@ -2565,12 +2586,12 @@ A.fdel=async()=>{
   const del=keys.filter(k=>!REQ.includes(k));
   if(del.length<keys.length)toast('주문번호·상품명은 중복 확인과 상품 매핑에 필요해서 삭제할 수 없습니다.','err',5000);
   if(!del.length){FC.sel.clear();route();return;}
-  const names=curFields().filter(f=>del.includes(f.key)).map(f=>f.label.replace(' (매핑에 사용)','')).join(', ');
+  const names=curFields(CL.mall).filter(f=>del.includes(f.key)).map(f=>f.label.replace(' (매핑에 사용)','')).join(', ');
   if(!confirm('선택한 항목을 삭제할까요?\n'+names+'\n(삭제한 기본 항목은 [항목 추가]에서 다시 추가할 수 있습니다.)'))return;
   const c=fcopy();
-  c.order=c.order.filter(k=>!del.includes(k));
-  c.custom=(c.custom||[]).filter(x=>!del.includes(x.key));
-  c.hidden=(c.hidden||[]).filter(k=>!del.includes(k));
+  dropCustomForMall(c,CL.mall,del);
+  c.order=c.order.filter(k=>!del.includes(k)||c.custom.some(x=>x.key===k));
+  c.hidden=(c.hidden||[]).filter(k=>!del.includes(k)||c.custom.some(x=>x.key===k));
   del.forEach(k=>{delete CL.map[k];});
   FC.sel.clear();
   await saveCfg(c);route();
@@ -2594,17 +2615,17 @@ A.faddb=async el=>{
 A.faddc=async()=>{
   const name=(($('#fname')||{}).value||'').trim();
   if(!name){toast('항목 이름을 입력하세요.','err');return;}
-  if(curFields().some(f=>f.label.replace(' (매핑에 사용)','')===name)){toast('이미 있는 항목 이름입니다.','err');return;}
+  if(curFields(CL.mall).some(f=>f.label.replace(' (매핑에 사용)','')===name)){toast('이미 있는 항목 이름입니다.','err');return;}
   const c=fcopy();
   const key='x'+Date.now().toString(36);
-  c.custom=(c.custom||[]).concat([{key,label:name}]);
+  c.custom=(c.custom||[]).concat([CL.mall?{key,label:name,malls:[CL.mall]}:{key,label:name}]);
   c.order.push(key);
   await saveCfg(c);closeModal();route();
 };
 A.freset=async()=>{
-  if(!confirm('항목을 기본 구성과 순서로 되돌릴까요?\n(직접 추가한 항목은 삭제됩니다.)'))return;
+  if(!confirm('항목을 기본 구성과 순서로 되돌릴까요?\n(이 쇼핑몰에 직접 추가한 항목은 삭제됩니다.)'))return;
   FC.sel.clear();
-  await saveCfg({order:BASE_KEYS.slice(),custom:[]});
+  {const c=fcopy();dropCustomForMall(c,CL.mall,null);c.order=BASE_KEYS.slice().concat(c.custom.map(x=>x.key));c.hidden=[];await saveCfg(c);}
   if(CL.sheets)clRecalc(false);
   route();
 };
@@ -3289,7 +3310,7 @@ function tplShow(html,cls){
 function tplSrcOpts(mall,cur){
   const os=S.orders.filter(o=>o.mall===mall),hid=hideSet();
   const has=f=>!os.length||os.some(o=>f.custom?(o.ex&&o.ex[f.key]):(o[f.key]!=null&&o[f.key]!==''));
-  const col=curFields().filter(has).map(f=>[f.custom?'cf:'+f.key:f.key,f.label.replace(' (매핑에 사용)','')+(hid.has(f.key)?' (숨김)':'')]);
+  const col=curFields(mall).filter(has).map(f=>[f.custom?'cf:'+f.key:f.key,f.label.replace(' (매핑에 사용)','')+(hid.has(f.key)?' (숨김)':'')]);
   col.push(['ownNo','자체주문번호']);
   if(mall===ESM_MALL)col.push(['sellerId','판매아이디(계정)'],['esmNo','ESM 주문번호']);
   const g1=[['','(빈칸)'],['__fixed','고정값']],g2=[['__carrierCode','택배사 코드(11번가 등)'],['carrier','택배사'],['trackingNo','운송장번호'],['shippedAt','출고일시']];

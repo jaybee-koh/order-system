@@ -2369,11 +2369,94 @@ function pgCollect(){
     '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+orders.length.toLocaleString()+'건)</span></h3>'+
     previewTable(curFields().map(f=>[f.custom?'c_'+f.key:f.key,f.label.replace(' (매핑에 사용)','')]).concat([['mall','쇼핑몰']]),orders);
   }
-  return '<h1>주문 수집</h1><p class="sub">쇼핑몰 주문내역 파일을 올리고 저장하면 [주문 확정 관리]에 표시됩니다. 이전에 매핑한 상품은 자동으로 매핑됩니다.</p>'+
-  '<div class="card"><h3>① 주문내역 파일 업로드</h3>'+body+'</div>'+
-  '<div class="card"><h3>② 저장</h3><button class="btn pri" data-act="collectSave"'+(CL.sheets&&orders.length?'':' disabled')+'>저장</button> <span class="mute small">'+(CL.sheets?orders.length.toLocaleString()+'건을 저장합니다.':'')+'</span></div>';
+  return '<h1>주문 수집</h1><p class="sub">쇼핑몰 주문내역 파일을 올리고 저장하면 [주문 확정 관리]에 표시됩니다. 이전에 매핑한 상품은 자동으로 매핑됩니다. 도소매·전화주문처럼 파일이 없는 주문은 ② 주문 직접 등록으로 입력하세요.</p>'+
+  '<div class="card"><h3>① 주문내역 파일 업로드</h3>'+body+
+  '<div class="row" style="margin-top:16px"><button class="btn pri" data-act="collectSave"'+(CL.sheets&&orders.length?'':' disabled')+'>저장</button> <span class="mute small">'+(CL.sheets?orders.length.toLocaleString()+'건을 저장합니다.':'파일을 올리면 저장할 수 있습니다.')+'</span></div></div>'+
+  '<div class="card"><h3>② 주문 직접 등록 <span class="mute small" style="font-weight:500">도소매 · 전화주문 등 파일이 없는 주문</span></h3>'+moForm()+'</div>';
 }
 ROUTES['/orders/collect']=pgCollect;
+/* ===== ② 주문 직접 등록 (도소매 · 전화주문 등) — 상품을 바로 연결해 [주문확인처리]에 신규주문으로 올림 ===== */
+const blankMO=()=>({mall:'',date:localDate(),orderNo:'',orderer:'',receiver:'',tel1:'',tel2:'',zip:'',addr:'',memo:'',qty:'1',pay:'',settle:'',pid:null,q:'',sup:''});
+let MO=blankMO();
+const MO_MALLS=['도소매','전화주문'];
+const moMallList=()=>MO_MALLS.concat(mallList().filter(m=>!MO_MALLS.includes(m)));
+function moResults(){
+  if(!S.products.length)return '<div class="card mute">등록된 상품이 없습니다. 먼저 <a href="#/products/new">신규상품등록</a>을 해주세요.</div>';
+  if(!String(MO.q).trim()&&!MO.sup)return '<div class="mute small">상품명 · 코드 · 옵션을 검색하거나 매입처를 선택하세요.</div>';
+  const r=searchProducts(MO.q,MO.sup);
+  if(!r.list.length)return '<div class="card mute">검색 결과가 없습니다. 검색어를 줄여서 다시 검색해 보세요.</div>';
+  return '<div class="mute small" style="margin-bottom:6px">'+r.total.toLocaleString()+'개 중 '+r.list.length+'개 표시'+(r.fuzzy?' · 일부 단어만 일치하는 상품 포함':'')+'</div><div class="tblwrap" style="max-height:260px"><table class="tbl"><thead><tr><th>매입처</th><th>상품코드</th><th>상품명</th><th>옵션</th><th class="num">매입가</th><th></th></tr></thead><tbody>'+
+  r.list.map(p=>{const s=M.sup.get(p.supplierId);return '<tr><td class="nw">'+esc(s?s.name:'')+'</td><td class="nw">'+esc(p.code)+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.option)+'</td><td class="num">'+won(p.price)+'</td><td><button class="btn sm pri" data-act="moPick" data-id="'+p.id+'">선택</button></td></tr>';}).join('')+'</tbody></table></div>';
+}
+function moPickHtml(){
+  const p=MO.pid?M.prod.get(MO.pid):null;
+  if(p){const s=M.sup.get(p.supplierId);return '<div class="row"><div class="grow"><b>'+esc(p.name)+'</b>'+(p.option?' <span class="mute">/ '+esc(p.option)+'</span>':'')+'<div class="mute small">'+esc(s?s.name:'')+(p.code?' · '+esc(p.code):'')+' · 매입가 '+won(p.price)+'원</div></div><button class="btn sm" data-act="moUnpick">상품 변경</button></div>';}
+  return '<div class="row" style="margin-bottom:8px"><input type="text" class="grow" placeholder="상품명 · 코드 · 옵션으로 검색" value="'+esc(MO.q)+'" data-inp="moq"><select data-chg="mosup"><option value="">전체 매입처</option>'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(String(MO.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div><div id="mo-res">'+moResults()+'</div>';
+}
+function moRedrawPick(){const b=$('#mo-pick');if(b){b.innerHTML=moPickHtml();const i=b.querySelector('[data-inp=moq]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}}}
+function moForm(){
+  const fld=(label,req,html)=>'<div><label class="f'+(req?' rq':'')+'">'+label+(req?' *':'')+'</label>'+html+'</div>';
+  const inp=(f,ph,extra,type)=>'<input type="'+(type||'text')+'" style="width:100%" data-inp="mo" data-f="'+f+'" value="'+esc(MO[f])+'" placeholder="'+(ph||'')+'"'+(extra||'')+'>';
+  const mallSel='<select style="width:100%" data-chg="mo" data-f="mall"><option value="">쇼핑몰(판매처) 선택</option>'+moMallList().map(m=>'<option value="'+esc(m)+'"'+(MO.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__add">＋ 직접 입력…</option></select>';
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 16px">'+
+    fld('쇼핑몰(판매처)',1,mallSel)+fld('주문일',0,inp('date','',null,'date'))+fld('주문번호',0,inp('orderNo','비우면 자동 부여'))+
+    fld('수취인',1,inp('receiver',''))+fld('주문자',0,inp('orderer','비우면 수취인과 같음'))+
+    fld('연락처1',1,inp('tel1','010-0000-0000',' inputmode="tel"'))+fld('연락처2',0,inp('tel2','',' inputmode="tel"'))+
+    fld('우편번호',0,inp('zip','',' inputmode="numeric"'))+fld('배송메모',0,inp('memo',''))+
+    '</div>'+
+    fld('주소',1,inp('addr',''))+
+    '<label class="f rq">상품 *</label><div id="mo-pick" class="card" style="background:#f7f8fb;box-shadow:none;margin:0">'+moPickHtml()+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0 16px">'+
+    fld('수량',1,inp('qty','1',' inputmode="numeric"'))+fld('결제금액',0,inp('pay','숫자만 입력',' inputmode="numeric"'))+fld('정산예정금액',0,inp('settle','숫자만 입력',' inputmode="numeric"'))+
+    '</div>'+
+    '<div class="row" style="margin-top:16px"><button class="btn pri" data-act="moSave">주문 등록</button><button class="btn" data-act="moReset">입력 지우기</button><span class="mute small">등록하면 [주문확인처리]에 신규주문으로 표시됩니다. 상품은 바로 연결됩니다.</span></div>';
+}
+I.mo=el=>{MO[el.dataset.f]=el.value;};
+C.mo=el=>{
+  const f=el.dataset.f;
+  if(f==='mall'&&el.value==='__add'){
+    const n=(prompt('쇼핑몰(판매처) 이름을 입력하세요.')||'').trim();
+    if(n){const cur=Array.isArray(S.meta.malls)?S.meta.malls.slice():[];if(!DEFAULT_MALLS.includes(n)&&!MO_MALLS.includes(n)&&!cur.includes(n)){cur.push(n);setMeta('malls',cur);}MO.mall=n;}
+    route();return;
+  }
+  MO[f]=el.value;
+};
+I.moq=el=>{MO.q=el.value;const r=$('#mo-res');if(r)r.innerHTML=moResults();};
+C.mosup=el=>{MO.sup=el.value;const r=$('#mo-res');if(r)r.innerHTML=moResults();};
+A.moPick=el=>{MO.pid=+el.dataset.id;moRedrawPick();};
+A.moUnpick=()=>{MO.pid=null;moRedrawPick();};
+A.moReset=()=>{MO=blankMO();route();};
+A.moSave=async()=>{
+  const err=m=>{toast(m,'err',5000);};
+  if(!MO.mall){err('쇼핑몰(판매처)을 선택하세요.');return;}
+  const receiver=MO.receiver.trim(),addr=MO.addr.trim(),tel1=fixPhone(MO.tel1);
+  if(!receiver){err('수취인을 입력하세요.');return;}
+  if(!tel1){err('연락처1을 입력하세요.');return;}
+  if(!addr){err('주소를 입력하세요.');return;}
+  const p=MO.pid?M.prod.get(MO.pid):null;
+  if(!p||!M.sup.has(p.supplierId)){err('상품을 선택하세요.');return;}
+  const qty=Number(String(MO.qty).replace(/,/g,'').trim());
+  if(!Number.isInteger(qty)||qty<1){err('수량은 1 이상의 숫자로 입력하세요.');return;}
+  const money=(v,label)=>{const raw=String(v).replace(/[,원\s]/g,'');if(raw==='')return '';if(isNaN(Number(raw))||Number(raw)<0){err(label+'은(는) 숫자로 입력하세요.');return null;}return Number(raw);};
+  const pay=money(MO.pay,'결제금액');if(pay===null)return;
+  const settle=money(MO.settle,'정산예정금액');if(settle===null)return;
+  const day=localDate(),sets=collectedSets();
+  let orderNo=MO.orderNo.trim();
+  if(orderNo){if(sets.no.has(norm(orderNo))){err('이미 등록된 주문번호입니다. 다른 번호를 입력하거나 비워 두세요.');return;}}
+  else{const pre='직접-'+day.replace(/-/g,'')+'-';let n=1;while(sets.no.has(norm(pre+String(n).padStart(3,'0'))))n++;orderNo=pre+String(n).padStart(3,'0');}
+  const now=new Date().toISOString();
+  const o={orderNo,orderDate:normDay(MO.date)||day,orderer:MO.orderer.trim()||receiver,receiver,tel1,tel2:fixPhone(MO.tel2),zip:fixZip(MO.zip),addr,memo:MO.memo.trim(),
+    itemName:p.name||'',itemOption:p.option||'',qty,payAmount:pay,settleAmount:settle,
+    collectedAt:now,collectedDate:day,mallFile:'직접등록',mall:MO.mall,manual:true,productId:p.id,matchedAuto:false,exportedAt:null,confirmed:false,confirmedAt:null,shipped:false,shippedAt:null};
+  try{
+    const freshOwn=ownNoAssign([o]);
+    await putMany('orders',[o]);S.orders.push(o);rebuild();
+    if(freshOwn.length)await putMany('meta',freshOwn);
+  }catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
+  MO=Object.assign(blankMO(),{mall:MO.mall,date:MO.date});
+  route();
+  toast('주문을 등록했습니다. ('+orderNo+') [주문확인처리]에서 신규주문으로 확인하세요.','',5000);
+};
 /* ===== 열 확인 표: 드래그 순서 변경 · 항목 추가 · 선택 삭제 ===== */
 function mapTableCollect(headers,map,extra){
   const opt=sel=>'<option value="">(선택 안 함)</option>'+headers.map((h,i)=>'<option value="'+i+'"'+(sel===i?' selected':'')+'>'+esc(colName(i)+'열 · '+(h||'(빈 제목)'))+'</option>').join('');

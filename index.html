@@ -3323,10 +3323,10 @@ function tplSrcOpts(mall,cur){
   return og('기본',g1)+og('송장 입력값(출고 시 입력)',g2)+og('주문수집 항목 · '+mall,col);
 }
 function drawTpl(){
-  const rows=TP.cols.map((c,i)=>'<tr><td><input type="text" style="width:100%" data-inp="tplh" data-i="'+i+'" value="'+esc(c.h)+'" placeholder="엑셀 헤더명"></td><td><select data-chg="tpls" data-i="'+i+'">'+tplSrcOpts(TP.mall,c.src)+'</select></td><td>'+(c.src==='__fixed'?'<input type="text" style="width:100%" data-inp="tplt" data-i="'+i+'" value="'+esc(c.text)+'" placeholder="고정값">':'')+'</td><td style="white-space:nowrap"><button class="btn sm" data-act="tplup" data-i="'+i+'">↑</button> <button class="btn sm" data-act="tpldn" data-i="'+i+'">↓</button> <button class="btn sm danger" data-act="tpldel" data-i="'+i+'">삭제</button></td></tr>').join('');
+  const rows=TP.cols.map((c,i)=>'<tr><td><input type="checkbox" data-chg="tplchk" data-i="'+i+'"'+(c.sel?' checked':'')+'></td><td><input type="text" style="width:100%" data-inp="tplh" data-i="'+i+'" value="'+esc(c.h)+'" placeholder="엑셀 헤더명"></td><td><select data-chg="tpls" data-i="'+i+'">'+tplSrcOpts(TP.mall,c.src)+'</select></td><td>'+(c.src==='__fixed'?'<input type="text" style="width:100%" data-inp="tplt" data-i="'+i+'" value="'+esc(c.text)+'" placeholder="고정값">':'')+'</td><td style="white-space:nowrap"><button class="btn sm danger" data-act="tpldel" data-i="'+i+'">삭제</button></td></tr>').join('');
   tplShow('<h2>쇼핑몰별 송장 엑셀 양식</h2><div class="small mute" style="margin-bottom:8px">쇼핑몰마다 송장 대량업로드 양식의 열 순서·헤더명을 한 번 등록해 두면, 출고완료 조회에서 그 쇼핑몰을 선택하고 다운로드할 때 그 양식 그대로 내려받습니다.</div>'+
-    '<div class="row" style="margin:8px 0"><b>쇼핑몰</b><select data-chg="tplmall">'+mallList().map(m=>'<option'+(m===TP.mall?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select>'+(dlTpls()[TP.mall]?'<span class="tag ok">등록됨</span>':'<span class="tag">미등록</span>')+'<span class="grow"></span><label class="btn sm">샘플 엑셀로 헤더 채우기<input type="file" accept=".xlsx,.xls,.csv" data-chg="tplfile" style="display:none"></label></div>'+
-    '<div class="tblwrap"><table class="tbl"><thead><tr><th>엑셀 헤더명</th><th>들어갈 값</th><th>고정값</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="row" style="margin:8px 0"><b>쇼핑몰</b><select data-chg="tplmall">'+mallList().map(m=>'<option'+(m===TP.mall?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select>'+(dlTpls()[TP.mall]?'<span class="tag ok">등록됨</span>':'<span class="tag">미등록</span>')+'<span class="grow"></span><button class="btn sm" data-act="tplmoveup" title="체크한 헤더를 위로">↑</button><button class="btn sm" data-act="tplmovedn" title="체크한 헤더를 아래로">↓</button><label class="btn sm">샘플 엑셀로 헤더 채우기<input type="file" accept=".xlsx,.xls,.csv" data-chg="tplfile" style="display:none"></label></div>'+
+    '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:32px"></th><th>엑셀 헤더명</th><th>들어갈 값</th><th>고정값</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div style="margin-top:8px"><button class="btn sm" data-act="tpladd">＋ 열 추가</button></div>'+
     '<div class="foot"><button class="btn" data-act="close">닫기</button>'+(dlTpls()[TP.mall]?'<button class="btn danger" data-act="tpldelall">이 양식 삭제</button>':'')+'<button class="btn pri" data-act="tplsave">저장</button></div>','wide tplmd');
 }
@@ -3337,8 +3337,17 @@ I.tplh=el=>{TP.cols[+el.dataset.i].h=el.value;};
 I.tplt=el=>{TP.cols[+el.dataset.i].text=el.value;};
 A.tpladd=()=>{TP.cols.push({h:'',src:'',text:''});drawTpl();};
 A.tpldel=el=>{TP.cols.splice(+el.dataset.i,1);drawTpl();};
-A.tplup=el=>{const i=+el.dataset.i;if(i>0){[TP.cols[i-1],TP.cols[i]]=[TP.cols[i],TP.cols[i-1]];drawTpl();}};
-A.tpldn=el=>{const i=+el.dataset.i;if(i<TP.cols.length-1){[TP.cols[i+1],TP.cols[i]]=[TP.cols[i],TP.cols[i+1]];drawTpl();}};
+C.tplchk=el=>{TP.cols[+el.dataset.i].sel=el.checked;};
+A.tplmoveup=()=>{
+  const a=TP.cols;if(!a.some(c=>c.sel)){toast('옮길 헤더를 체크하세요.','err');return;}
+  for(let i=1;i<a.length;i++)if(a[i].sel&&!a[i-1].sel){[a[i-1],a[i]]=[a[i],a[i-1]];}
+  drawTpl();
+};
+A.tplmovedn=()=>{
+  const a=TP.cols;if(!a.some(c=>c.sel)){toast('옮길 헤더를 체크하세요.','err');return;}
+  for(let i=a.length-2;i>=0;i--)if(a[i].sel&&!a[i+1].sel){[a[i+1],a[i]]=[a[i],a[i+1]];}
+  drawTpl();
+};
 const TPL_GUESS=[[/상품주문번호/,'prodOrderNo'],[/계정|판매아이디|셀러/,'sellerId'],[/자체주문/,'ownNo'],[/주문번호/,'orderNo'],[/택배사|배송업체|운송사/,'carrier'],[/송장|운송장/,'trackingNo'],[/배송방법/,'shipMethod'],[/수취인|받는/,'receiver']];
 C.tplfile=async el=>{
   const f=el.files[0];if(!f)return;

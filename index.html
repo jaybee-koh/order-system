@@ -3435,27 +3435,52 @@ A.ocancel=async el=>{
   const y=window.scrollY;drawCheckTable();window.scrollTo(0,y);
 };
 /* ---- 클레임 팝업 ---- */
-let CLMO=null;
+let CLMO=null,CLM_TOUCH=false,CLM_AUTO=false;
+/* 같은 C/S구분·요청사항·귀책·상품명으로 이전에 입력한 배송비정산 (가장 최근 값) */
+function clmLastShip(o,type,req,fault){
+  const nm=x=>{const {p}=orderInfo(x);return norm(p?p.name:x.itemName);};
+  const key=nm(o);if(!key||!type||!req||!fault)return null;
+  let best=null;
+  S.orders.forEach(x=>{
+    const c=x.claim;
+    if(!c||x.id===o.id||c.type!==type||c.req!==req||c.fault!==fault||c.ship===''||c.ship==null)return;
+    if(nm(x)!==key)return;
+    const t=c.updatedAt||c.at||'';
+    if(!best||t>best.t)best={t,ship:c.ship};
+  });
+  return best;
+}
 const clmBuyHtml=(req,o)=>{if(req!=='반품')return '<span class="mute">반품일 때만 표시됩니다</span>';const b=claimBuy(o);return b?'<b style="color:#e03131">-'+won(b)+'원</b>':'<b>0원</b> <span class="mute small">(매입가 없음)</span>';};
 A.claim=el=>{
   const o=M.ord.get(+el.dataset.id);if(!o||ordStatus(o)!=='shipped')return;
   CLMO=o.id;
   const {p}=orderInfo(o),c=o.claim||{};
+  CLM_AUTO=false;CLM_TOUCH=c.ship!==''&&c.ship!=null;   /* 이미 입력된 값이 있으면 자동 입력으로 덮어쓰지 않음 */
   const sel=(id,list,cur,chg)=>'<select id="'+id+'" style="width:100%"'+(chg?' data-chg="'+chg+'"':'')+'><option value="">선택</option>'+list.map(x=>'<option value="'+x+'"'+(cur===x?' selected':'')+'>'+x+'</option>').join('')+'</select>';
   openModal('<h2>클레임 접수</h2>'+
     '<div class="card" style="background:#f7f8fb;box-shadow:none;margin-bottom:0;padding:14px 16px"><div class="small mute">'+esc(o.mall||'')+(o.mall?' · ':'')+esc(o.orderNo)+'</div><div style="margin-top:2px"><b>'+esc(o.receiver)+'</b>'+(p?' <span class="mute">/ '+esc(p.name)+(p.option?' '+esc(p.option):'')+' · 수량 '+o.qty+'</span>':'')+'</div></div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0 14px">'+
-    '<div><label class="f rq">C/S구분 *</label>'+sel('clm-type',CLM_TYPES,c.type)+'</div>'+
+    '<div><label class="f rq">C/S구분 *</label>'+sel('clm-type',CLM_TYPES,c.type,'clmreq')+'</div>'+
     '<div><label class="f rq">요청사항 *</label>'+sel('clm-req',CLM_REQS,c.req,'clmreq')+'</div>'+
-    '<div><label class="f rq">귀책 *</label>'+sel('clm-fault',CLM_FAULTS,c.fault)+'</div></div>'+
+    '<div><label class="f rq">귀책 *</label>'+sel('clm-fault',CLM_FAULTS,c.fault,'clmreq')+'</div></div>'+
     '<h3 style="margin:22px 0 0">CS정산</h3>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px">'+
     '<div><label class="f">상품대금 <span class="mute small" style="font-weight:500">(주문일 기준 매입금액)</span></label><div id="clm-buy" style="min-height:38px;display:flex;align-items:center">'+clmBuyHtml(c.req||'',o)+'</div></div>'+
-    '<div><label class="f">배송비정산</label><input type="text" id="clm-ship" inputmode="numeric" style="width:100%" placeholder="직접 입력 (숫자)" value="'+esc(c.ship===''||c.ship==null?'':c.ship)+'"></div></div>'+
+    '<div><label class="f">배송비정산</label><input type="text" id="clm-ship" data-inp="clmship" inputmode="numeric" style="width:100%" placeholder="직접 입력 (숫자)" value="'+esc(c.ship===''||c.ship==null?'':c.ship)+'"><div id="clm-hint" class="small" style="margin-top:4px;color:#0b7a3b;min-height:1.2em"></div></div></div>'+
     (c.at?'<div class="mute small" style="margin-top:10px">접수일시: '+fmtDT(c.at)+'</div>':'')+
     '<div class="foot">'+(o.claim?'<button class="btn danger" data-act="claimDel" style="margin-right:auto">클레임 삭제</button>':'')+'<button class="btn" data-act="close">닫기</button><button class="btn pri" data-act="claimSave">저장</button></div>');
 };
-C.clmreq=el=>{const o=M.ord.get(CLMO),b=$('#clm-buy');if(o&&b)b.innerHTML=clmBuyHtml(el.value,o);};
+C.clmreq=()=>{
+  const o=M.ord.get(CLMO);if(!o)return;
+  const type=$('#clm-type').value,req=$('#clm-req').value,fault=$('#clm-fault').value;
+  const b=$('#clm-buy');if(b)b.innerHTML=clmBuyHtml(req,o);
+  const h=$('#clm-hint'),inp=$('#clm-ship');if(h)h.textContent='';
+  if(CLM_TOUCH||!inp)return;   /* 직접 입력했거나 기존 값이 있으면 건드리지 않음 */
+  const last=clmLastShip(o,type,req,fault);
+  if(last){inp.value=String(last.ship);CLM_AUTO=true;if(h)h.textContent='같은 상품·구분·요청·귀책의 이전 입력값이 자동 적용되었습니다. (수정 가능)';}
+  else if(CLM_AUTO){inp.value='';CLM_AUTO=false;}   /* 자동 입력했던 값은 조건이 바뀌면 비움 */
+};
+I.clmship=()=>{CLM_TOUCH=true;const h=$('#clm-hint');if(h)h.textContent='';};
 A.claimSave=async()=>{
   const o=M.ord.get(CLMO);if(!o)return;
   const type=$('#clm-type').value,req=$('#clm-req').value,fault=$('#clm-fault').value;

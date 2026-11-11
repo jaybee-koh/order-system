@@ -1288,6 +1288,7 @@ function extractOrders(rows,hdrIdx,map,mall){
   for(let i=hdrIdx+1;i<rows.length;i++){
     const r=rows[i];
     const o={
+
       orderNo:get(r,'orderNo')[0]||'',
       prodOrderNo:get(r,'prodOrderNo')[0]||'',
       sellerId:mall===ESM_MALL?String(r[0]==null?'':r[0]).trim():'',
@@ -2406,7 +2407,7 @@ function applyMallCols(){
   if(isSSMall(CL.mall)&&CL.sheets&&clHeaders().length>SS_SHIP_COL&&curFields().some(f=>f.key==='shipMethod'))CL.map.shipMethod=[SS_SHIP_COL];
 }
 function mallRow(){
-  return '<tr><td></td><td></td><td><b>쇼핑몰</b></td><td><select data-chg="cmall"><option value="">(선택 안 함)</option>'+mallList().map(m=>'<option value="'+esc(m)+'"'+(CL.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__add">＋ 직접 입력…</option></select> <span class="mute small">(이 파일의 주문이 어느 쇼핑몰 것인지 선택)</span></td></tr>';
+  return '<tr><td></td><td></td><td></td><td><b>쇼핑몰</b></td><td><select data-chg="cmall"><option value="">(선택 안 함)</option>'+mallList().map(m=>'<option value="'+esc(m)+'"'+(CL.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__add">＋ 직접 입력…</option></select> <span class="mute small">(이 파일의 주문이 어느 쇼핑몰 것인지 선택)</span></td></tr>';
 }
 function pgCollect(){
   let body='<div class="filebox"><input type="file" accept=".xlsx,.csv,.xls,.txt" data-chg="cfile"><div class="mute small" style="margin-top:6px">쇼핑몰에서 다운받은 주문내역 파일(엑셀/CSV)을 선택하세요.</div></div>';
@@ -2416,7 +2417,7 @@ function pgCollect(){
     body+='<div class="row" style="margin-top:12px"><span class="tag ok">불러옴</span><b>'+esc(CL.fileName)+'</b>'+
     (CL.sheets.length>1?'<span class="mute small">시트:</span><select data-chg="csheet">'+CL.sheets.map((s,i)=>'<option value="'+i+'"'+(i===CL.sheetIdx?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select>':'')+
     '<span class="mute small">제목 행:</span><input type="number" min="1" style="width:70px" value="'+CL.headerRow+'" data-chg="chdr"><span class="mute small">번째 줄</span></div>'+
-    '<h3 style="margin-top:16px">열 확인</h3><div class="mute small" style="margin-bottom:6px">자동으로 찾아 두었습니다. 틀린 항목만 바꿔주세요. 한 번 확인한 설정은 같은 양식의 파일에 다음에도 적용됩니다.</div>'+
+    '<h3 style="margin-top:16px">열 확인</h3><div class="mute small" style="margin-bottom:6px">자동으로 찾아 두었습니다. 틀린 항목만 바꿔주세요. 한 번 확인한 설정은 같은 양식의 파일에 다음에도 적용됩니다. [숨김]을 체크한 항목은 주문 확정 관리·주문확인처리 화면에 보이지 않지만 엑셀 다운로드에는 그대로 들어갑니다.</div>'+
     mapTableCollect(clHeaders(),CL.map,mallRow())+
     (function(){const sets=collectedSets(),n=orders.filter(o=>isCollected(o,sets)).length;return n?'<div class="notice" style="margin-top:14px"><b>이미 수집된 주문입니다.</b> 이 파일의 '+orders.length.toLocaleString()+'건 중 '+n.toLocaleString()+'건은 이미 수집된 주문번호라 저장할 때 제외됩니다.</div>':'';})()+
     '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+orders.length.toLocaleString()+'건)</span></h3>'+
@@ -2513,14 +2514,14 @@ A.moSave=async()=>{
 /* ===== 열 확인 표: 드래그 순서 변경 · 항목 추가 · 선택 삭제 ===== */
 function mapTableCollect(headers,map,extra){
   const opt=sel=>'<option value="">(선택 안 함)</option>'+headers.map((h,i)=>'<option value="'+i+'"'+(sel===i?' selected':'')+'>'+esc(colName(i)+'열 · '+(h||'(빈 제목)'))+'</option>').join('');
-  const fs=curFields();
+  const fs=curFields(),hid=hideSet();
   return '<div class="row" style="margin-bottom:8px"><button class="btn sm" data-act="fadd">＋ 항목 추가</button><button class="btn sm danger" data-act="fdel">선택 삭제</button><button class="btn sm" data-act="freset">기본 항목으로 초기화</button><span class="mute small">☰ 를 끌어서 순서를 바꿀 수 있습니다.</span></div>'+
-  '<div class="tblwrap" style="max-height:none"><table class="tbl"><thead><tr><th style="width:36px"></th><th style="width:36px"></th><th style="width:230px">필요한 항목</th><th>업로드한 파일의 어느 열인가요?</th></tr></thead><tbody>'+
+  '<div class="tblwrap" style="max-height:none"><table class="tbl"><thead><tr><th style="width:48px" title="체크하면 주문 확정 관리·주문확인처리 화면에서 숨깁니다. 엑셀 다운로드에는 그대로 포함됩니다.">숨김</th><th style="width:36px"></th><th style="width:36px"></th><th style="width:230px">필요한 항목</th><th>업로드한 파일의 어느 열인가요?</th></tr></thead><tbody>'+
   fs.map(f=>{
     const cur=map[f.key]||[];
     let sel='<select data-chg="map" data-kind="collect" data-field="'+f.key+'" data-slot="0">'+opt(cur[0])+'</select>';
     if(f.multi)sel+=' <select data-chg="map" data-kind="collect" data-field="'+f.key+'" data-slot="1">'+opt(cur[1])+'</select> <span class="mute small">(주소가 2칸이면 둘 다 선택)</span>';
-    return '<tr data-fkey="'+f.key+'"><td class="nw"><span class="fdrag" draggable="true" data-fdrag="'+f.key+'" title="끌어서 순서 변경">☰</span></td><td><input type="checkbox" data-chg="fchk" data-key="'+f.key+'"'+(FC.sel.has(f.key)?' checked':'')+'></td><td><b>'+esc(f.label)+'</b>'+(f.req?'<span class="req">*</span>':'')+(f.custom?' <span class="tag gray">추가</span>':'')+'</td><td>'+sel+'</td></tr>';
+    return '<tr data-fkey="'+f.key+'"><td class="nw"><input type="checkbox" data-chg="fhide" data-key="'+f.key+'"'+(hid.has(f.key)?' checked':'')+' title="숨김"></td><td class="nw"><span class="fdrag" draggable="true" data-fdrag="'+f.key+'" title="끌어서 순서 변경">☰</span></td><td><input type="checkbox" data-chg="fchk" data-key="'+f.key+'"'+(FC.sel.has(f.key)?' checked':'')+'></td><td><b>'+esc(f.label)+'</b>'+(f.req?'<span class="req">*</span>':'')+(f.custom?' <span class="tag gray">추가</span>':'')+'</td><td>'+sel+'</td></tr>';
   }).join('')+(extra||'')+'</tbody></table></div>';
 }
 let FD=null;
@@ -2547,6 +2548,14 @@ document.addEventListener('drop',async e=>{
   await saveCfg(c);route();
 });
 document.addEventListener('dragend',()=>{FD=null;fClear();});
+/* 숨김 항목: 주문 확정 관리·주문확인처리 표에서만 감춤 (데이터는 그대로 저장, 엑셀 다운로드에는 포함) */
+const hideSet=()=>new Set((fcfg().hidden)||[]);
+C.fhide=async el=>{
+  const c=fcopy(),h=new Set(c.hidden||[]);
+  el.checked?h.add(el.dataset.key):h.delete(el.dataset.key);
+  c.hidden=[...h];
+  await saveCfg(c);
+};
 C.fchk=el=>{el.checked?FC.sel.add(el.dataset.key):FC.sel.delete(el.dataset.key);};
 A.fdel=async()=>{
   const keys=[...FC.sel];
@@ -2560,6 +2569,7 @@ A.fdel=async()=>{
   const c=fcopy();
   c.order=c.order.filter(k=>!del.includes(k));
   c.custom=(c.custom||[]).filter(x=>!del.includes(x.key));
+  c.hidden=(c.hidden||[]).filter(k=>!del.includes(k));
   del.forEach(k=>{delete CL.map[k];});
   FC.sel.clear();
   await saveCfg(c);route();
@@ -2768,6 +2778,26 @@ function drawConfirmTable(keep){
   drawConfirmChips();
   if(keep&&box){const w=box.querySelector('.tblwrap');if(w){w.scrollTop=t;w.scrollLeft=l;}window.scrollTo(0,y);}
 }
+function confirmTableHtml(cur,allSel){
+  const V=hideSet(),v=k=>!V.has(k);
+  const cols=[
+    {i:0,t:'<input type="checkbox" data-chg="csall"'+(allSel?' checked':'')+'>',cell:o=>'<td><input type="checkbox" data-chg="crow" data-id="'+o.id+'"'+(CF.sel.has(o.id)?' checked':'')+'></td>'},
+    {i:1,t:'쇼핑몰 / 주문번호 <span style="color:#1c7ed6">자체주문번호</span>',cell:o=>'<td>'+(o.mall?mallHtml(o.mall,true):'')+(v('orderNo')?'<div class="sm2 brk">'+esc(o.orderNo)+'</div>':'')+(o.ownNo?'<div class="sm2 brk" style="color:#1c7ed6" title="자체주문번호">'+esc(o.ownNo)+'</div>':'')+'</td>'},
+    {i:2,show:v('receiver')||v('orderer'),t:'수취인 / 주문자',cell:o=>'<td>'+(v('receiver')?'<b>'+esc(o.receiver)+'</b>':'')+(v('orderer')?'<div class="sm2">'+esc(o.orderer)+'</div>':'')+'</td>'},
+    {i:3,show:v('tel1')||v('tel2'),t:'연락처',cell:o=>'<td>'+(v('tel1')?esc(o.tel1):'')+(v('tel2')&&o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'},
+    {i:4,show:v('zip')||v('addr'),t:'우편번호 / 주소',cell:o=>'<td>'+(v('zip')&&o.zip?'<span class="mute small">['+esc(o.zip)+']</span> ':'')+(v('addr')?esc(o.addr):'')+'</td>'},
+    {i:5,show:v('memo'),t:'배송메세지',cell:o=>'<td>'+esc(o.memo)+'</td>'},
+    {i:6,show:v('itemName')||v('itemOption'),t:'주문 상품',cell:o=>'<td>'+(v('itemName')?esc(o.itemName):'')+(v('itemOption')&&o.itemOption?'<div class="sm2">'+esc(o.itemOption)+'</div>':'')+'</td>'},
+    {i:7,show:v('qty'),t:'수량',c:'num',cell:o=>'<td class="num">'+o.qty+'</td>'},
+    {i:8,t:'매핑',cell:(o,x)=>'<td>'+x.mc+'</td>'},
+    {i:9,t:'매입처',cell:(o,x)=>'<td>'+(x.s?'<b>'+esc(x.s.name)+'</b>'+(x.st==='done'?' <span class="tag gray">발주완료</span>':''):'')+'</td>'}
+  ];
+  return fitCols('confirm',cols,cur,o=>{
+    const {p,s}=orderInfo(o),st=stOf(o);
+    const mc=p?'<div class="pn">'+esc(p.name)+(p.option?' <span class="mute" style="font-weight:400">/ '+esc(p.option)+'</span>':'')+'</div><div class="mini"><button class="btn sm" data-act="match" data-id="'+o.id+'">변경</button><button class="btn sm" data-act="unmatch" data-id="'+o.id+'">해제</button>'+(o.matchedAuto?'<span class="tag">자동</span>':'')+'</div>':'<button class="btn sm pri" data-act="match" data-id="'+o.id+'">매핑하기</button>';
+    return {p,s,st,mc,cls:(st==='matched'?'m':st==='done'?'d':'u')};
+  });
+}
 function drawConfirmTableInner(){
   const box=$('#ctbl');if(!box)return;
   const list=confirmList();
@@ -2777,21 +2807,7 @@ function drawConfirmTableInner(){
   if(!S.orders.length){box.innerHTML='<div class="card mute">수집된 주문이 없습니다. <a href="#/orders/collect">주문 수집</a>에서 주문내역 파일을 올려주세요.</div>';return;}
   if(!list.length){box.innerHTML='<div class="card mute">조건에 맞는 주문이 없습니다.</div>';return;}
   box.innerHTML='<div class="row" style="margin-bottom:6px"><span class="mute small">자료수 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</span><span class="grow"></span><button class="btn pri" data-act="bulkmatch">일괄매핑</button><button class="btn" data-act="bulkunmatch">매핑해제</button></div>'+
-  fitTable('confirm',[{t:'<input type="checkbox" data-chg="csall"'+(allSel?' checked':'')+'>'},{t:'쇼핑몰 / 주문번호 <span style="color:#1c7ed6">자체주문번호</span>'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메세지'},{t:'주문 상품'},{t:'수량',c:'num'},{t:'매핑'},{t:'매입처'}],
-  cur.map(o=>{
-    const {p,s}=orderInfo(o),st=stOf(o);
-    const mc=p?'<div class="pn">'+esc(p.name)+(p.option?' <span class="mute" style="font-weight:400">/ '+esc(p.option)+'</span>':'')+'</div><div class="mini"><button class="btn sm" data-act="match" data-id="'+o.id+'">변경</button><button class="btn sm" data-act="unmatch" data-id="'+o.id+'">해제</button>'+(o.matchedAuto?'<span class="tag">자동</span>':'')+'</div>':'<button class="btn sm pri" data-act="match" data-id="'+o.id+'">매핑하기</button>';
-    return '<tr class="'+(st==='matched'?'m':st==='done'?'d':'u')+'"><td><input type="checkbox" data-chg="crow" data-id="'+o.id+'"'+(CF.sel.has(o.id)?' checked':'')+'></td>'+
-      '<td>'+(o.mall?mallHtml(o.mall,true):'')+'<div class="sm2 brk">'+esc(o.orderNo)+'</div>'+(o.ownNo?'<div class="sm2 brk" style="color:#1c7ed6" title="자체주문번호">'+esc(o.ownNo)+'</div>':'')+'</td>'+
-      '<td><b>'+esc(o.receiver)+'</b><div class="sm2">'+esc(o.orderer)+'</div></td>'+
-      '<td>'+esc(o.tel1)+(o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'+
-      '<td>'+(o.zip?'<span class="mute small">['+esc(o.zip)+']</span> ':'')+esc(o.addr)+'</td>'+
-      '<td>'+esc(o.memo)+'</td>'+
-      '<td>'+esc(o.itemName)+(o.itemOption?'<div class="sm2">'+esc(o.itemOption)+'</div>':'')+'</td>'+
-      '<td class="num">'+o.qty+'</td>'+
-      '<td>'+mc+'</td>'+
-      '<td>'+(s?'<b>'+esc(s.name)+'</b>'+(st==='done'?' <span class="tag gray">발주완료</span>':''):'')+'</td></tr>';
-  }).join(''))+
+  confirmTableHtml(cur,allSel)+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="cpage" data-d="-1"'+(CF.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="cpage" data-d="1"'+(CF.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
 A.cstat=el=>{CF.d.status=el.dataset.s;drawConfirmChips();};   /* 고르기만 하고, [검색]을 눌러야 적용 */
@@ -3050,6 +3066,26 @@ function pgCheck(){
   '</div><div id="kcnt" style="margin-bottom:14px"></div><div id="ktbl"></div>';
 }
 ROUTES['/orders/check']=pgCheck;
+function checkTableHtml(cur,allSel){
+  const V=hideSet(),v=k=>!V.has(k);
+  const cols=[
+    {i:0,t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>',cell:o=>'<td><input type="checkbox" data-chg="ckrow" data-id="'+o.id+'"'+(CK.sel.has(o.id)?' checked':'')+'></td>'},
+    {i:1,t:'주문상태',cell:o=>'<td><div class="stcell">'+stTag(o)+'<button class="btn cs'+((o.csContent||o.csAction)?' on':'')+'" data-act="cs" data-id="'+o.id+'" title="'+((o.csContent||o.csAction)?'C/S 메모 있음 · 클릭하여 보기/수정':'C/S 메모 작성')+'">C/S</button>'+clmBtns(o)+'</div></td>'},
+    {i:2,t:'수집일',cell:o=>'<td>'+esc(o.collectedDate)+'</td>'},
+    {i:3,t:'쇼핑몰',cell:o=>'<td>'+mallHtml(o.mall)+'</td>'},
+    {i:4,t:'주문번호 <span style="color:#1c7ed6">자체주문번호</span>',cell:o=>'<td class="brk">'+(v('orderNo')?esc(o.orderNo):'')+(o.ownNo?'<div class="sm2" style="color:#1c7ed6" title="자체주문번호">'+esc(o.ownNo)+'</div>':'')+'</td>'},
+    {i:5,show:v('receiver')||v('orderer'),t:'수취인 / 주문자',cell:o=>'<td>'+(v('receiver')?'<b>'+esc(o.receiver)+'</b>':'')+(v('orderer')?'<div class="sm2">'+esc(o.orderer)+'</div>':'')+'</td>'},
+    {i:6,show:v('tel1')||v('tel2'),t:'연락처',cell:o=>'<td>'+(v('tel1')?esc(o.tel1):'')+(v('tel2')&&o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'},
+    {i:7,show:v('zip')||v('addr'),t:'우편번호 / 주소',cell:o=>'<td>'+(v('zip')&&o.zip?'<span class="mute small">['+esc(o.zip)+']</span> ':'')+(v('addr')?esc(o.addr):'')+'</td>'},
+    {i:8,show:v('memo'),t:'배송메모',cell:o=>'<td>'+esc(o.memo)+'</td>'},
+    {i:9,show:v('itemName'),t:'상품명',cell:(o,x)=>'<td>'+esc(o.itemName||x.p.name)+'</td>'},
+    {i:10,t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>',cell:(o,x)=>'<td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+(v('itemOption')?esc(o.itemOption||''):'')+'</div><div style="color:#1c7ed6;font-weight:600;min-height:1.3em">'+esc(x.p.option||'')+'</div></td>'},
+    {i:11,show:v('qty'),t:'수량',c:'num',cell:o=>'<td class="num">'+o.qty+'</td>'},
+    {i:12,t:'거래선',cell:(o,x)=>'<td><b>'+esc(x.s.name)+'</b></td>'},
+    {i:13,t:'택배사 / 운송장번호',cell:o=>'<td>'+(o.trackingNo?'<b>'+esc(o.carrier||'')+'</b><div class="sm2 brk">'+(o.shipped?'<a class="trk" data-act="trkpop" data-id="'+o.id+'" title="클릭하면 '+esc(o.carrier||'택배사')+' 배송조회 팝업이 열립니다">'+esc(o.trackingNo)+'</a>':esc(o.trackingNo))+'</div>':'')+'</td>'}
+  ];
+  return fitCols('check',cols,cur,o=>{const {p,s}=orderInfo(o);return {p,s,cls:'m'};});
+}
 function drawCheckTable(){
   const box=$('#ktbl');if(!box)return;
   const kc=$('#kcnt');
@@ -3068,17 +3104,7 @@ function drawCheckTable(){
     '<button class="btn sm ok" data-act="ckdl">선택 다운로드</button><button class="btn sm ok" data-act="ckdlall">전체 다운로드</button><button class="btn sm pri" data-act="ckstatus">주문상태변경</button>'+(CK.a.status==='shipped'?'<button class="btn sm" data-act="ckmall">쇼핑몰수정</button>':'')+'</div>';
   if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 매핑 주문이 없습니다. 수집일자·주문상태를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
   box.innerHTML=bar+
-  fitTable('check',[{t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>'},{t:'주문상태'},{t:'수집일'},{t:'쇼핑몰'},{t:'주문번호 <span style="color:#1c7ed6">자체주문번호</span>'},{t:'수취인 / 주문자'},{t:'연락처'},{t:'우편번호 / 주소'},{t:'배송메모'},{t:'상품명'},{t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>'},{t:'수량',c:'num'},{t:'거래선'},{t:'택배사 / 운송장번호'}],
-  cur.map(o=>{
-    const {p,s}=orderInfo(o);
-    return '<tr class="m"><td><input type="checkbox" data-chg="ckrow" data-id="'+o.id+'"'+(CK.sel.has(o.id)?' checked':'')+'></td>'+
-      '<td><div class="stcell">'+stTag(o)+'<button class="btn cs'+((o.csContent||o.csAction)?' on':'')+'" data-act="cs" data-id="'+o.id+'" title="'+((o.csContent||o.csAction)?'C/S 메모 있음 · 클릭하여 보기/수정':'C/S 메모 작성')+'">C/S</button>'+clmBtns(o)+'</div></td>'+
-      '<td>'+esc(o.collectedDate)+'</td><td>'+mallHtml(o.mall)+'</td><td class="brk">'+esc(o.orderNo)+(o.ownNo?'<div class="sm2" style="color:#1c7ed6" title="자체주문번호">'+esc(o.ownNo)+'</div>':'')+'</td>'+
-      '<td><b>'+esc(o.receiver)+'</b><div class="sm2">'+esc(o.orderer)+'</div></td>'+
-      '<td>'+esc(o.tel1)+(o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'+
-      '<td>'+(o.zip?'<span class="mute small">['+esc(o.zip)+']</span> ':'')+esc(o.addr)+'</td>'+
-      '<td>'+esc(o.memo)+'</td><td>'+esc(o.itemName||p.name)+'</td><td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+esc(o.itemOption||'')+'</div><div style="color:#1c7ed6;font-weight:600;min-height:1.3em">'+esc(p.option||'')+'</div></td><td class="num">'+o.qty+'</td><td><b>'+esc(s.name)+'</b></td><td>'+(o.trackingNo?'<b>'+esc(o.carrier||'')+'</b><div class="sm2 brk">'+(o.shipped?'<a class="trk" data-act="trkpop" data-id="'+o.id+'" title="클릭하면 '+esc(o.carrier||'택배사')+' 배송조회 팝업이 열립니다">'+esc(o.trackingNo)+'</a>':esc(o.trackingNo))+'</div>':'')+'</td></tr>';
-  }).join(''))+
+  checkTableHtml(cur,allSel)+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="ckpage" data-d="-1"'+(CK.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="ckpage" data-d="1"'+(CK.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
 C.ckf=el=>{CK.d[el.dataset.k]=el.value;};
@@ -3213,6 +3239,12 @@ A.ckmallSave=async()=>{
 };
 A.ckdl=()=>ckDownload(ckPicked(),'다운로드할 주문을 체크하세요.');
 A.ckdlall=()=>ckDownload(ckList(),'다운로드할 주문이 없습니다.');
+/* ESM 계정(판매아이디): 수집 때 저장한 값, 없으면 [항목 추가]로 만든 판매아이디·계정 항목의 값 */
+function esmSeller(o){
+  if(o.sellerId)return o.sellerId;
+  const c=customFields().find(c=>/판매아이디|판매자|계정|셀러/.test(c.label||''));
+  return c&&o.ex?String(o.ex[c.key]||''):'';
+}
 async function ckDownload(list0,emptyMsg){
   /* 신규주문은 엑셀 다운로드 불가 */
   const list=list0.filter(o=>ordStatus(o)!=='new'),skipped=list0.length-list.length;
@@ -3226,7 +3258,7 @@ async function ckDownload(list0,emptyMsg){
   let rows;
   if(esm){
     rows=[['계정','주문번호','택배사','운송장/등기번호']];
-    list.forEach(o=>{rows.push([o.sellerId||'',o.esmNo||o.orderNo||'',o.carrier||'',o.trackingNo||'']);});
+    list.forEach(o=>{rows.push([esmSeller(o),o.esmNo||o.orderNo||'',o.carrier||'',o.trackingNo||'']);});
   }else if(ss){
     rows=[['상품주문번호','배송방법','택배사','송장번호']];
     list.forEach(o=>{rows.push([o.prodOrderNo||o.orderNo||'',o.shipMethod||'택배,등기,소포',o.carrier||'',o.trackingNo||'']);});
@@ -3247,7 +3279,7 @@ async function ckDownload(list0,emptyMsg){
   const now=new Date().toISOString();
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});
   await putMany('orders',list);
-  const noPo=ss?list.filter(o=>!o.prodOrderNo).length:0,noSeller=esm?list.filter(o=>!o.sellerId).length:0;
+  const noPo=ss?list.filter(o=>!o.prodOrderNo).length:0,noSeller=esm?list.filter(o=>!esmSeller(o)).length:0;
   toast(list.length+'건을 다운로드했습니다.'+(esm?' (ESM 송장 대량업로드 양식)':ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(skipped?' · 신규주문 '+skipped+'건 제외':'')+(noPo?' · 상품주문번호가 없어 쇼핑몰주문번호로 대체한 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':'')+(noSeller?' · 계정(판매아이디)이 비어 있는 주문 '+noSeller+'건 (주문수집에서 ESM 주문서를 다시 올려 저장하면 채워집니다)':''),(noPo||noSeller)?'err':'ok',(noPo||noSeller)?8000:3500);
 }
 
@@ -3729,9 +3761,15 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.m
 /* ===== 한 화면 표 + 엑셀처럼 열 너비 조절 (헤더 경계선을 끌면 옆 열과 너비를 주고받음) ===== */
 const COLW_DEF={confirm:[3,11,8,9,21,9,15,4,12,8],check:[3,7,6,5,9,7,8,11,5,11,10,3,6,9],track:[3,7,7,6,10,8,15,15,3,8,9,9]};
 function colW(key){const s=S.meta['colw_'+key];return Array.isArray(s)&&s.length===COLW_DEF[key].length?s:COLW_DEF[key];}
-function fitTable(key,heads,body){
-  const w=colW(key),n=heads.length;
-  return '<div class="tblwrap"><table class="tbl fit" data-colkey="'+key+'"><colgroup>'+w.map(x=>'<col style="width:'+x+'%">').join('')+'</colgroup><thead><tr>'+
+function fitCols(key,cols,rows,ctxOf){
+  const vis=cols.filter(c=>c.show!==false),keep=vis.map(c=>c.i);
+  const body=rows.map(o=>{const x=ctxOf(o);return '<tr class="'+x.cls+'">'+vis.map(c=>c.cell(o,x)).join('')+'</tr>';}).join('');
+  return fitTable(key,vis.map(c=>({t:c.t,c:c.c})),body,keep);
+}
+function fitTable(key,heads,body,keep){
+  let w=colW(key),n=heads.length,ka='';
+  if(keep&&keep.length<w.length){const sub=keep.map(i=>w[i]),sum=sub.reduce((a,b)=>a+b,0)||1;w=sub.map(x=>x/sum*100);ka=' data-colkeep=\''+JSON.stringify(keep)+'\'';}
+  return '<div class="tblwrap"><table class="tbl fit" data-colkey="'+key+'"'+ka+'><colgroup>'+w.map(x=>'<col style="width:'+x+'%">').join('')+'</colgroup><thead><tr>'+
     heads.map((h,i)=>'<th'+(h.c?' class="'+h.c+'"':'')+'>'+h.t+(i<n-1?'<span class="rz" data-rz="'+i+'" title="끌어서 너비 조절 (더블클릭: 초기화)"></span>':'')+'</th>').join('')+
     '</tr></thead><tbody>'+body+'</tbody></table></div>';
 }
@@ -3740,7 +3778,7 @@ document.addEventListener('mousedown',e=>{
   const h=e.target.closest&&e.target.closest('.rz');if(!h)return;
   e.preventDefault();e.stopPropagation();
   const table=h.closest('table'),cols=[...table.querySelectorAll('col')];
-  RZ={cols,i:+h.dataset.rz,x:e.clientX,w:cols.map(c=>parseFloat(c.style.width)),total:table.getBoundingClientRect().width,key:table.dataset.colkey};
+  RZ={keep:JSON.parse(table.dataset.colkeep||'null'),cols,i:+h.dataset.rz,x:e.clientX,w:cols.map(c=>parseFloat(c.style.width)),total:table.getBoundingClientRect().width,key:table.dataset.colkey};
   document.body.classList.add('rzing');
 });
 document.addEventListener('mousemove',e=>{
@@ -3755,7 +3793,9 @@ document.addEventListener('mouseup',()=>{
   if(!RZ)return;
   document.body.classList.remove('rzing');
   const r=RZ;RZ=null;
-  setMeta('colw_'+r.key,r.cols.map(c=>Math.round(parseFloat(c.style.width)*100)/100));
+  let out=r.cols.map(c=>parseFloat(c.style.width));
+  if(r.keep){const full=colW(r.key).slice(),tot=r.keep.reduce((a,i)=>a+full[i],0);r.keep.forEach((ix,j)=>{full[ix]=out[j]/100*tot;});out=full;}
+  setMeta('colw_'+r.key,out.map(x=>Math.round(x*100)/100));
 });
 document.addEventListener('dblclick',e=>{
   const h=e.target.closest&&e.target.closest('.rz');if(!h)return;

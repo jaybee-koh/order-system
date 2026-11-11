@@ -2407,7 +2407,7 @@ function applyMallCols(){
   if(isSSMall(CL.mall)&&CL.sheets&&clHeaders().length>SS_SHIP_COL&&curFields().some(f=>f.key==='shipMethod'))CL.map.shipMethod=[SS_SHIP_COL];
 }
 function mallRow(){
-  return '<tr><td></td><td></td><td></td><td><b>쇼핑몰</b></td><td><select data-chg="cmall"><option value="">(선택 안 함)</option>'+mallList().map(m=>'<option value="'+esc(m)+'"'+(CL.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__add">＋ 직접 입력…</option></select> <span class="mute small">(이 파일의 주문이 어느 쇼핑몰 것인지 선택)</span></td></tr>';
+  return '<tr><td></td><td></td><td><b>쇼핑몰</b></td><td><select data-chg="cmall"><option value="">(선택 안 함)</option>'+mallList().map(m=>'<option value="'+esc(m)+'"'+(CL.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__add">＋ 직접 입력…</option></select> <span class="mute small">(이 파일의 주문이 어느 쇼핑몰 것인지 선택)</span></td><td></td></tr>';
 }
 function pgCollect(){
   let body='<div class="filebox"><input type="file" accept=".xlsx,.csv,.xls,.txt" data-chg="cfile"><div class="mute small" style="margin-top:6px">쇼핑몰에서 다운받은 주문내역 파일(엑셀/CSV)을 선택하세요.</div></div>';
@@ -2421,7 +2421,7 @@ function pgCollect(){
     mapTableCollect(clHeaders(),CL.map,mallRow())+
     (function(){const sets=collectedSets(),n=orders.filter(o=>isCollected(o,sets)).length;return n?'<div class="notice" style="margin-top:14px"><b>이미 수집된 주문입니다.</b> 이 파일의 '+orders.length.toLocaleString()+'건 중 '+n.toLocaleString()+'건은 이미 수집된 주문번호라 저장할 때 제외됩니다.</div>':'';})()+
     '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+orders.length.toLocaleString()+'건)</span></h3>'+
-    previewTable(curFields().map(f=>[f.custom?'c_'+f.key:f.key,f.label.replace(' (매핑에 사용)','')]).concat([['mall','쇼핑몰']]),orders);
+    previewTable(curFields().filter(f=>!hideSet().has(f.key)).map(f=>[f.custom?'c_'+f.key:f.key,f.label.replace(' (매핑에 사용)','')]).concat([['mall','쇼핑몰']]),orders);
   }
   return '<h1>주문 수집</h1><p class="sub">쇼핑몰 주문내역 파일을 올리고 저장하면 [주문 확정 관리]에 표시됩니다. 이전에 매핑한 상품은 자동으로 매핑됩니다. 도소매·전화주문처럼 파일이 없는 주문은 ② 주문 직접 등록으로 입력하세요.</p>'+
   '<div class="card"><h3>① 주문내역 파일 업로드</h3>'+body+
@@ -2516,12 +2516,12 @@ function mapTableCollect(headers,map,extra){
   const opt=sel=>'<option value="">(선택 안 함)</option>'+headers.map((h,i)=>'<option value="'+i+'"'+(sel===i?' selected':'')+'>'+esc(colName(i)+'열 · '+(h||'(빈 제목)'))+'</option>').join('');
   const fs=curFields(),hid=hideSet();
   return '<div class="row" style="margin-bottom:8px"><button class="btn sm" data-act="fadd">＋ 항목 추가</button><button class="btn sm danger" data-act="fdel">선택 삭제</button><button class="btn sm" data-act="freset">기본 항목으로 초기화</button><span class="mute small">☰ 를 끌어서 순서를 바꿀 수 있습니다.</span></div>'+
-  '<div class="tblwrap" style="max-height:none"><table class="tbl"><thead><tr><th style="width:48px" title="체크하면 주문 확정 관리·주문확인처리 화면에서 숨깁니다. 엑셀 다운로드에는 그대로 포함됩니다.">숨김</th><th style="width:36px"></th><th style="width:36px"></th><th style="width:230px">필요한 항목</th><th>업로드한 파일의 어느 열인가요?</th></tr></thead><tbody>'+
+  '<div class="tblwrap" style="max-height:none"><table class="tbl"><thead><tr><th style="width:36px"></th><th style="width:36px"></th><th style="width:230px">필요한 항목</th><th>업로드한 파일의 어느 열인가요?</th><th style="width:48px" title="체크하면 주문 확정 관리·주문확인처리 화면과 아래 미리보기에서 숨깁니다. 엑셀 다운로드에는 그대로 포함됩니다.">숨김</th></tr></thead><tbody>'+
   fs.map(f=>{
     const cur=map[f.key]||[];
     let sel='<select data-chg="map" data-kind="collect" data-field="'+f.key+'" data-slot="0">'+opt(cur[0])+'</select>';
     if(f.multi)sel+=' <select data-chg="map" data-kind="collect" data-field="'+f.key+'" data-slot="1">'+opt(cur[1])+'</select> <span class="mute small">(주소가 2칸이면 둘 다 선택)</span>';
-    return '<tr data-fkey="'+f.key+'"><td class="nw"><input type="checkbox" data-chg="fhide" data-key="'+f.key+'"'+(hid.has(f.key)?' checked':'')+' title="숨김"></td><td class="nw"><span class="fdrag" draggable="true" data-fdrag="'+f.key+'" title="끌어서 순서 변경">☰</span></td><td><input type="checkbox" data-chg="fchk" data-key="'+f.key+'"'+(FC.sel.has(f.key)?' checked':'')+'></td><td><b>'+esc(f.label)+'</b>'+(f.req?'<span class="req">*</span>':'')+(f.custom?' <span class="tag gray">추가</span>':'')+'</td><td>'+sel+'</td></tr>';
+    return '<tr data-fkey="'+f.key+'"><td class="nw"><span class="fdrag" draggable="true" data-fdrag="'+f.key+'" title="끌어서 순서 변경">☰</span></td><td><input type="checkbox" data-chg="fchk" data-key="'+f.key+'"'+(FC.sel.has(f.key)?' checked':'')+'></td><td><b>'+esc(f.label)+'</b>'+(f.req?'<span class="req">*</span>':'')+(f.custom?' <span class="tag gray">추가</span>':'')+'</td><td>'+sel+'</td><td class="nw"><input type="checkbox" data-chg="fhide" data-key="'+f.key+'"'+(hid.has(f.key)?' checked':'')+' title="숨김"></td></tr>';
   }).join('')+(extra||'')+'</tbody></table></div>';
 }
 let FD=null;
@@ -2555,6 +2555,7 @@ C.fhide=async el=>{
   el.checked?h.add(el.dataset.key):h.delete(el.dataset.key);
   c.hidden=[...h];
   await saveCfg(c);
+  route();   /* 미리보기에 바로 반영 */
 };
 C.fchk=el=>{el.checked?FC.sel.add(el.dataset.key):FC.sel.delete(el.dataset.key);};
 A.fdel=async()=>{

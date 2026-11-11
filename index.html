@@ -3247,33 +3247,56 @@ function esmSeller(o){
   return c&&o.ex?String(o.ex[c.key]||''):'';
 }
 /* ===== 쇼핑몰별 송장 엑셀 양식 (미리 등록 → 출고완료 다운로드 때 그대로 적용) ===== */
-const TPL_SRC=[['','(빈칸)'],['__fixed','고정값'],['prodOrderNo','상품주문번호'],['orderNo','쇼핑몰주문번호'],['esmNo','ESM 주문번호'],['sellerId','판매아이디(계정)'],['ownNo','자체주문번호'],['carrier','택배사'],['trackingNo','운송장번호'],['shipMethod','배송방법'],['receiver','수취인'],['orderer','주문자'],['tel1','연락처1'],['addr','주소'],['qty','수량'],['itemName','수집상품명'],['shippedAt','출고일시']];
+const TPL_SRC=[['','(빈칸)'],['__fixed','고정값'],['prodOrderNo','상품주문번호'],['orderNo','쇼핑몰주문번호'],['esmNo','ESM 주문번호'],['sellerId','판매아이디(계정)'],['ownNo','자체주문번호'],['__carrierCode','택배사 코드(11번가 등)'],['carrier','택배사'],['trackingNo','운송장번호'],['shipMethod','배송방법'],['receiver','수취인'],['orderer','주문자'],['tel1','연락처1'],['addr','주소'],['qty','수량'],['itemName','수집상품명'],['shippedAt','출고일시']];
+const ST11_CARRIER="로젠택배:00002|우체국택배/등기:00007|한진택배:00011|롯데택배:00012|대신택배:00021|일양로지스:00022|ACI:00023|WIZWA:00025|경동택배:00026|천일택배:00027|CJ대한통운:00034|합동택배:00035|삼성전자 본사설치:00036|건영택배:00037|LG전자 본사설치:00038|DHL:00039|DHL Global Mail:00046|CVSnet편의점택배:00060|CU편의점택배:00061|우리택배:00062|SLX택배:00063|한의사랑택배:00064|용마로지스:00065|세방택배:00066|농협택배:00067|HI택배:00068|원더스퀵:00069|홈픽택배:00070|cway express:00079|퍼레버택배:00081|홈이노베이션로지스:00082|자이언트:00083|위니아딤채 본사설치:00085|애니트랙:00087|대림통운:00089|IK 물류:00090|성훈 물류:00091|제니엘시스템:00097|기타:00099|엘서비스:00100|로지스밸리택배:00101|프레시솔루션:00102|풀앳홈:00103|큐런택배:00107|카카오T 당일배송:00109|SB GLS:00111|롯데칠성:00112|LTL:00113|GTS로지스:00114|홈픽 오늘도착:00115|(주)팀프레시:00116|브릿지 로지스:00117|두발히어로:00119|로지스파트너:00120|투데이:00121|현대글로비스:00122|ARGO:00123|더바오:00124|핑퐁:00125|HY:00126|삼다수 가정배송:00127|와이드테크:00128|이스트라:00129|나은물류:00130|(주)국제:00132|딜리박스:00133|위니온로지스:00134|딜리래빗:00135|풀무원샘물:00136|티에스지로지스:00137|든든택배:00138|모든로지스:00139|벤더피아:00142|한샘:00143|JCLS:00144|지케이글로벌:00145|서림물류:00146|신세계까사:00148|발렉스:00149|컬리넥스트마일:00152";
+const ST11_ALIAS={'우체국':'00007','우체국택배':'00007','cj':'00034','cj대한통운':'00034','대한통운':'00034','롯데':'00012','롯데글로벌로지스':'00012','한진':'00011','로젠':'00002','경동':'00026','대신':'00021'};
+const cNorm=x=>String(x||'').toLowerCase().replace(/\s|\(주\)/g,'');
+function carrierCode(name){
+  const n=cNorm(name);if(!n)return '';
+  if(ST11_ALIAS[n])return ST11_ALIAS[n];
+  for(const it of ST11_CARRIER.split('|')){const i=it.lastIndexOf(':');if(cNorm(it.slice(0,i))===n)return it.slice(i+1);}
+  for(const it of ST11_CARRIER.split('|')){const i=it.lastIndexOf(':');const k=cNorm(it.slice(0,i));if(k.length>1&&(k.includes(n)||n.includes(k)))return it.slice(i+1);}
+  return '';
+}
 const dlTpls=()=>S.meta.dlTpls||{};
 function tplVal(o,m){
-  switch(m.src){case '':return '';case '__fixed':return m.text||'';
+  if(String(m.src).startsWith('cf:')){const k=m.src.slice(3);return o.ex?String(o.ex[k]==null?'':o.ex[k]):'';}
+  switch(m.src){case '__carrierCode':return carrierCode(o.carrier);case '':return '';case '__fixed':return m.text||'';
     case 'prodOrderNo':return o.prodOrderNo||o.orderNo||'';
     case 'esmNo':return o.esmNo||o.orderNo||'';
     case 'sellerId':return esmSeller(o);
     case 'shippedAt':return o.shippedAt?fmtDT(o.shippedAt):'';
     default:return o[m.src]==null?'':o[m.src];}
 }
-const TP={mall:'',cols:[]};
+const TP={mall:'',cols:[],title:''};
 function tplPreset(mall){
-  const t=dlTpls()[mall];if(t)return JSON.parse(JSON.stringify(t.cols));
+  const t=dlTpls()[mall];TP.title=t&&t.title||'';if(t)return JSON.parse(JSON.stringify(t.cols));
+  if(/11번가/.test(mall)){TP.title='발송처리([배송방법코드],[택배사코드],[송장/등기번호]) 필수입력';return [['번호','__fixed',''],['주문번호','orderNo',''],['배송번호','',''],['택배사코드','__carrierCode',''],['송장/등기번호','trackingNo',''],['배송방법','__fixed','01']].map(a=>({h:a[0],src:a[1],text:a[2]}));}
   if(mall===ESM_MALL)return [['계정','sellerId'],['주문번호','esmNo'],['택배사','carrier'],['운송장/등기번호','trackingNo']].map(a=>({h:a[0],src:a[1],text:''}));
   return [['주문번호','orderNo'],['택배사','carrier'],['송장번호','trackingNo']].map(a=>({h:a[0],src:a[1],text:''}));
 }
+/* 팝업이 이미 열려 있으면 내용만 교체(깜빡임·스크롤 초기화 방지) */
+function tplShow(html,cls){
+  const md=$('#modal .md.tplmd');
+  if(!md){openModal(html,cls);return;}
+  const sc=[md,md.parentElement,$('.tblwrap',md)].map(e=>e?e.scrollTop:0);
+  const ov=md.parentElement,prev=[ov.style.animation,md.style.animation];
+  ov.style.animation='none';md.style.animation='none';
+  md.innerHTML=html;
+  const els=[md,ov,$('.tblwrap',md)];els.forEach((e,i)=>{if(e)e.scrollTop=sc[i];});
+}
 function drawTpl(){
-  const rows=TP.cols.map((c,i)=>'<tr><td><input type="text" style="width:100%" data-inp="tplh" data-i="'+i+'" value="'+esc(c.h)+'" placeholder="엑셀 헤더명"></td><td><select data-chg="tpls" data-i="'+i+'">'+TPL_SRC.map(x=>'<option value="'+x[0]+'"'+(c.src===x[0]?' selected':'')+'>'+x[1]+'</option>').join('')+'</select></td><td>'+(c.src==='__fixed'?'<input type="text" style="width:100%" data-inp="tplt" data-i="'+i+'" value="'+esc(c.text)+'" placeholder="고정값">':'')+'</td><td style="white-space:nowrap"><button class="btn sm" data-act="tplup" data-i="'+i+'">↑</button> <button class="btn sm" data-act="tpldn" data-i="'+i+'">↓</button> <button class="btn sm danger" data-act="tpldel" data-i="'+i+'">삭제</button></td></tr>').join('');
-  openModal('<h2>쇼핑몰별 송장 엑셀 양식</h2><div class="small mute" style="margin-bottom:8px">쇼핑몰마다 송장 대량업로드 양식의 열 순서·헤더명을 한 번 등록해 두면, 출고완료 조회에서 그 쇼핑몰을 선택하고 다운로드할 때 그 양식 그대로 내려받습니다.</div>'+
+  const rows=TP.cols.map((c,i)=>'<tr><td><input type="text" style="width:100%" data-inp="tplh" data-i="'+i+'" value="'+esc(c.h)+'" placeholder="엑셀 헤더명"></td><td><select data-chg="tpls" data-i="'+i+'">'+TPL_SRC.concat(customFields().map(f=>['cf:'+f.key,'추가항목: '+f.label])).map(x=>'<option value="'+esc(x[0])+'"'+(c.src===x[0]?' selected':'')+'>'+esc(x[1])+'</option>').join('')+'</select></td><td>'+(c.src==='__fixed'?'<input type="text" style="width:100%" data-inp="tplt" data-i="'+i+'" value="'+esc(c.text)+'" placeholder="고정값">':'')+'</td><td style="white-space:nowrap"><button class="btn sm" data-act="tplup" data-i="'+i+'">↑</button> <button class="btn sm" data-act="tpldn" data-i="'+i+'">↓</button> <button class="btn sm danger" data-act="tpldel" data-i="'+i+'">삭제</button></td></tr>').join('');
+  tplShow('<h2>쇼핑몰별 송장 엑셀 양식</h2><div class="small mute" style="margin-bottom:8px">쇼핑몰마다 송장 대량업로드 양식의 열 순서·헤더명을 한 번 등록해 두면, 출고완료 조회에서 그 쇼핑몰을 선택하고 다운로드할 때 그 양식 그대로 내려받습니다.</div>'+
     '<div class="row" style="margin:8px 0"><b>쇼핑몰</b><select data-chg="tplmall">'+mallList().map(m=>'<option'+(m===TP.mall?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select>'+(dlTpls()[TP.mall]?'<span class="tag ok">등록됨</span>':'<span class="tag">미등록</span>')+'<span class="grow"></span><label class="btn sm">샘플 엑셀로 헤더 채우기<input type="file" accept=".xlsx,.xls,.csv" data-chg="tplfile" style="display:none"></label></div>'+
-    '<div class="tblwrap"><table class="tbl"><thead><tr><th>엑셀 헤더명</th><th>들어갈 값</th><th>고정값</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="row" style="margin:0 0 8px"><b>맨 윗줄 제목</b><input type="text" style="flex:1" data-inp="tpltitle" value="'+esc(TP.title)+'" placeholder="(선택) 헤더 위에 한 줄 더 필요한 양식일 때만 입력"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>엑셀 헤더명</th><th>들어갈 값</th><th>고정값</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div style="margin-top:8px"><button class="btn sm" data-act="tpladd">＋ 열 추가</button></div>'+
-    '<div class="foot"><button class="btn" data-act="close">닫기</button>'+(dlTpls()[TP.mall]?'<button class="btn danger" data-act="tpldelall">이 양식 삭제</button>':'')+'<button class="btn pri" data-act="tplsave">저장</button></div>','wide');
+    '<div class="foot"><button class="btn" data-act="close">닫기</button>'+(dlTpls()[TP.mall]?'<button class="btn danger" data-act="tpldelall">이 양식 삭제</button>':'')+'<button class="btn pri" data-act="tplsave">저장</button></div>','wide tplmd');
 }
 A.dltpl=()=>{if(!TP.mall||!mallList().includes(TP.mall))TP.mall=CK.a.mall||mallList()[0];TP.cols=tplPreset(TP.mall);drawTpl();};
 C.tplmall=el=>{TP.mall=el.value;TP.cols=tplPreset(TP.mall);drawTpl();};
 C.tpls=el=>{TP.cols[+el.dataset.i].src=el.value;drawTpl();};
+I.tpltitle=el=>{TP.title=el.value;};
 I.tplh=el=>{TP.cols[+el.dataset.i].h=el.value;};
 I.tplt=el=>{TP.cols[+el.dataset.i].text=el.value;};
 A.tpladd=()=>{TP.cols.push({h:'',src:'',text:''});drawTpl();};
@@ -3286,7 +3309,7 @@ C.tplfile=async el=>{
   try{
     const sheets=await parseAny(await readFileBuf(f));
     const rows=sheets[firstNonEmptySheet(sheets)].rows;
-    const hd=(rows.find(r=>(r||[]).some(x=>String(x==null?'':x).trim()))||[]).map(x=>String(x==null?'':x).trim()).filter(Boolean);
+    const ne=rows.filter(r=>(r||[]).some(x=>String(x==null?'':x).trim())).map(r=>r.map(x=>String(x==null?'':x).trim()));TP.title='';let hr=ne[0]||[];if(ne.length>1&&hr.filter(Boolean).length===1){TP.title=hr.find(Boolean);hr=ne[1];}const hd=hr.filter(Boolean);
     if(!hd.length)throw new Error('헤더 행을 찾지 못했습니다.');
     TP.cols=hd.map(h=>{const g=TPL_GUESS.find(t=>t[0].test(h));return {h,src:g?g[1]:'',text:''};});
     drawTpl();toast('헤더 '+hd.length+'개를 불러왔습니다. 각 열에 들어갈 값을 확인해 주세요.');
@@ -3296,7 +3319,7 @@ A.tplsave=async()=>{
   const cols=TP.cols.filter(c=>c.h.trim()||c.src);
   if(!cols.length){toast('열을 하나 이상 만들어 주세요.','err');return;}
   if(cols.some(c=>!c.h.trim())){toast('헤더명이 비어 있는 열이 있습니다.','err');return;}
-  const t=Object.assign({},dlTpls());t[TP.mall]={cols:cols.map(c=>({h:c.h.trim(),src:c.src,text:c.text||''}))};
+  const t=Object.assign({},dlTpls());t[TP.mall]={title:TP.title.trim(),cols:cols.map(c=>({h:c.h.trim(),src:c.src,text:c.text||''}))};
   await setMeta('dlTpls',t);TP.cols=t[TP.mall].cols;drawTpl();toast(TP.mall+' 양식을 저장했습니다.');
 };
 A.tpldelall=async()=>{
@@ -3316,8 +3339,8 @@ async function ckDownload(list0,emptyMsg){
   const full=!ct&&!ss&&!esm&&list.some(o=>ordStatus(o)==='shipped');
   let rows;
   if(ct){
-    rows=[ct.cols.map(c=>c.h)];
-    list.forEach(o=>{rows.push(ct.cols.map(c=>tplVal(o,c)));});
+    rows=ct.title?[[ct.title],ct.cols.map(c=>c.h)]:[ct.cols.map(c=>c.h)];
+    list.forEach((o,i)=>{rows.push(ct.cols.map(c=>c.src==='__fixed'&&c.h==='번호'&&!c.text?i+1:tplVal(o,c)));});
   }else if(esm){
     rows=[['계정','주문번호','택배사','운송장/등기번호']];
     list.forEach(o=>{rows.push([esmSeller(o),o.esmNo||o.orderNo||'',o.carrier||'',o.trackingNo||'']);});
@@ -3341,8 +3364,9 @@ async function ckDownload(list0,emptyMsg){
   const now=new Date().toISOString();
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});
   await putMany('orders',list);
+  const noCode=ct&&ct.cols.some(c=>c.src==='__carrierCode')?list.filter(o=>o.carrier&&!carrierCode(o.carrier)).length:0;
   const noPo=ss?list.filter(o=>!o.prodOrderNo).length:0,noSeller=esm?list.filter(o=>!esmSeller(o)).length:0;
-  toast(list.length+'건을 다운로드했습니다.'+(ct?' ('+CK.a.mall+' 등록 양식)':'')+(esm?' (ESM 송장 대량업로드 양식)':ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(skipped?' · 신규주문 '+skipped+'건 제외':'')+(noPo?' · 상품주문번호가 없어 쇼핑몰주문번호로 대체한 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':'')+(noSeller?' · 계정(판매아이디)이 비어 있는 주문 '+noSeller+'건 (주문수집에서 ESM 주문서를 다시 올려 저장하면 채워집니다)':''),(noPo||noSeller)?'err':'ok',(noPo||noSeller)?8000:3500);
+  toast(list.length+'건을 다운로드했습니다.'+(ct?' ('+CK.a.mall+' 등록 양식)':'')+(noCode?' · 택배사 코드를 찾지 못해 비워둔 주문 '+noCode+'건':'')+(esm?' (ESM 송장 대량업로드 양식)':ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(skipped?' · 신규주문 '+skipped+'건 제외':'')+(noPo?' · 상품주문번호가 없어 쇼핑몰주문번호로 대체한 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':'')+(noSeller?' · 계정(판매아이디)이 비어 있는 주문 '+noSeller+'건 (주문수집에서 ESM 주문서를 다시 올려 저장하면 채워집니다)':''),(noPo||noSeller||noCode)?'err':'ok',(noPo||noSeller||noCode)?8000:3500);
 }
 
 

@@ -3285,8 +3285,24 @@ function tplShow(html,cls){
   md.innerHTML=html;
   const els=[md,ov,$('.tblwrap',md)];els.forEach((e,i)=>{if(e)e.scrollTop=sc[i];});
 }
+/* 선택한 쇼핑몰의 주문수집 업로드 항목(숨김 포함)만 '들어갈 값' 후보로 보여줌 */
+function tplSrcOpts(mall,cur){
+  const os=S.orders.filter(o=>o.mall===mall),hid=hideSet();
+  const has=f=>!os.length||os.some(o=>f.custom?(o.ex&&o.ex[f.key]):(o[f.key]!=null&&o[f.key]!==''));
+  const col=curFields().filter(has).map(f=>[f.custom?'cf:'+f.key:f.key,f.label.replace(' (매핑에 사용)','')+(hid.has(f.key)?' (숨김)':'')]);
+  col.push(['ownNo','자체주문번호']);
+  if(mall===ESM_MALL)col.push(['sellerId','판매아이디(계정)'],['esmNo','ESM 주문번호']);
+  const g1=[['','(빈칸)'],['__fixed','고정값']],g2=[['__carrierCode','택배사 코드(11번가 등)'],['carrier','택배사'],['trackingNo','운송장번호'],['shippedAt','출고일시']];
+  const all=g1.concat(g2,col);
+  if(cur&&!all.some(x=>x[0]===cur)){
+    const t=TPL_SRC.find(x=>x[0]===cur),cf=String(cur).startsWith('cf:')?customFields().find(f=>'cf:'+f.key===cur):null;
+    col.push([cur,(t?t[1]:cf?cf.label:cur)+' (이 쇼핑몰 수집 항목에 없음)']);
+  }
+  const og=(l,a)=>'<optgroup label="'+esc(l)+'">'+a.map(x=>'<option value="'+esc(x[0])+'"'+(cur===x[0]?' selected':'')+'>'+esc(x[1])+'</option>').join('')+'</optgroup>';
+  return og('기본',g1)+og('송장 입력값(출고 시 입력)',g2)+og('주문수집 항목 · '+mall,col);
+}
 function drawTpl(){
-  const rows=TP.cols.map((c,i)=>'<tr><td><input type="text" style="width:100%" data-inp="tplh" data-i="'+i+'" value="'+esc(c.h)+'" placeholder="엑셀 헤더명"></td><td><select data-chg="tpls" data-i="'+i+'">'+TPL_SRC.concat(customFields().map(f=>['cf:'+f.key,'추가항목: '+f.label])).map(x=>'<option value="'+esc(x[0])+'"'+(c.src===x[0]?' selected':'')+'>'+esc(x[1])+'</option>').join('')+'</select></td><td>'+(c.src==='__fixed'?'<input type="text" style="width:100%" data-inp="tplt" data-i="'+i+'" value="'+esc(c.text)+'" placeholder="고정값">':'')+'</td><td style="white-space:nowrap"><button class="btn sm" data-act="tplup" data-i="'+i+'">↑</button> <button class="btn sm" data-act="tpldn" data-i="'+i+'">↓</button> <button class="btn sm danger" data-act="tpldel" data-i="'+i+'">삭제</button></td></tr>').join('');
+  const rows=TP.cols.map((c,i)=>'<tr><td><input type="text" style="width:100%" data-inp="tplh" data-i="'+i+'" value="'+esc(c.h)+'" placeholder="엑셀 헤더명"></td><td><select data-chg="tpls" data-i="'+i+'">'+tplSrcOpts(TP.mall,c.src)+'</select></td><td>'+(c.src==='__fixed'?'<input type="text" style="width:100%" data-inp="tplt" data-i="'+i+'" value="'+esc(c.text)+'" placeholder="고정값">':'')+'</td><td style="white-space:nowrap"><button class="btn sm" data-act="tplup" data-i="'+i+'">↑</button> <button class="btn sm" data-act="tpldn" data-i="'+i+'">↓</button> <button class="btn sm danger" data-act="tpldel" data-i="'+i+'">삭제</button></td></tr>').join('');
   tplShow('<h2>쇼핑몰별 송장 엑셀 양식</h2><div class="small mute" style="margin-bottom:8px">쇼핑몰마다 송장 대량업로드 양식의 열 순서·헤더명을 한 번 등록해 두면, 출고완료 조회에서 그 쇼핑몰을 선택하고 다운로드할 때 그 양식 그대로 내려받습니다.</div>'+
     '<div class="row" style="margin:8px 0"><b>쇼핑몰</b><select data-chg="tplmall">'+mallList().map(m=>'<option'+(m===TP.mall?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select>'+(dlTpls()[TP.mall]?'<span class="tag ok">등록됨</span>':'<span class="tag">미등록</span>')+'<span class="grow"></span><label class="btn sm">샘플 엑셀로 헤더 채우기<input type="file" accept=".xlsx,.xls,.csv" data-chg="tplfile" style="display:none"></label></div>'+
     '<div class="tblwrap"><table class="tbl"><thead><tr><th>엑셀 헤더명</th><th>들어갈 값</th><th>고정값</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+

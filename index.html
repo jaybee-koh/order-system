@@ -1313,8 +1313,8 @@ function extractProducts(rows,hdrIdx,map){
 const A={},C={},I={};
 const NAV=[
   {h:'/home',t:'홈'},
-  {parent:'매입처관리'},
-  {h:'/suppliers/new',t:'매입처등록',sub:1},{h:'/suppliers',t:'매입처조회/수정',sub:1},
+  {parent:'계정관리'},
+  {h:'/suppliers',t:'매입거래선관리',sub:1},
   {parent:'상품관리'},
   {h:'/products/changes',t:'상품변경사항',sub:1},{h:'/products/new',t:'신규상품등록',sub:1},{h:'/products/bulk',t:'상품대량등록',sub:1},{h:'/products',t:'매입상품조회',sub:1},
   {parent:'주문관리'},
@@ -1326,7 +1326,6 @@ const ICONS={
   'p_주문관리':IC('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 12h6M9 16h4"/>'),
   'p_상품관리':IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>'),
   'parent':IC('<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/><path d="M8 10h.01M12 10h.01M16 10h.01"/>'),
-  '/suppliers/new':IC('<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>'),
   '/suppliers':IC('<path d="M4 6h16M4 12h16M4 18h10"/>'),
   '/products/changes':IC('<path d="M4 7h12"/><path d="m13 4 3 3-3 3"/><path d="M20 17H8"/><path d="m11 14-3 3 3 3"/>'),
   '/products/new':IC('<path d="M12 5v14"/><path d="M5 12h14"/>'),
@@ -1362,7 +1361,7 @@ document.getElementById('nav-ov').addEventListener('click',()=>setNav(false));
 document.getElementById('nav').addEventListener('click',e=>{if(e.target.closest('a'))setNav(false);});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')setNav(false);});
 window.addEventListener('resize',()=>{if(window.innerWidth>800)setNav(false);});
-window.addEventListener('hashchange',()=>{CF.keep.clear();if(location.hash==='#/suppliers/new'){if(SF.edit)SF.edit=false;else SF=blankSF();}route();window.scrollTo(0,0);});
+window.addEventListener('hashchange',()=>{CF.keep.clear();route();window.scrollTo(0,0);});
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&A[el.dataset.act]){A[el.dataset.act](el,e);}});
 document.addEventListener('change',e=>{const el=e.target.closest('[data-chg]');if(el&&C[el.dataset.chg])C[el.dataset.chg](el,e);});
 document.addEventListener('input',e=>{const el=e.target.closest('[data-inp]');if(el&&I[el.dataset.inp])I[el.dataset.inp](el,e);});
@@ -1616,25 +1615,25 @@ C.restore=async el=>{
 /* =====================================================================
    매입처 (관리 목록 / 등록·수정)
 ===================================================================== */
-const blankSF=()=>({id:null,name:'',contact:'',phone:'',memo:'',edit:false});
+const blankSF=()=>({id:null,name:'',rep:'',bizNo:'',address:'',memo:'',edit:false});
 let SF=blankSF();
 const SL={q:''};
 const supCounts=()=>{const c={};S.products.forEach(p=>{c[p.supplierId]=(c[p.supplierId]||0)+1;});return c;};
 
 /* ---- 매입처관리 (목록) ---- */
 function pgSuppliers(){
-  return '<div class="row"><div class="grow"><h1>매입처 조회/수정</h1><p class="sub">등록된 매입처를 조회하고 수정·삭제합니다.</p></div><a class="btn pri" href="#/suppliers/new" style="text-decoration:none">+ 매입처 등록</a></div>'+
-  '<div class="card row"><input type="text" placeholder="업체명 · 담당자 · 연락처 검색" style="width:280px" data-inp="sq" value="'+esc(SL.q)+'"><span class="grow"></span><span class="mute small">총 '+S.suppliers.length+'개 매입처</span></div><div id="stbl"></div>';
+  return '<div class="row"><div class="grow"><h1>매입거래선관리</h1><p class="sub">등록된 매입처를 조회하고 수정·삭제합니다.</p></div><button class="btn pri" data-act="supNew">+ 매입처 등록</button></div>'+
+  '<div class="card row"><input type="text" placeholder="매입처명 · 대표자명 · 사업자등록번호 · 주소 검색" style="width:340px;max-width:100%" data-inp="sq" value="'+esc(SL.q)+'"><span class="grow"></span><span class="mute small">총 '+S.suppliers.length+'개 매입처</span></div><div id="stbl"></div>';
 }
 ROUTES['/suppliers']=()=>{setTimeout(drawSuppliers,0);return pgSuppliers();};
 function drawSuppliers(){
   const box=$('#stbl');if(!box)return;
-  if(!S.suppliers.length){box.innerHTML='<div class="card mute">등록된 매입처가 없습니다. <a href="#/suppliers/new">매입처 등록</a>에서 첫 매입처를 등록하세요.</div>';return;}
+  if(!S.suppliers.length){box.innerHTML='<div class="card mute">등록된 매입처가 없습니다. 상단의 [+ 매입처 등록]으로 첫 매입처를 등록하세요.</div>';return;}
   const q=norm(SL.q),cnt=supCounts();
-  const list=S.suppliers.filter(s=>!q||norm([s.name,s.contact,s.phone,s.memo].join(' ')).includes(q));
+  const list=S.suppliers.filter(s=>!q||norm([s.name,s.rep,s.bizNo,s.address,s.memo,s.contact,s.phone].join(' ')).includes(q));
   if(!list.length){box.innerHTML='<div class="card mute">검색 결과가 없습니다.</div>';return;}
-  box.innerHTML='<div class="tblwrap"><table class="tbl"><thead><tr><th>거래상태</th><th>업체명</th><th>담당자</th><th>연락처</th><th>메모</th><th class="num">등록 상품수</th><th>등록일</th><th>관리</th></tr></thead><tbody>'+
-  list.map(s=>{const stp=s.status==='stopped';return '<tr'+(stp?' style="background:#f4f4f6;color:#8a90a2"':'')+'><td class="nw"><select data-chg="supst" data-id="'+s.id+'" style="font-weight:600;color:'+(stp?'#e03131':'#2b8a3e')+'"><option value="active"'+(stp?'':' selected')+'>거래중</option><option value="stopped"'+(stp?' selected':'')+'>거래중지</option></select></td><td class="nw"><b>'+esc(s.name)+'</b></td><td class="nw">'+esc(s.contact)+'</td><td class="nw">'+esc(s.phone)+'</td><td>'+esc(s.memo)+'</td><td class="num">'+(cnt[s.id]||0).toLocaleString()+'</td><td class="nw">'+esc(s.createdAt?localDate(new Date(s.createdAt)):'')+'</td><td class="nw"><button class="btn sm" data-act="supEdit" data-id="'+s.id+'">수정</button> <button class="btn sm" data-act="supToList" data-id="'+s.id+'">상품 조회</button> <button class="btn sm pri" data-act="supToBulk" data-id="'+s.id+'">상품 등록</button> <button class="btn sm danger" data-act="supDel" data-id="'+s.id+'">삭제</button></td></tr>';}).join('')+'</tbody></table></div>';
+  box.innerHTML='<div class="tblwrap"><table class="tbl"><thead><tr><th>거래상태</th><th>매입처명</th><th>대표자명</th><th>사업자등록번호</th><th>주소</th><th>메모</th><th class="num">등록 상품수</th><th>등록일</th><th>관리</th></tr></thead><tbody>'+
+  list.map(s=>{const stp=s.status==='stopped';return '<tr'+(stp?' style="background:#f4f4f6;color:#8a90a2"':'')+'><td class="nw"><select data-chg="supst" data-id="'+s.id+'" style="font-weight:600;color:'+(stp?'#e03131':'#2b8a3e')+'"><option value="active"'+(stp?'':' selected')+'>거래중</option><option value="stopped"'+(stp?' selected':'')+'>거래중지</option></select></td><td class="nw"><b>'+esc(s.name)+'</b></td><td class="nw">'+esc(s.rep||'')+'</td><td class="nw">'+esc(s.bizNo||'')+'</td><td>'+esc(s.address||'')+'</td><td>'+esc(s.memo||'')+'</td><td class="num">'+(cnt[s.id]||0).toLocaleString()+'</td><td class="nw">'+esc(s.createdAt?localDate(new Date(s.createdAt)):'')+'</td><td class="nw"><button class="btn sm" data-act="supEdit" data-id="'+s.id+'">수정</button> <button class="btn sm" data-act="supToList" data-id="'+s.id+'">상품 조회</button> <button class="btn sm pri" data-act="supToBulk" data-id="'+s.id+'">상품 등록</button> <button class="btn sm danger" data-act="supDel" data-id="'+s.id+'">삭제</button></td></tr>';}).join('')+'</tbody></table></div>';
 }
 C.supst=async el=>{
   const s=M.sup.get(+el.dataset.id);if(!s)return;
@@ -1646,40 +1645,49 @@ C.supst=async el=>{
 };
 I.sq=el=>{SL.q=el.value;drawSuppliers();};
 
-/* ---- 매입처 등록 / 수정 (페이지) ---- */
-function pgSupForm(){
+/* ---- 매입처 등록 / 수정 (팝업) ---- */
+const fmtBiz=v=>{const d=String(v||'').replace(/\D/g,'').slice(0,10);return d.length>5?d.slice(0,3)+'-'+d.slice(3,5)+'-'+d.slice(5):d.length>3?d.slice(0,3)+'-'+d.slice(3):d;};
+function openSupModal(){
   const edit=!!SF.id;
-  return '<h1>'+(edit?'매입처 수정':'매입처 등록')+'</h1><p class="sub">'+(edit?'매입처 정보를 수정합니다.':'새 매입처를 등록합니다. 상품은 [신규상품등록]에서 올립니다.')+'</p>'+
-  '<div class="card" style="max-width:640px">'+
-  '<label class="f" style="margin-top:0">업체명<span class="req">*</span></label><input type="text" style="width:100%" data-inp="sf" data-f="name" value="'+esc(SF.name)+'" placeholder="예: OO도매">'+
-  '<div class="row" style="align-items:flex-start;gap:14px"><div class="grow"><label class="f">담당자 (선택)</label><input type="text" style="width:100%" data-inp="sf" data-f="contact" value="'+esc(SF.contact)+'"></div><div class="grow"><label class="f">연락처 (선택)</label><input type="text" style="width:100%" data-inp="sf" data-f="phone" value="'+esc(SF.phone)+'" placeholder="010-0000-0000"></div></div>'+
-  '<label class="f">메모 (선택)</label><input type="text" style="width:100%" data-inp="sf" data-f="memo" value="'+esc(SF.memo)+'">'+
-  '<div class="row" style="margin-top:20px"><button class="btn pri" data-act="sfSave">저장</button>'+(edit?'':'<button class="btn" data-act="sfSave" data-go="bulk">저장 후 상품 등록</button>')+'<a class="btn" href="#/suppliers" style="text-decoration:none">목록으로</a></div></div>';
+  const fld=(label,req,f,ph,extra)=>'<label class="f'+(req?' rq':'')+'">'+label+(req?' *':'')+'</label><input type="text" style="width:100%" data-inp="sf" data-f="'+f+'" value="'+esc(SF[f]||'')+'" placeholder="'+(ph||'')+'"'+(extra||'')+'>';
+  openModal('<h2>'+(edit?'매입처 수정':'매입처 등록')+'</h2>'+
+    (edit?'':'<p class="mute small" style="margin:0 0 6px">새 매입처를 등록합니다. 상품은 [신규상품등록]에서 올립니다.</p>')+
+    fld('매입처명',1,'name','예: OO도매')+
+    fld('대표자명',0,'rep','')+
+    fld('사업자등록번호',0,'bizNo','000-00-00000',' inputmode="numeric" maxlength="12"')+
+    fld('주소',0,'address','')+
+    '<label class="f">메모</label><textarea style="width:100%;min-height:72px;resize:vertical" data-inp="sf" data-f="memo">'+esc(SF.memo||'')+'</textarea>'+
+    '<div class="foot"><button class="btn" data-act="close">취소</button>'+(edit?'':'<button class="btn" data-act="sfSave" data-go="bulk">저장 후 상품 등록</button>')+'<button class="btn pri" data-act="sfSave">저장</button></div>','');
+  const f=$('[data-f=name]');if(f)f.focus();
 }
-ROUTES['/suppliers/new']=pgSupForm;
-I.sf=el=>{SF[el.dataset.f]=el.value;};
+I.sf=el=>{
+  if(el.dataset.f==='bizNo'){const v=fmtBiz(el.value);if(v!==el.value)el.value=v;}
+  SF[el.dataset.f]=el.value;
+};
+A.supNew=()=>{SF=blankSF();openSupModal();};
 A.sfSave=async el=>{
   const name=SF.name.trim();
-  if(!name){toast('업체명을 입력하세요.','err');return;}
+  if(!name){toast('매입처명을 입력하세요.','err');return;}
   if(S.suppliers.some(s=>s.id!==SF.id&&s.name===name)){toast('같은 이름의 매입처가 이미 있습니다.','err');return;}
+  const bizNo=fmtBiz(SF.bizNo);
+  if(bizNo&&bizNo.replace(/\D/g,'').length!==10){toast('사업자등록번호는 숫자 10자리로 입력하세요.','err');return;}
   const old=SF.id?M.sup.get(SF.id):null;
-  const obj={...(old||{}),status:(old&&old.status)||'active',name,contact:SF.contact.trim(),phone:SF.phone.trim(),memo:SF.memo.trim(),createdAt:old?old.createdAt:new Date().toISOString(),pl:null};
+  const obj={...(old||{}),status:(old&&old.status)||'active',name,rep:SF.rep.trim(),bizNo,address:SF.address.trim(),memo:SF.memo.trim(),createdAt:old?old.createdAt:new Date().toISOString(),pl:null};
   try{
     await putOne('suppliers',obj);
     const i=S.suppliers.findIndex(x=>x.id===obj.id);
     if(i>=0)S.suppliers[i]=obj;else S.suppliers.push(obj);
     rebuild();
   }catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
-  SF=blankSF();
+  SF=blankSF();closeModal();
   if(el.dataset.go==='bulk'){NP.supplierId=obj.id;NP.result=null;location.hash='#/products/new';return;}
-  if(old){toast('수정했습니다.');location.hash='#/suppliers';return;}
-  toast('"'+name+'" 매입처를 등록했습니다.');route();
-  const f=$('[data-f=name]');if(f)f.focus();
+  toast(old?'수정했습니다.':'"'+name+'" 매입처를 등록했습니다.');
+  route();
 };
 A.supEdit=el=>{
   const s=M.sup.get(+el.dataset.id);if(!s)return;
-  SF={id:s.id,name:s.name,contact:s.contact||'',phone:s.phone||'',memo:s.memo||'',edit:true};
-  location.hash='#/suppliers/new';
+  SF={id:s.id,name:s.name,rep:s.rep||'',bizNo:s.bizNo||'',address:s.address||'',memo:s.memo||'',edit:true};
+  openSupModal();
 };
 A.supDel=async el=>{
   const id=+el.dataset.id,s=M.sup.get(id);
@@ -2244,7 +2252,7 @@ function pgNewProd(){
   const fld=(label,req,html)=>'<div><label class="f'+(req?' rq':'')+'">'+label+'</label>'+html+'</div>';
   const txt=(k,ph,num)=>'<input type="text" style="width:100%"'+(num?' inputmode="numeric"':'')+' data-inp="npf" data-k="'+k+'" value="'+esc(NP[k])+'" placeholder="'+(ph||'')+'">';
   const sel=(k,opts)=>'<select style="width:100%" data-chg="npf" data-k="'+k+'">'+opts.map(o=>'<option value="'+o+'"'+(NP[k]===o?' selected':'')+'>'+o+'</option>').join('')+'</select>';
-  const supSel=S.suppliers.length?'<select style="width:100%" data-chg="npf" data-k="supplierId"><option value="">매입처를 선택하세요</option>'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(String(NP.supplierId)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select>':'<span class="err">먼저 <a href="#/suppliers/new">매입처등록</a>에서 매입처를 등록하세요.</span>';
+  const supSel=S.suppliers.length?'<select style="width:100%" data-chg="npf" data-k="supplierId"><option value="">매입처를 선택하세요</option>'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(String(NP.supplierId)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select>':'<span class="err">먼저 <a href="#/suppliers">매입거래선관리</a>에서 매입처를 등록하세요.</span>';
   return '<h1>신규상품등록</h1><p class="sub">상품을 1개씩 직접 입력해 등록합니다. 여러 개는 [상품대량등록]에서 엑셀로 한 번에 등록하세요. 자체상품코드를 비워 두면 8자리 숫자가 자동으로 부여됩니다(중복 없음).</p>'+
   (res?'<div class="good">'+(res.updated?'수정':'등록')+' 완료 — <b>'+esc(res.name)+'</b> / '+esc(res.option)+' (상품코드 '+esc(res.code)+') · <a href="#/products">매입 상품 조회</a></div>':'')+
   '<div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0 20px">'+

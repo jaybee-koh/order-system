@@ -369,6 +369,10 @@ body.rzing{cursor:col-resize;user-select:none}
 .stcell{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .btn.cs{height:20px;padding:0 6px;font-size:10.5px;font-weight:700;border-radius:5px;box-shadow:none;color:var(--mute);letter-spacing:0}
 .btn.cs.on{background:var(--warn-soft);border-color:#f3cf8f;color:#a85f00}
+.btn.cs.clm.on{background:var(--pri-soft);border-color:#8cc3bb;color:var(--pri)}
+.btn.cs.cancel.on{background:#e03131;border-color:#e03131;color:#fff}
+.btn.cs.cancel.on:hover{background:#c92a2a;border-color:#c92a2a;color:#fff}
+td.cstxt{white-space:pre-wrap;min-width:180px;max-width:320px;word-break:break-word}
 textarea.csarea{display:block;width:100%;height:auto;min-height:120px;padding:10px 12px;line-height:1.6;resize:vertical}
 .tag.ship{background:#f3ecff;color:#5f3dc4}
 
@@ -1324,6 +1328,8 @@ const NAV=[
   {h:'/suppliers',t:'매입거래선관리',sub:1},
   {parent:'상품관리'},
   {h:'/products/changes',t:'상품변경사항',sub:1},{h:'/products/new',t:'신규상품등록',sub:1},{h:'/products/bulk',t:'상품대량등록',sub:1},{h:'/products',t:'매입상품조회',sub:1},
+  {parent:'C/S관리'},
+  {h:'/cs/claims',t:'클레임접수관리',sub:1},{h:'/cs/memos',t:'C/S메모관리',sub:1},
   {parent:'주문관리'},
   {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1}
 ];
@@ -1434,6 +1440,7 @@ function homeBuyPrice(p,o,d){
 function homeRows(){
   const out=[];
   S.orders.forEach(o=>{
+    if(o.canceled)return;   /* 취소 주문은 집계 제외 */
     const d=ordDayOf(o);if(!d)return;
     const {p,s}=orderInfo(o),pay=nz(o.payAmount),qty=nz(o.qty)||1;
     const unitBuy=p?homeBuyPrice(p,o,d):0,buy=unitBuy*qty,ship=p&&p.shipFee==='미포함'?nz(p.shipAmount):0,fee=Math.round(pay*HD_FEE);
@@ -1529,9 +1536,10 @@ function buildHome(){
   const t=localDate(),rows=homeRows();
   /* 판매관리: 주문 상태별 수량 */
   const st={pre:0,nw:0,cf:0,sh:0};
-  S.orders.forEach(o=>{if(stOf(o)==='none'&&!o.confirmed){st.pre++;return;}const s=ordStatus(o);if(s==='shipped')st.sh++;else if(s==='confirmed')st.cf++;else st.nw++;});
+  const liveCnt=S.orders.filter(o=>!o.canceled).length;
+  S.orders.forEach(o=>{if(o.canceled)return;if(stOf(o)==='none'&&!o.confirmed){st.pre++;return;}const s=ordStatus(o);if(s==='shipped')st.sh++;else if(s==='confirmed')st.cf++;else st.nw++;});
   const tile=(href,l,n,c,hint)=>'<a class="htile" href="#'+href+'" style="--c:'+c+'"><span>'+l+'</span><b>'+n.toLocaleString()+'<small>건</small></b><em>'+hint+'</em></a>';
-  const sale='<div class="card hbox hcol"><div class="row hhead"><h3 style="margin:0">판매관리</h3><span class="grow"></span><span class="mute small">전체 주문 '+S.orders.length.toLocaleString()+'건</span></div><div class="htiles">'+
+  const sale='<div class="card hbox hcol"><div class="row hhead"><h3 style="margin:0">판매관리</h3><span class="grow"></span><span class="mute small">전체 주문 '+liveCnt.toLocaleString()+'건 (취소 제외)</span></div><div class="htiles">'+
     tile('/orders/confirm','주문확정 전',st.pre,'#e8890c','미매핑 · 상품 연결 필요')+tile('/orders/check','신규주문',st.nw,'#3b5bdb','주문확인 대기')+tile('/orders/check','주문확인',st.cf,'#12a150','출고 대기')+tile('/orders/tracking','출고완료',st.sh,'#7048e8','운송장 입력 완료')+'</div><div class="hnote">주문확정 전 = 상품 매핑이 안 된 주문 · 신규주문 = 매핑 후 확인 대기 · 건수는 전체 주문 기준</div></div>';
   /* 정산관리 */
   const sr={day:[t,t],yday:[addD(t,-1),addD(t,-1)],week:[mondayOf(t),t],month:[t.slice(0,8)+'01',t],all:[null,null]}[HD.set];
@@ -2904,7 +2912,14 @@ function cellVal(o,p,s,seq,m){
 ===================================================================== */
 const ST_NAME={new:'신규주문',confirmed:'주문확인',shipped:'출고완료'};
 const ordStatus=o=>o.shipped?'shipped':(o.confirmed?'confirmed':'new');
-function stTag(o){const s=ordStatus(o);return '<span class="tag'+(s==='confirmed'?' ok':s==='shipped'?' ship':'')+'">'+ST_NAME[s]+'</span>';}
+/* 주문상태 조회용: 기본 상태 외에 취소건(canceled) · 반품건(returned) */
+function stMatch(o,s){
+  if(s==='canceled')return !!o.canceled;
+  if(s==='returned')return !!(o.claim&&o.claim.req==='반품');
+  return ordStatus(o)===s;
+}
+const CK_LBL={new:'신규주문',confirmed:'주문확인',shipped:'출고완료',canceled:'취소건',returned:'반품건'};
+function stTag(o){const s=ordStatus(o);return '<span class="tag'+(s==='confirmed'?' ok':s==='shipped'?' ship':'')+'">'+ST_NAME[s]+'</span>'+(o.canceled?' <span class="tag warn">취소</span>':'')+(o.claim&&o.claim.req==='반품'?' <span class="tag gray">반품</span>':'');}
 function setOrdStatus(o,st,now){
   o.confirmed=st!=='new';o.confirmedAt=st==='new'?null:(o.confirmedAt||now);
   o.shipped=st==='shipped';o.shippedAt=st==='shipped'?now:null;
@@ -2939,7 +2954,7 @@ function ckList(skipStatus){
   return S.orders.filter(o=>{
     const {p,s}=orderInfo(o);
     if(!p)return false;
-    if(!skipStatus&&a.status&&ordStatus(o)!==a.status)return false;
+    if(!skipStatus&&a.status&&!stMatch(o,a.status))return false;
     if(a.mall==='__none'){if(o.mall)return false;}else if(a.mall&&o.mall!==a.mall)return false;
     if(a.sup&&s.id!==+a.sup)return false;
     const cd=a.dtype==='order'?ordDateOnly(o):(o.collectedDate||'');
@@ -2957,7 +2972,7 @@ function pgCheck(){
   const lb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
   return '<h1>주문확인처리</h1><p class="sub">매핑이 끝난 주문만 조회됩니다. 조회 기준 일자는 수집일자 또는 주문일자 중에서 선택할 수 있습니다. (주문일자가 없는 주문은 주문일자 조회에서 제외됩니다) 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
   '<div class="card">'+
-  '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value=""'+(d.status===''?' selected':'')+'>전체</option><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option></select>'+
+  '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value=""'+(d.status===''?' selected':'')+'>전체</option><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option><option value="canceled"'+(d.status==='canceled'?' selected':'')+'>취소건</option><option value="returned"'+(d.status==='returned'?' selected':'')+'>반품건</option></select>'+
   '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="ckf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
   '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="ckf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+
   '<div class="row" style="margin-bottom:10px">'+'<select data-chg="ckf" data-k="dtype" style="min-width:86px"><option value="collected"'+(d.dtype!=='order'?' selected':'')+'>수집일자</option><option value="order"'+(d.dtype==='order'?' selected':'')+'>주문일자</option></select>'+'<input type="date" id="ckfrom" data-chg="ckf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ckto" data-chg="ckf" data-k="to" value="'+esc(d.to)+'">'+
@@ -2971,9 +2986,9 @@ function drawCheckTable(){
   const box=$('#ktbl');if(!box)return;
   const kc=$('#kcnt');
   if(kc){
-    const cnt={new:0,confirmed:0,shipped:0};
-    ckList(true).forEach(o=>{cnt[ordStatus(o)]++;});
-    kc.innerHTML='<div class="chips" style="display:inline-flex">'+['','new','confirmed','shipped'].map(k=>'<button class="chip'+(CK.a.status===k?' on':'')+'" data-act="ckstat" data-s="'+k+'">'+(k?ST_NAME[k]:'전체')+' <b>'+(k?cnt[k]:cnt.new+cnt.confirmed+cnt.shipped).toLocaleString()+'</b></button>').join('')+'</div>';
+    const cnt={new:0,confirmed:0,shipped:0,canceled:0,returned:0};
+    ckList(true).forEach(o=>{cnt[ordStatus(o)]++;if(o.canceled)cnt.canceled++;if(o.claim&&o.claim.req==='반품')cnt.returned++;});
+    kc.innerHTML='<div class="chips" style="display:inline-flex">'+['','new','confirmed','shipped','canceled','returned'].map(k=>'<button class="chip'+(CK.a.status===k?' on':'')+'" data-act="ckstat" data-s="'+k+'">'+(k?CK_LBL[k]:'전체')+' <b>'+(k?cnt[k]:cnt.new+cnt.confirmed+cnt.shipped).toLocaleString()+'</b></button>').join('')+'</div>';
   }
   const list=ckList();
   const pages=Math.max(1,Math.ceil(list.length/PAGE_O));if(CK.page>=pages)CK.page=pages-1;
@@ -2988,7 +3003,7 @@ function drawCheckTable(){
   cur.map(o=>{
     const {p,s}=orderInfo(o);
     return '<tr class="m"><td><input type="checkbox" data-chg="ckrow" data-id="'+o.id+'"'+(CK.sel.has(o.id)?' checked':'')+'></td>'+
-      '<td><div class="stcell">'+stTag(o)+'<button class="btn cs'+((o.csContent||o.csAction)?' on':'')+'" data-act="cs" data-id="'+o.id+'" title="'+((o.csContent||o.csAction)?'C/S 메모 있음 · 클릭하여 보기/수정':'C/S 메모 작성')+'">C/S</button></div></td>'+
+      '<td><div class="stcell">'+stTag(o)+'<button class="btn cs'+((o.csContent||o.csAction)?' on':'')+'" data-act="cs" data-id="'+o.id+'" title="'+((o.csContent||o.csAction)?'C/S 메모 있음 · 클릭하여 보기/수정':'C/S 메모 작성')+'">C/S</button>'+clmBtns(o)+'</div></td>'+
       '<td>'+esc(o.collectedDate)+'</td><td>'+esc(o.mall)+'</td><td class="brk">'+esc(o.orderNo)+(o.ownNo?'<div class="sm2" style="color:#1c7ed6" title="자체주문번호">'+esc(o.ownNo)+'</div>':'')+'</td>'+
       '<td><b>'+esc(o.receiver)+'</b><div class="sm2">'+esc(o.orderer)+'</div></td>'+
       '<td>'+esc(o.tel1)+(o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'+
@@ -3050,20 +3065,21 @@ A.cs=el=>{
 A.csDel=async()=>{
   const o=M.ord.get(CSO);if(!o)return;
   if(!confirm('이 주문의 C/S 메모(CS 내용·처리내용)를 삭제할까요?'))return;
-  o.csContent='';o.csAction='';o.csAt=null;
+  o.csContent='';o.csAction='';o.csAt=null;o.csAt0=null;
   try{await putOne('orders',o);}catch(e){toast('삭제 실패: '+e.message,'err',6000);return;}
-  closeModal();CSO=null;toast('C/S 메모를 삭제했습니다.');drawCheckTable();
+  closeModal();CSO=null;toast('C/S 메모를 삭제했습니다.');csRedraw();
 };
 A.csSave=async()=>{
   const o=M.ord.get(CSO);if(!o)return;
   const a=$('#cs-a').value.trim(),b=$('#cs-b').value.trim();
   o.csContent=a;o.csAction=b;o.csAt=(a||b)?new Date().toISOString():null;
+  if(!(a||b))o.csAt0=null;else if(!o.csAt0)o.csAt0=o.csAt;   /* csAt0 = 최초 접수일시 */
   try{await putOne('orders',o);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
   closeModal();CSO=null;toast(a||b?'C/S 메모를 저장했습니다.':'C/S 메모를 비웠습니다.');
-  drawCheckTable();
+  csRedraw();
 };
 A.ckstat=el=>{
-  const s=el.dataset.s;if(s&&!ST_NAME[s])return;
+  const s=el.dataset.s;if(s&&!CK_LBL[s])return;
   CK.a.status=s;CK.d.status=s;CK.page=0;CK.sel.clear();
   const sel=$('[data-chg="ckf"][data-k="status"]');if(sel)sel.value=s;
   drawCheckTable();
@@ -3375,6 +3391,213 @@ A.btsave=async()=>{
   BT.items=null;BT.fileName='';BT.err='';
   route();
 };
+
+/* =====================================================================
+   클레임(출고완료 주문) · 취소 · C/S관리 (클레임접수관리 / C/S메모관리)
+===================================================================== */
+ICONS['p_C/S관리']=IC('<path d="M4 5h16v11H10l-4 4v-4H4z"/><path d="M8 9h8M8 12h5"/>');
+const CLM_TYPES=['고객변심','오배송','제품하자'];
+const CLM_REQS=['반품','교환','재출고'];
+const CLM_FAULTS=['고객','매입처','쇼핑몰','지앤'];
+/* 주문일 기준 상품 매입금액 (매입가 × 수량) */
+const claimBuy=o=>{const {p}=orderInfo(o);return p?homeBuyPrice(p,o,ordDayOf(o))*(nz(o.qty)||1):0;};
+/* 주문확인처리의 C/S 버튼 옆 버튼: 출고완료=클레임, 신규주문·주문확인=취소(누르면 빨간색 on/off) */
+function clmBtns(o){
+  if(ordStatus(o)==='shipped')return '<button class="btn cs clm'+(o.claim?' on':'')+'" data-act="claim" data-id="'+o.id+'" title="'+(o.claim?'클레임 접수됨 · 클릭하여 보기/수정':'클레임 접수')+'">클레임</button>';
+  return '<button class="btn cs cancel'+(o.canceled?' on':'')+'" data-act="ocancel" data-id="'+o.id+'" title="'+(o.canceled?'취소됨 · 클릭하면 취소 해제':'클릭하면 취소 처리')+'">취소</button>';
+}
+A.ocancel=async el=>{
+  const o=M.ord.get(+el.dataset.id);if(!o||ordStatus(o)==='shipped')return;
+  const pv=[o.canceled,o.canceledAt];
+  o.canceled=!o.canceled;o.canceledAt=o.canceled?new Date().toISOString():null;
+  try{await putOne('orders',o);}
+  catch(e){[o.canceled,o.canceledAt]=pv;toast('저장 실패: '+e.message,'err',6000);return;}
+  toast(o.canceled?'취소 처리했습니다.':'취소를 해제했습니다.');
+  const y=window.scrollY;drawCheckTable();window.scrollTo(0,y);
+};
+/* ---- 클레임 팝업 ---- */
+let CLMO=null;
+const clmBuyHtml=(req,o)=>{if(req!=='반품')return '<span class="mute">반품일 때만 표시됩니다</span>';const b=claimBuy(o);return b?'<b style="color:#e03131">-'+won(b)+'원</b>':'<b>0원</b> <span class="mute small">(매입가 없음)</span>';};
+A.claim=el=>{
+  const o=M.ord.get(+el.dataset.id);if(!o||ordStatus(o)!=='shipped')return;
+  CLMO=o.id;
+  const {p}=orderInfo(o),c=o.claim||{};
+  const sel=(id,list,cur,chg)=>'<select id="'+id+'" style="width:100%"'+(chg?' data-chg="'+chg+'"':'')+'><option value="">선택</option>'+list.map(x=>'<option value="'+x+'"'+(cur===x?' selected':'')+'>'+x+'</option>').join('')+'</select>';
+  openModal('<h2>클레임 접수</h2>'+
+    '<div class="card" style="background:#f7f8fb;box-shadow:none;margin-bottom:0;padding:14px 16px"><div class="small mute">'+esc(o.mall||'')+(o.mall?' · ':'')+esc(o.orderNo)+'</div><div style="margin-top:2px"><b>'+esc(o.receiver)+'</b>'+(p?' <span class="mute">/ '+esc(p.name)+(p.option?' '+esc(p.option):'')+' · 수량 '+o.qty+'</span>':'')+'</div></div>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0 14px">'+
+    '<div><label class="f rq">C/S구분 *</label>'+sel('clm-type',CLM_TYPES,c.type)+'</div>'+
+    '<div><label class="f rq">요청사항 *</label>'+sel('clm-req',CLM_REQS,c.req,'clmreq')+'</div>'+
+    '<div><label class="f rq">귀책 *</label>'+sel('clm-fault',CLM_FAULTS,c.fault)+'</div></div>'+
+    '<h3 style="margin:22px 0 0">CS정산</h3>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px">'+
+    '<div><label class="f">상품대금 <span class="mute small" style="font-weight:500">(주문일 기준 매입금액)</span></label><div id="clm-buy" style="min-height:38px;display:flex;align-items:center">'+clmBuyHtml(c.req||'',o)+'</div></div>'+
+    '<div><label class="f">배송비정산</label><input type="text" id="clm-ship" inputmode="numeric" style="width:100%" placeholder="직접 입력 (숫자)" value="'+esc(c.ship===''||c.ship==null?'':c.ship)+'"></div></div>'+
+    (c.at?'<div class="mute small" style="margin-top:10px">접수일시: '+fmtDT(c.at)+'</div>':'')+
+    '<div class="foot">'+(o.claim?'<button class="btn danger" data-act="claimDel" style="margin-right:auto">클레임 삭제</button>':'')+'<button class="btn" data-act="close">닫기</button><button class="btn pri" data-act="claimSave">저장</button></div>');
+};
+C.clmreq=el=>{const o=M.ord.get(CLMO),b=$('#clm-buy');if(o&&b)b.innerHTML=clmBuyHtml(el.value,o);};
+A.claimSave=async()=>{
+  const o=M.ord.get(CLMO);if(!o)return;
+  const type=$('#clm-type').value,req=$('#clm-req').value,fault=$('#clm-fault').value;
+  if(!type){toast('C/S구분을 선택하세요.','err');return;}
+  if(!req){toast('요청사항을 선택하세요.','err');return;}
+  if(!fault){toast('귀책을 선택하세요.','err');return;}
+  const raw=$('#clm-ship').value.replace(/[,원\s]/g,'');
+  let ship='';
+  if(raw!==''){if(isNaN(Number(raw))){toast('배송비정산은 숫자로 입력하세요.','err');return;}ship=Number(raw);}
+  const prev=o.claim,now=new Date().toISOString(),b=claimBuy(o);
+  o.claim={type,req,fault,buy:req==='반품'&&b?-b:0,ship,at:(prev&&prev.at)||now,updatedAt:now};
+  try{await putOne('orders',o);}catch(e){o.claim=prev;toast('저장 실패: '+e.message,'err',6000);return;}
+  closeModal();CLMO=null;toast('클레임을 '+(prev?'수정':'접수')+'했습니다.');
+  csRedraw();
+};
+A.claimDel=async()=>{
+  const o=M.ord.get(CLMO);if(!o||!o.claim)return;
+  if(!confirm('이 주문의 클레임 접수 내용을 삭제할까요?'))return;
+  const prev=o.claim;o.claim=null;
+  try{await putOne('orders',o);}catch(e){o.claim=prev;toast('삭제 실패: '+e.message,'err',6000);return;}
+  closeModal();CLMO=null;toast('클레임을 삭제했습니다.');csRedraw();
+};
+/* 팝업 저장 후 현재 화면 다시 그리기 */
+function csRedraw(){
+  const cur=(location.hash||'').slice(1);
+  if(cur==='/cs/memos')drawMemos();else if(cur==='/cs/claims')drawClaims();else drawCheckTable();
+}
+/* ---- C/S관리 공통 ---- */
+const CS_STATUS=[['','전체'],['new','신규주문'],['confirmed','주문확인'],['shipped','출고완료'],['canceled','취소건'],['returned','반품건']];
+const csStatusOpts=cur=>CS_STATUS.map(x=>'<option value="'+x[0]+'"'+(cur===x[0]?' selected':'')+'>'+x[1]+'</option>').join('');
+const csMallOpts=cur=>{const ms=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];return '<option value="">전체</option>'+ms.map(m=>'<option value="'+esc(m)+'"'+(cur===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(cur==='__none'?' selected':'')+'>(미지정)</option>';};
+const csSupOpts=cur=>'<option value="">전체</option>'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(String(cur)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('');
+const csMallOk=(o,m)=>!m||(m==='__none'?!o.mall:o.mall===m);
+const csLb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
+const csBtnSm='style="padding:2px 8px;font-size:12px"';
+function monthsBack(n){const t=new Date(),y=t.getFullYear(),m=t.getMonth(),day=t.getDate(),dim=new Date(y,m-n+1,0).getDate();return [localDate(new Date(y,m-n,Math.min(day,dim))),localDate(t)];}
+
+/* ---- 클레임접수관리 ---- */
+const CM={init:false,d:{},a:{},page:0};
+const CM_FIELDS=[['receiver','수취인'],['sup','매입처'],['mall','쇼핑몰'],['itemName','상품명']];
+function pgClaims(){
+  if(!CM.init){CM.d={from:'',to:'',mall:'',sup:'',status:'',field:'receiver',q:''};CM.a=Object.assign({},CM.d);CM.init=true;}
+  const d=CM.d;
+  return '<h1>클레임접수관리</h1><p class="sub">[주문확인처리]에서 출고완료 주문의 [클레임] 버튼으로 접수한 클레임 목록입니다. 최근 접수 건이 맨 위에 표시됩니다. 조회 기준 일자는 주문 수집일자입니다.</p>'+
+  '<div class="card">'+
+  '<div class="row" style="margin-bottom:10px">'+csLb('수집일자')+'<input type="date" id="cmfrom" data-chg="cmf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="cmto" data-chg="cmf" data-k="to" value="'+esc(d.to)+'">'+
+  [['1','1개월'],['2','2개월'],['3','3개월']].map(x=>'<button class="btn sm" '+csBtnSm+' data-act="cmrange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>'+
+  '<div class="row" style="margin-bottom:10px">'+csLb('쇼핑몰')+'<select data-chg="cmf" data-k="mall">'+csMallOpts(d.mall)+'</select><span style="width:10px"></span>'+
+  csLb('매입처')+'<select data-chg="cmf" data-k="sup">'+csSupOpts(d.sup)+'</select><span style="width:10px"></span>'+
+  csLb('주문상태')+'<select data-chg="cmf" data-k="status">'+csStatusOpts(d.status)+'</select></div>'+
+  '<div class="row">'+csLb('검색')+'<select data-chg="cmf" data-k="field">'+CM_FIELDS.map(f=>'<option value="'+f[0]+'"'+(d.field===f[0]?' selected':'')+'>'+f[1]+'</option>').join('')+'</select>'+
+  '<input type="text" placeholder="검색어 입력" style="width:240px" data-inp="cmq" value="'+esc(d.q)+'"><button class="btn pri" data-act="cmsearch">검색</button><button class="btn" data-act="cmreset">초기화</button></div></div>'+
+  '<div id="cmtbl"></div>';
+}
+ROUTES['/cs/claims']=()=>{setTimeout(drawClaims,0);return pgClaims();};
+function claimList(){
+  const a=CM.a,q=norm(a.q);
+  return S.orders.filter(o=>{
+    if(!o.claim)return false;
+    const {p,s}=orderInfo(o);
+    if(!csMallOk(o,a.mall))return false;
+    if(a.sup&&!(s&&s.id===+a.sup))return false;
+    if(a.status&&!stMatch(o,a.status))return false;
+    const cd=o.collectedDate||'';
+    if(a.from&&cd<a.from)return false;
+    if(a.to&&cd>a.to)return false;
+    if(q){
+      let v;
+      if(a.field==='sup')v=s?s.name:'';
+      else if(a.field==='mall')v=o.mall;
+      else if(a.field==='itemName')v=(o.itemName||'')+' '+(p?p.name:'');
+      else v=o.receiver;
+      if(!norm(v).includes(q))return false;
+    }
+    return true;
+  }).sort((x,y)=>(y.claim.at||'').localeCompare(x.claim.at||''));
+}
+function drawClaims(){
+  const box=$('#cmtbl');if(!box)return;
+  const list=claimList();
+  const pages=Math.max(1,Math.ceil(list.length/PAGE_O));if(CM.page>=pages)CM.page=pages-1;
+  const cur=list.slice(CM.page*PAGE_O,(CM.page+1)*PAGE_O);
+  if(!list.length){box.innerHTML='<div class="card mute">'+(S.orders.some(o=>o.claim)?'조건에 맞는 클레임이 없습니다.':'접수된 클레임이 없습니다. [주문확인처리]에서 출고완료 주문의 [클레임] 버튼으로 접수하세요.')+'</div>';return;}
+  const money=v=>v===''||v==null?'<span class="mute">-</span>':won(v);
+  box.innerHTML='<div class="mute small" style="margin-bottom:6px">총 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CM.page+1)+'/'+pages+' 페이지':'')+'</div>'+
+  '<div class="tblwrap"><table class="tbl"><thead><tr><th>NO</th><th>C/S구분</th><th>요청사항</th><th>귀책</th><th>쇼핑몰명</th><th>수취인</th><th>전화번호1</th><th>전화번호2</th><th>우편번호</th><th>주소</th><th>상품명</th><th>옵션명</th><th class="num">수량</th><th class="num">매입금액</th><th class="num">배송비정산</th></tr></thead><tbody>'+
+  cur.map((o,i)=>{
+    const {p}=orderInfo(o),c=o.claim,no=list.length-(CM.page*PAGE_O+i);
+    return '<tr><td class="nw">'+no+'</td><td class="nw">'+esc(c.type)+'</td><td class="nw"><b>'+esc(c.req)+'</b></td><td class="nw">'+esc(c.fault)+'</td><td class="nw">'+esc(o.mall||'')+'</td><td class="nw"><b>'+esc(o.receiver)+'</b></td><td class="nw">'+esc(o.tel1)+'</td><td class="nw">'+esc(o.tel2)+'</td><td class="nw">'+esc(o.zip)+'</td><td class="addr">'+esc(o.addr)+'</td><td class="prod">'+esc(p?p.name:o.itemName)+'</td><td>'+esc(p?p.option:o.itemOption)+'</td><td class="num">'+o.qty+'</td><td class="num">'+(c.req==='반품'?'<span style="color:#e03131">'+won(c.buy||0)+'</span>':'<span class="mute">-</span>')+'</td><td class="num">'+money(c.ship)+'</td></tr>';
+  }).join('')+'</tbody></table></div>'+
+  (pages>1?'<div class="pager"><button class="btn sm" data-act="cmpage" data-d="-1"'+(CM.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="cmpage" data-d="1"'+(CM.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
+}
+C.cmf=el=>{CM.d[el.dataset.k]=el.value;};
+I.cmq=el=>{CM.d.q=el.value;};
+A.cmrange=el=>{const r=monthsBack(+el.dataset.r);CM.d.from=r[0];CM.d.to=r[1];const f=$('#cmfrom'),t=$('#cmto');if(f)f.value=r[0];if(t)t.value=r[1];};
+A.cmsearch=()=>{
+  if(CM.d.from&&CM.d.to&&CM.d.from>CM.d.to){toast('시작일이 종료일보다 늦습니다.','err');return;}
+  CM.a=Object.assign({},CM.d);CM.page=0;drawClaims();
+};
+A.cmreset=()=>{CM.init=false;route();};
+A.cmpage=el=>{CM.page+=+el.dataset.d;drawClaims();const b=$('#cmtbl');if(b)b.scrollIntoView({block:'start'});};
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.matches&&e.target.matches('[data-inp="cmq"]'))A.cmsearch();});
+
+/* ---- C/S메모관리 ---- */
+const CMM={init:false,d:{},a:{},page:0};
+const CMM_FIELDS=[['orderer','주문자'],['receiver','수취인'],['ownNo','자체주문번호'],['orderNo','쇼핑몰주문번호'],['itemName','수집상품명'],['csContent','접수내용'],['csAction','답변내용']];
+const csAtOf=o=>o.csAt0||o.csAt||'';
+function pgMemos(){
+  if(!CMM.init){CMM.d={from:'',to:'',mall:'',sup:'',status:'',field:'receiver',q:''};CMM.a=Object.assign({},CMM.d);CMM.init=true;}
+  const d=CMM.d;
+  return '<h1>C/S메모관리</h1><p class="sub">[주문확인처리]의 C/S 버튼으로 작성한 메모 목록입니다. 최근 작성한 메모가 맨 위에 표시됩니다. [수정] 버튼으로 CS 내용·처리내용(답변)을 수정할 수 있습니다.</p>'+
+  '<div class="card">'+
+  '<div class="row" style="margin-bottom:10px">'+csLb('접수일자')+'<input type="date" id="cmmfrom" data-chg="cmmf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="cmmto" data-chg="cmmf" data-k="to" value="'+esc(d.to)+'">'+
+  [['today','오늘'],['7d','1주일'],['month','당월'],['1','1개월'],['3','3개월']].map(x=>'<button class="btn sm" '+csBtnSm+' data-act="cmmrange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>'+
+  '<div class="row" style="margin-bottom:10px">'+csLb('쇼핑몰')+'<select data-chg="cmmf" data-k="mall">'+csMallOpts(d.mall)+'</select><span style="width:10px"></span>'+
+  csLb('매입처')+'<select data-chg="cmmf" data-k="sup">'+csSupOpts(d.sup)+'</select><span style="width:10px"></span>'+
+  csLb('주문상태')+'<select data-chg="cmmf" data-k="status">'+csStatusOpts(d.status)+'</select></div>'+
+  '<div class="row">'+csLb('검색')+'<select data-chg="cmmf" data-k="field">'+CMM_FIELDS.map(f=>'<option value="'+f[0]+'"'+(d.field===f[0]?' selected':'')+'>'+f[1]+'</option>').join('')+'</select>'+
+  '<input type="text" placeholder="검색어 입력" style="width:240px" data-inp="cmmq" value="'+esc(d.q)+'"><button class="btn pri" data-act="cmmsearch">검색</button><button class="btn" data-act="cmmreset">초기화</button></div></div>'+
+  '<div id="cmmtbl"></div>';
+}
+ROUTES['/cs/memos']=()=>{setTimeout(drawMemos,0);return pgMemos();};
+function memoList(){
+  const a=CMM.a,q=norm(a.q);
+  return S.orders.filter(o=>{
+    if(!(o.csContent||o.csAction))return false;
+    const {s}=orderInfo(o);
+    if(!csMallOk(o,a.mall))return false;
+    if(a.sup&&!(s&&s.id===+a.sup))return false;
+    if(a.status&&!stMatch(o,a.status))return false;
+    const day=csAtOf(o)?localDate(new Date(csAtOf(o))):'';
+    if(a.from&&(!day||day<a.from))return false;
+    if(a.to&&(!day||day>a.to))return false;
+    if(q&&!norm(o[a.field]).includes(q))return false;
+    return true;
+  }).sort((x,y)=>csAtOf(y).localeCompare(csAtOf(x)));
+}
+function drawMemos(){
+  const box=$('#cmmtbl');if(!box)return;
+  const list=memoList();
+  const pages=Math.max(1,Math.ceil(list.length/PAGE_O));if(CMM.page>=pages)CMM.page=pages-1;
+  const cur=list.slice(CMM.page*PAGE_O,(CMM.page+1)*PAGE_O);
+  if(!list.length){box.innerHTML='<div class="card mute">'+(S.orders.some(o=>o.csContent||o.csAction)?'조건에 맞는 C/S 메모가 없습니다.':'작성된 C/S 메모가 없습니다. [주문확인처리]의 C/S 버튼으로 메모를 작성하세요.')+'</div>';return;}
+  box.innerHTML='<div class="mute small" style="margin-bottom:6px">총 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CMM.page+1)+'/'+pages+' 페이지':'')+'</div>'+
+  '<div class="tblwrap"><table class="tbl"><thead><tr><th>NO</th><th>자체주문번호</th><th>쇼핑몰주문번호</th><th>쇼핑몰</th><th>수취인</th><th>주문상태</th><th>상품명</th><th class="num">수량</th><th>CS 내용</th><th>처리내용</th><th>접수일시</th><th>답변</th></tr></thead><tbody>'+
+  cur.map((o,i)=>{
+    const {p}=orderInfo(o),no=list.length-(CMM.page*PAGE_O+i);
+    return '<tr><td class="nw">'+no+'</td><td class="nw">'+esc(o.ownNo||'')+'</td><td class="nw">'+esc(o.orderNo||'')+'</td><td class="nw">'+esc(o.mall||'')+'</td><td class="nw"><b>'+esc(o.receiver)+'</b></td><td class="nw">'+stTag(o)+'</td><td class="prod">'+esc(o.itemName||(p?p.name:''))+'</td><td class="num">'+o.qty+'</td><td class="cstxt">'+esc(o.csContent||'')+'</td><td class="cstxt">'+esc(o.csAction||'')+'</td><td class="nw">'+esc(csAtOf(o)?fmtDT(csAtOf(o)):'')+'</td><td class="nw"><button class="btn sm" data-act="cs" data-id="'+o.id+'">수정</button></td></tr>';
+  }).join('')+'</tbody></table></div>'+
+  (pages>1?'<div class="pager"><button class="btn sm" data-act="cmmpage" data-d="-1"'+(CMM.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="cmmpage" data-d="1"'+(CMM.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
+}
+C.cmmf=el=>{CMM.d[el.dataset.k]=el.value;};
+I.cmmq=el=>{CMM.d.q=el.value;};
+A.cmmrange=el=>{const r=pRange(el.dataset.r);CMM.d.from=r[0];CMM.d.to=r[1];const f=$('#cmmfrom'),t=$('#cmmto');if(f)f.value=r[0];if(t)t.value=r[1];};
+A.cmmsearch=()=>{
+  if(CMM.d.from&&CMM.d.to&&CMM.d.from>CMM.d.to){toast('시작일이 종료일보다 늦습니다.','err');return;}
+  CMM.a=Object.assign({},CMM.d);CMM.page=0;drawMemos();
+};
+A.cmmreset=()=>{CMM.init=false;route();};
+A.cmmpage=el=>{CMM.page+=+el.dataset.d;drawMemos();const b=$('#cmmtbl');if(b)b.scrollIntoView({block:'start'});};
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.matches&&e.target.matches('[data-inp="cmmq"]'))A.cmmsearch();});
 
 /* ===== 한 화면 표 + 엑셀처럼 열 너비 조절 (헤더 경계선을 끌면 옆 열과 너비를 주고받음) ===== */
 const COLW_DEF={confirm:[3,11,8,9,21,9,15,4,12,8],check:[3,7,6,5,9,7,8,11,5,11,10,3,6,9],track:[3,7,7,6,10,8,15,15,3,8,9,9]};

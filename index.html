@@ -3623,10 +3623,12 @@ A.tpldelall=async()=>{
   const t=Object.assign({},dlTpls());delete t[TP.mall];await setMeta('dlTpls',t);TP.cols=tplPreset(TP.mall);drawTpl();drawCheckTable();
 };
 async function ckDownload(list0,emptyMsg){
-  const list=list0;
-  if(!list.length){toast(emptyMsg,'err',5000);return;}
-  /* 출고완료 조회에서 [송장업로드양식선택]으로 고른 쇼핑몰 양식이 있으면 그 양식대로 다운로드 (위쪽 검색 조건의 쇼핑몰과는 별개) */
+  if(!list0.length){toast(emptyMsg,'err',5000);return;}
+  /* 출고완료 조회에서 [송장업로드양식선택]으로 고른 쇼핑몰 양식이 있으면 그 양식대로, 그 쇼핑몰의 주문만 다운로드 (위쪽 검색 조건의 쇼핑몰과는 별개) */
   const tplName=CK.a.status==='shipped'&&CK.tpl&&dlTpls()[CK.tpl]?CK.tpl:'';
+  const list=tplName?list0.filter(o=>o.mall===tplName):list0;
+  if(!list.length){toast('조회된 주문 중 "'+tplName+'" 주문이 없습니다. 양식 선택을 해제하면 전체 항목으로 내려받을 수 있습니다.','err',6000);return;}
+  const skipMall=list0.length-list.length;
   const ct=tplName?dlTpls()[tplName]:null;
   const ss=false,esm=false;   /* 스마트스토어·ESM 양식은 [송장양식 설정]에서 등록한 뒤 선택해서 사용 */
   /* 양식을 고르지 않으면 주문목록에 보이는 모든 항목을 다 담아서 내려받습니다 */
@@ -3660,7 +3662,7 @@ async function ckDownload(list0,emptyMsg){
   await putMany('orders',list);
   const noCode=ct&&ct.cols.some(c=>c.src==='__carrierCode')?list.filter(o=>o.carrier&&!carrierCode(o.carrier)).length:0;
   const noPo=(ss||(ct&&ct.cols.some(c=>c.src==='prodOrderNo')))?list.filter(o=>!o.prodOrderNo).length:0,noSeller=esm?list.filter(o=>!esmSeller(o)).length:0;
-  toast(list.length+'건을 다운로드했습니다.'+(ct?' ('+tplName+' 등록 양식)':'')+(noCode?' · 택배사 코드를 찾지 못해 비워둔 주문 '+noCode+'건':'')+(esm?' (ESM 송장 대량업로드 양식)':ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(noPo?' · 상품주문번호가 없어 빈칸으로 내려간 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':'')+(noSeller?' · 계정(판매아이디)이 비어 있는 주문 '+noSeller+'건 (주문수집에서 ESM 주문서를 다시 올려 저장하면 채워집니다)':''),(noPo||noSeller||noCode)?'err':'ok',(noPo||noSeller||noCode)?8000:3500);
+  toast(list.length+'건을 다운로드했습니다.'+(ct?' ('+tplName+' 등록 양식)'+(skipMall?' · 다른 쇼핑몰 주문 '+skipMall.toLocaleString()+'건 제외':''):'')+(noCode?' · 택배사 코드를 찾지 못해 비워둔 주문 '+noCode+'건':'')+(esm?' (ESM 송장 대량업로드 양식)':ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(noPo?' · 상품주문번호가 없어 빈칸으로 내려간 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':'')+(noSeller?' · 계정(판매아이디)이 비어 있는 주문 '+noSeller+'건 (주문수집에서 ESM 주문서를 다시 올려 저장하면 채워집니다)':''),(noPo||noSeller||noCode)?'err':'ok',(noPo||noSeller||noCode)?8000:3500);
 }
 
 

@@ -791,7 +791,7 @@ function buildXlsx(rows,sheetName,opts){
     for(let ci=0;ci<ncol;ci++){
       const v=r[ci];if(v===''||v==null)continue;
       const ref=colName(ci)+(ri+1),st=ri===0?' s="1"':'';
-      if(typeof v==='number'&&isFinite(v))sd+='<c r="'+ref+'"'+st+'><v>'+v+'</v></c>';
+      if(typeof v==='number'&&isFinite(v)&&!(opts&&opts.allText))sd+='<c r="'+ref+'"'+st+'><v>'+v+'</v></c>';
       else sd+='<c r="'+ref+'" t="inlineStr"'+st+'><is><t xml:space="preserve">'+xmlEsc(v)+'</t></is></c>';
     }
     sd+='</row>';
@@ -3535,7 +3535,7 @@ function tplVal(o,m){
     case 'shippedAt':return o.shippedAt?fmtDT(o.shippedAt):'';
     default:return o[m.src]==null?'':o[m.src];}
 }
-const TP={mall:'',cols:[]};
+const TP={mall:'',cols:[],sheet:''};
 function tplPreset(mall){
   const t=dlTpls()[mall];if(t)return JSON.parse(JSON.stringify(t.cols));
   if(/11번가/.test(mall)){return [['번호','__fixed',''],['주문번호','orderNo',''],['배송번호','',''],['택배사코드','__carrierCode',''],['송장/등기번호','trackingNo',''],['배송방법','__fixed','01']].map(a=>({h:a[0],src:a[1],text:a[2]}));}
@@ -3579,9 +3579,9 @@ function drawTpl(){
   const body=has?'<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:32px"></th><th>엑셀 헤더명</th><th>들어갈 값</th><th>고정값</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div><div style="margin-top:8px"><button class="btn sm" data-act="tpladd">＋ 열 추가</button></div>':'<div class="card mute" style="margin:8px 0">위에서 쇼핑몰을 선택하면 그 쇼핑몰의 양식을 등록·수정할 수 있습니다. 목록에서 오른쪽 끝에 초록색 체크 아이콘이 있는 쇼핑몰은 이미 양식이 저장된 곳입니다.</div>';
   tplShow('<h2>쇼핑몰별 송장 엑셀 양식</h2><div class="small mute" style="margin-bottom:8px">쇼핑몰마다 송장 대량업로드 양식의 열 순서·헤더명을 한 번 등록해 두면, 출고완료 조회에서 그 쇼핑몰을 선택하고 다운로드할 때 그 양식 그대로 내려받습니다.</div><div class="row" style="margin:8px 0"><b>쇼핑몰</b>'+sel+tools+'</div>'+body+'<div class="foot"><button class="btn" data-act="close">닫기</button>'+(has&&dlTpls()[TP.mall]?'<button class="btn danger" data-act="tpldelall">이 양식 삭제</button>':'')+(has?'<button class="btn pri" data-act="tplsave">저장</button>':'')+'</div>','wide tplmd');
 }
-A.dltpl=()=>{TP.mall='';TP.cols=[];drawTpl();};
+A.dltpl=()=>{TP.mall='';TP.cols=[];TP.sheet='';drawTpl();};
 A.tpldd=()=>{const l=$('#tpllist');if(l)l.style.display=l.style.display==='block'?'none':'block';};
-A.tplpick=el=>{TP.mall=el.dataset.m||'';TP.cols=TP.mall?tplPreset(TP.mall):[];drawTpl();};
+A.tplpick=el=>{TP.mall=el.dataset.m||'';TP.cols=TP.mall?tplPreset(TP.mall):[];TP.sheet=TP.mall?((dlTpls()[TP.mall]||{}).sheet||''):'';drawTpl();};
 document.addEventListener('click',e=>{const l=$('#tpllist');if(l&&l.style.display==='block'&&!(e.target.closest&&e.target.closest('.tpldd')))l.style.display='none';});
 C.tpls=el=>{TP.cols[+el.dataset.i].src=el.value;drawTpl();};
 I.tplh=el=>{TP.cols[+el.dataset.i].h=el.value;};
@@ -3605,6 +3605,7 @@ C.tplfile=async el=>{
   try{
     const sheets=await parseAny(await readFileBuf(f));
     const rows=sheets[firstNonEmptySheet(sheets)].rows;
+    TP.sheet=/\.xlsx$/i.test(f.name)?String(sheets[firstNonEmptySheet(sheets)].name||''):'';   /* 샘플의 시트 이름도 함께 기억 */
     const ne=rows.filter(r=>(r||[]).some(x=>String(x==null?'':x).trim())).map(r=>r.map(x=>String(x==null?'':x).trim()));let hr=ne[0]||[];if(ne.length>1&&hr.filter(Boolean).length===1)hr=ne[1];const hd=hr.filter(Boolean);
     if(!hd.length)throw new Error('헤더 행을 찾지 못했습니다.');
     TP.cols=hd.map(h=>{const g=TPL_GUESS.find(t=>t[0].test(h));return {h,src:g?g[1]:'',text:''};});
@@ -3615,12 +3616,12 @@ A.tplsave=async()=>{
   const cols=TP.cols.filter(c=>c.h.trim()||c.src);
   if(!cols.length){toast('열을 하나 이상 만들어 주세요.','err');return;}
   if(cols.some(c=>!c.h.trim())){toast('헤더명이 비어 있는 열이 있습니다.','err');return;}
-  const t=Object.assign({},dlTpls());t[TP.mall]={cols:cols.map(c=>({h:c.h.trim(),src:c.src,text:c.text||''}))};
-  await setMeta('dlTpls',t);TP.cols=t[TP.mall].cols;drawTpl();drawCheckTable();toast(TP.mall+' 양식을 저장했습니다.');
+  const t=Object.assign({},dlTpls());t[TP.mall]={cols:cols.map(c=>({h:c.h.trim(),src:c.src,text:c.text||''})),sheet:TP.sheet||''};
+  await setMeta('dlTpls',t);TP.cols=t[TP.mall].cols;drawTpl();drawCheckTable();toast(TP.mall+' 양식을 저장했습니다.'+(TP.sheet?' (시트 이름: '+TP.sheet+')':''));
 };
 A.tpldelall=async()=>{
   if(!confirm(TP.mall+' 양식을 삭제할까요?'))return;
-  const t=Object.assign({},dlTpls());delete t[TP.mall];await setMeta('dlTpls',t);TP.cols=tplPreset(TP.mall);drawTpl();drawCheckTable();
+  const t=Object.assign({},dlTpls());delete t[TP.mall];await setMeta('dlTpls',t);TP.cols=tplPreset(TP.mall);TP.sheet='';drawTpl();drawCheckTable();
 };
 async function ckDownload(list0,emptyMsg){
   if(!list0.length){toast(emptyMsg,'err',5000);return;}
@@ -3656,7 +3657,7 @@ async function ckDownload(list0,emptyMsg){
     rows=[tpl.headers];
     list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(tpl.mapping.map(m=>cellVal(o,p,s,i+1,m)));});
   }
-  download(buildXlsx(rows,ct?(isSSMall(tplName)?'발송처리':'송장업로드'):esm?'송장업로드':ss?'발송처리':full?'주문내역':'발주서',ct?{noFreeze:true}:null),   /* 스마트스토어 양식은 시트명이 '발송처리'여야 스마트스토어에서 업로드됨 */   /* 쇼핑몰 송장업로드 양식은 틀고정 없이 */(ct?safeName(tplName)+'_송장업로드_':esm?'ESM_송장대량업로드_':ss?'스마트스토어_발송처리_':full?'출고완료_주문_':'주문확인_발주_')+localDate().replace(/-/g,'')+'.xlsx');
+  download(buildXlsx(rows,ct?(ct.sheet||(isSSMall(tplName)?'발송처리':'송장업로드')):esm?'송장업로드':ss?'발송처리':full?'주문내역':'발주서',ct?{noFreeze:true,allText:true}:null),   /* 등록한 양식은 샘플의 시트 이름·텍스트 서식 그대로. 스마트스토어 양식은 시트명이 '발송처리'여야 스마트스토어에서 업로드됨 */   /* 쇼핑몰 송장업로드 양식은 틀고정 없이 */(ct?safeName(tplName)+'_송장업로드_':esm?'ESM_송장대량업로드_':ss?'스마트스토어_발송처리_':full?'출고완료_주문_':'주문확인_발주_')+localDate().replace(/-/g,'')+'.xlsx');
   const now=new Date().toISOString();
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});
   await putMany('orders',list);

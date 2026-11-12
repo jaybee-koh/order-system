@@ -2924,7 +2924,7 @@ A.pick=async el=>{
   const pid=+el.dataset.id,p=M.prod.get(pid),o=M.ord.get(MT.orderId);
   if(!p||!o)return;
   const changed=[];
-  const lg=!!(MT&&MT.legacy),ly=lg?(MT.y||0):0,lty=lg?(MT.ty||0):0;
+  const MT0=MT||{},lg=!!(MT&&MT.legacy),ly=lg?(MT.y||0):0,lty=lg?(MT.ty||0):0;
   delete o.snapP;delete o.snapS;o.productId=pid;o.matchedAuto=false;
   if(!o.legacy){o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;}   /* 사방넷 주문은 출고완료 상태 유지 */
   changed.push(o);
@@ -2938,7 +2938,18 @@ A.pick=async el=>{
   changed.forEach(x=>CF.keep.add(x.id));
   closeModal();MT=null;
   toast('매핑 완료: '+p.name+(extra?' (같은 상품 주문 '+extra+'건도 함께 매핑)':''));
-  if(lg){drawCheckTable();const back=()=>{const w=$('#ktbl .tblwrap');if(w)w.scrollTop=lty;window.scrollTo({top:ly,left:0,behavior:'instant'});};back();requestAnimationFrame(back);setTimeout(back,60);}else redrawConfirm();   /* html에 smooth 스크롤이 걸려 있어 instant로 즉시 복원 */
+  if(lg){
+    const oid=o.id,ot=MT0.top,html=document.documentElement,sb=html.style.scrollBehavior;
+    drawCheckTable();
+    html.style.scrollBehavior='auto';
+    /* 매핑을 누른 행을 다시 찾아 그 행이 눌렀던 화면 위치에 오도록 맞춤 (표 안 스크롤·페이지 스크롤 모두 해결) */
+    const back=()=>{
+      const b=document.querySelector('#ktbl [data-act="lgmap"][data-id="'+oid+'"]');
+      if(b){b.scrollIntoView({block:'center',behavior:'instant'});const d=b.getBoundingClientRect().top-ot;if(Math.abs(d)>1)window.scrollBy({top:d,left:0,behavior:'instant'});}
+      else{const w=$('#ktbl .tblwrap');if(w)w.scrollTop=lty;window.scrollTo({top:ly,left:0,behavior:'instant'});}
+    };
+    back();requestAnimationFrame(back);setTimeout(back,80);setTimeout(()=>{back();html.style.scrollBehavior=sb;},300);
+  }else redrawConfirm();
 };
 A.bulkmatch=async()=>{
   const sel=[...CF.sel].map(id=>M.ord.get(id)).filter(Boolean);
@@ -3422,7 +3433,7 @@ A.lgrun=async()=>{
 A.lgmap=el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;
   const ss=o.legacySup?S.suppliers.find(s=>norm(s.name)===norm(o.legacySup)):null;   /* 사방넷 거래선과 같은 이름의 매입처가 있으면 먼저 선택 */
-  MT={orderId:o.id,q:o.itemName||'',sup:ss?String(ss.id):'',legacy:true,y:window.scrollY,ty:(()=>{const w=$('#ktbl .tblwrap');return w?w.scrollTop:0;})()};   /* 팝업을 열기 전 스크롤 위치 기억 */
+  MT={orderId:o.id,q:o.itemName||'',sup:ss?String(ss.id):'',legacy:true,id:o.id,top:el.getBoundingClientRect().top,y:window.scrollY,ty:(()=>{const w=$('#ktbl .tblwrap');return w?w.scrollTop:0;})()};   /* 팝업을 열기 전 스크롤 위치 기억 */
   drawMatch();
 };
 

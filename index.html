@@ -1675,9 +1675,9 @@ function buildHome(){
   const st={pre:0,nw:0,cf:0,sh:0};
   const liveCnt=S.orders.filter(o=>!o.canceled).length;
   S.orders.forEach(o=>{if(o.canceled)return;if(!fixedOf(o)){st.pre++;return;}const s=ordStatus(o);if(s==='shipped')st.sh++;else if(s==='confirmed')st.cf++;else st.nw++;});
-  const tile=(href,l,n,c,hint)=>'<a class="htile" href="#'+href+'" style="--c:'+c+'"><span>'+l+'</span><b>'+n.toLocaleString()+'<small>건</small></b><em>'+hint+'</em></a>';
+  const tile=(href,l,n,c,hint,stat)=>'<a class="htile" href="#'+href+'"'+(stat?' data-act="hstat" data-s="'+stat+'"':'')+' style="--c:'+c+'"><span>'+l+'</span><b>'+n.toLocaleString()+'<small>건</small></b><em>'+hint+'</em></a>';
   const sale='<div class="card hbox hcol"><div class="row hhead"><h3 style="margin:0">판매관리</h3><span class="grow"></span><span class="mute small">전체 주문 '+liveCnt.toLocaleString()+'건 (취소 제외)</span></div><div class="htiles">'+
-    tile('/orders/confirm','주문확정 전',st.pre,'#e8890c','미매핑 · 확정 대기')+tile('/orders/check','신규주문',st.nw,'#3b5bdb','주문확인 대기')+tile('/orders/check','주문확인',st.cf,'#12a150','출고 대기')+tile('/orders/tracking','출고완료',st.sh,'#7048e8','운송장 입력 완료')+'</div><div class="hnote">주문확정 전 = 매핑 전이거나 매핑 후 [주문확정]을 누르기 전인 주문 · 신규주문 = 주문확정 후 확인 대기 · 건수는 전체 주문 기준</div></div>';
+    tile('/orders/confirm','주문확정 전',st.pre,'#e8890c','미매핑 · 확정 대기')+tile('/orders/check','신규주문',st.nw,'#3b5bdb','주문확인 대기','new')+tile('/orders/check','주문확인',st.cf,'#12a150','출고 대기','confirmed')+tile('/orders/check','출고완료',st.sh,'#7048e8','운송장 입력 완료','shipped')+'</div><div class="hnote">주문확정 전 = 매핑 전이거나 매핑 후 [주문확정]을 누르기 전인 주문 · 신규주문 = 주문확정 후 확인 대기 · 건수는 전체 주문 기준</div></div>';
   /* 정산관리 */
   const sr={day:[t,t],yday:[addD(t,-1),addD(t,-1)],week:[mondayOf(t),t],month:[t.slice(0,8)+'01',t],all:[null,null]}[HD.set];
   const sa=agg(inR(rows,sr[0],sr[1])),sm=sa.margin,rate=sa.mpay?sm/sa.mpay*100:0;
@@ -3317,6 +3317,15 @@ A.csSave=async()=>{
   try{await putOne('orders',o);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
   closeModal();CSO=null;toast(a||b?'C/S 메모를 저장했습니다.':'C/S 메모를 비웠습니다.');
   csRedraw();
+};
+/* 홈 대시보드 타일 → 주문확인처리를 해당 상태(신규주문/주문확인/출고완료)로 열기. 타일 건수는 전체 주문 기준이라 기간·쇼핑몰 등 다른 조건은 비움 */
+A.hstat=(el,e)=>{
+  e.preventDefault();
+  const s=el.dataset.s;if(!CK_LBL[s])return;
+  ckInit();
+  CK.d=Object.assign({},CK.d,{status:s,from:'',to:'',mall:'',sup:'',q:''});
+  CK.a=Object.assign({},CK.d);CK.page=0;CK.sel.clear();
+  if((location.hash||'')==='#/orders/check')route();else location.hash='#/orders/check';
 };
 A.ckstat=el=>{
   const s=el.dataset.s;if(s&&!CK_LBL[s])return;

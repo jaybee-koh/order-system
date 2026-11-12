@@ -3116,7 +3116,9 @@ function ckList(skipStatus){
       if(s){if(s.id!==+a.sup)return false;}
       else{const ss=M.sup.get(+a.sup);if(!ss||norm(ss.name)!==norm(o.legacySup||''))return false;}   /* 미매핑: 사방넷 거래선 이름으로 비교 */
     }
-    const cd=a.dtype==='order'?ordDateOnly(o):(o.collectedDate||'');
+    /* 출고일자 = 송장(운송장) 등록일. 송장이 없는 주문은 날짜가 비어 기간 조회에서 제외 */
+    const cd=a.dtype==='order'?ordDateOnly(o):a.dtype==='shipped'?((o.trackingNo&&(o.trackedAt||o.shippedAt))?localDate(new Date(o.trackedAt||o.shippedAt)):''):(o.collectedDate||'');
+    if((a.from||a.to)&&!cd)return false;
     if(a.from&&cd<a.from)return false;
     if(a.to&&cd>a.to)return false;
     if(q&&!norm(o[a.field]).includes(q))return false;
@@ -3129,12 +3131,12 @@ function pgCheck(){
   const malls=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];
   const sm='style="padding:2px 8px;font-size:12px"';
   const lb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
-  return '<h1>주문확인처리</h1><p class="sub">매핑이 끝난 주문만 조회됩니다. 조회 기준 일자는 수집일자 또는 주문일자 중에서 선택할 수 있습니다. (주문일자가 없는 주문은 주문일자 조회에서 제외됩니다) 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
+  return '<h1>주문확인처리</h1><p class="sub">매핑이 끝난 주문만 조회됩니다. 조회 기준 일자는 수집일자·주문일자·출고일자 중에서 선택할 수 있습니다. (주문일자가 없는 주문은 주문일자 조회에서, 운송장이 없는 주문은 출고일자(송장등록일) 조회에서 제외됩니다) 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
   '<div class="card">'+
   '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value=""'+(d.status===''?' selected':'')+'>전체</option><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option><option value="canceled"'+(d.status==='canceled'?' selected':'')+'>취소건</option><option value="returned"'+(d.status==='returned'?' selected':'')+'>반품건</option></select>'+
   '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="ckf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
   '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="ckf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select><span class="grow"></span><button class="btn sm" data-act="lgopen" title="사방넷에서 내려받은 이전 주문을 출고완료로 가져옵니다">사방넷 이전주문 가져오기</button></div>'+
-  '<div class="row" style="margin-bottom:10px">'+'<select data-chg="ckf" data-k="dtype" style="min-width:86px"><option value="collected"'+(d.dtype!=='order'?' selected':'')+'>수집일자</option><option value="order"'+(d.dtype==='order'?' selected':'')+'>주문일자</option></select>'+'<input type="date" id="ckfrom" data-chg="ckf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ckto" data-chg="ckf" data-k="to" value="'+esc(d.to)+'">'+
+  '<div class="row" style="margin-bottom:10px">'+'<select data-chg="ckf" data-k="dtype" style="min-width:86px"><option value="collected"'+(d.dtype!=='order'&&d.dtype!=='shipped'?' selected':'')+'>수집일자</option><option value="order"'+(d.dtype==='order'?' selected':'')+'>주문일자</option><option value="shipped"'+(d.dtype==='shipped'?' selected':'')+'>출고일자</option></select>'+'<input type="date" id="ckfrom" data-chg="ckf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ckto" data-chg="ckf" data-k="to" value="'+esc(d.to)+'">'+
   [['today','오늘'],['yesterday','어제'],['7','7일'],['30','30일'],['month','당월'],['prev','전월']].map(x=>'<button class="btn sm" '+sm+' data-act="ckrange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>'+
   '<div class="row">'+lb('검색')+'<select data-chg="ckf" data-k="field"><option value="orderNo"'+(d.field==='orderNo'?' selected':'')+'>쇼핑몰주문번호</option><option value="ownNo"'+(d.field==='ownNo'?' selected':'')+'>자체주문번호</option><option value="orderer"'+(d.field==='orderer'?' selected':'')+'>주문자명</option><option value="receiver"'+(d.field==='receiver'?' selected':'')+'>수취인명</option></select>'+
   '<input type="text" placeholder="검색어 입력" style="width:240px" data-inp="ckq" value="'+esc(d.q)+'"><button class="btn" data-act="cksearch">검색</button><button class="btn pri" data-act="cksearch">조회</button></div>'+

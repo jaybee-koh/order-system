@@ -2736,16 +2736,17 @@ A.collectSave=async()=>{
   const need=new Map(),upd=[];
   const needNo=new Map();
   const FILL=['prodOrderNo','shipMethod','sellerId','esmNo'];
-  S.orders.forEach(x=>{if(x.orderNo&&FILL.some(f=>!x[f])){const k=lineKey(x);if(!need.has(k))need.set(k,[]);need.get(k).push(x);const n=norm(x.orderNo);if(!needNo.has(n))needNo.set(n,[]);needNo.get(n).push(x);}});
+  const badPo=x=>isSSMall(x.mall)&&x.prodOrderNo&&x.prodOrderNo===x.orderNo;   /* 상품주문번호 칸에 주문번호가 들어간 경우 */
+  S.orders.forEach(x=>{if(x.orderNo&&(FILL.some(f=>!x[f])||badPo(x))){const k=lineKey(x);if(!need.has(k))need.set(k,[]);need.get(k).push(x);const n=norm(x.orderNo);if(!needNo.has(n))needNo.set(n,[]);needNo.get(n).push(x);}});
   for(const o of list){
     if(isCollected(o,sets)){
       dup++;
       if(FILL.some(f=>o[f])){
-        const lack=x=>FILL.some(f=>!x[f]&&o[f]);
+        const goodPo=o.prodOrderNo&&o.prodOrderNo!==o.orderNo,lack=x=>FILL.some(f=>!x[f]&&o[f])||(badPo(x)&&goodPo);
         let arr=need.get(lineKey(o)),t=arr&&arr.find(lack);
         if(!t){arr=needNo.get(norm(o.orderNo));t=arr&&arr.find(lack);}
         if(t){
-          FILL.forEach(f=>{if(!t[f]&&o[f])t[f]=o[f];});
+          const wasBad=badPo(t);FILL.forEach(f=>{if((!t[f]||(f==='prodOrderNo'&&wasBad&&goodPo))&&o[f])t[f]=o[f];});
           arr.splice(arr.indexOf(t),1);if(!upd.includes(t))upd.push(t);fill++;
         }
       }
@@ -3318,7 +3319,7 @@ const dlTpls=()=>S.meta.dlTpls||{};
 function tplVal(o,m){
   if(String(m.src).startsWith('cf:')){const k=m.src.slice(3);return o.ex?String(o.ex[k]==null?'':o.ex[k]):'';}
   switch(m.src){case '__carrierCode':return carrierCode(o.carrier);case '':return '';case '__fixed':return m.text||'';
-    case 'prodOrderNo':return o.prodOrderNo||o.orderNo||'';
+    case 'prodOrderNo':return o.prodOrderNo||'';   /* 주문번호로 대체하지 않음 */
     case 'esmNo':return o.esmNo||o.orderNo||'';
     case 'sellerId':return esmSeller(o);
     case 'shippedAt':return o.shippedAt?fmtDT(o.shippedAt):'';
@@ -3429,7 +3430,7 @@ async function ckDownload(list0,emptyMsg){
     list.forEach(o=>{rows.push([esmSeller(o),o.esmNo||o.orderNo||'',o.carrier||'',o.trackingNo||'']);});
   }else if(ss){
     rows=[['상품주문번호','배송방법','택배사','송장번호']];
-    list.forEach(o=>{rows.push([o.prodOrderNo||o.orderNo||'',o.shipMethod||'택배,등기,소포',o.carrier||'',o.trackingNo||'']);});
+    list.forEach(o=>{rows.push([o.prodOrderNo||'',o.shipMethod||'택배,등기,소포',o.carrier||'',o.trackingNo||'']);});
   }else if(full){
     const cf=customFields();
     const num=v=>{if(v===''||v==null)return '';const n=Number(v);return isFinite(n)?n:String(v);};
@@ -3448,8 +3449,8 @@ async function ckDownload(list0,emptyMsg){
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});
   await putMany('orders',list);
   const noCode=ct&&ct.cols.some(c=>c.src==='__carrierCode')?list.filter(o=>o.carrier&&!carrierCode(o.carrier)).length:0;
-  const noPo=ss?list.filter(o=>!o.prodOrderNo).length:0,noSeller=esm?list.filter(o=>!esmSeller(o)).length:0;
-  toast(list.length+'건을 다운로드했습니다.'+(ct?' ('+CK.a.mall+' 등록 양식)':'')+(noCode?' · 택배사 코드를 찾지 못해 비워둔 주문 '+noCode+'건':'')+(esm?' (ESM 송장 대량업로드 양식)':ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(noPo?' · 상품주문번호가 없어 쇼핑몰주문번호로 대체한 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':'')+(noSeller?' · 계정(판매아이디)이 비어 있는 주문 '+noSeller+'건 (주문수집에서 ESM 주문서를 다시 올려 저장하면 채워집니다)':''),(noPo||noSeller||noCode)?'err':'ok',(noPo||noSeller||noCode)?8000:3500);
+  const noPo=(ss||(ct&&ct.cols.some(c=>c.src==='prodOrderNo')))?list.filter(o=>!o.prodOrderNo).length:0,noSeller=esm?list.filter(o=>!esmSeller(o)).length:0;
+  toast(list.length+'건을 다운로드했습니다.'+(ct?' ('+CK.a.mall+' 등록 양식)':'')+(noCode?' · 택배사 코드를 찾지 못해 비워둔 주문 '+noCode+'건':'')+(esm?' (ESM 송장 대량업로드 양식)':ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(noPo?' · 상품주문번호가 없어 빈칸으로 내려간 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':'')+(noSeller?' · 계정(판매아이디)이 비어 있는 주문 '+noSeller+'건 (주문수집에서 ESM 주문서를 다시 올려 저장하면 채워집니다)':''),(noPo||noSeller||noCode)?'err':'ok',(noPo||noSeller||noCode)?8000:3500);
 }
 
 

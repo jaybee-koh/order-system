@@ -2866,7 +2866,7 @@ function drawConfirmTableInner(){
   const allSel=list.length&&list.every(o=>CF.sel.has(o.id));
   if(!S.orders.length){box.innerHTML='<div class="card mute">수집된 주문이 없습니다. <a href="#/orders/collect">주문 수집</a>에서 주문내역 파일을 올려주세요.</div>';return;}
   if(!list.length){box.innerHTML='<div class="card mute">조건에 맞는 주문이 없습니다.</div>';return;}
-  box.innerHTML='<div class="row" style="margin-bottom:6px"><span class="mute small">자료수 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</span><span class="grow"></span><button class="btn pri" data-act="bulkmatch">일괄매핑</button><button class="btn" data-act="bulkunmatch">매핑해제</button><button class="btn ok" data-act="bulkfix">주문확정</button></div>'+
+  box.innerHTML='<div class="row" style="margin-bottom:6px"><span class="mute small">자료수 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</span><span class="grow"></span><button class="btn sm pri" data-act="bulkmatch">일괄매핑</button><button class="btn sm" data-act="bulkunmatch">매핑해제</button><button class="btn sm ok" data-act="bulkfix">주문확정</button></div>'+
   confirmTableHtml(cur,allSel)+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="cpage" data-d="-1"'+(CF.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="cpage" data-d="1"'+(CF.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
@@ -3669,7 +3669,7 @@ function drawTrackTable(){
   const pages=Math.max(1,Math.ceil(list.length/PAGE_O));if(TK.page>=pages)TK.page=pages-1;
   const cur=list.slice(TK.page*PAGE_O,(TK.page+1)*PAGE_O);
   const allSel=cur.length&&cur.every(o=>TK.sel.has(o.id));
-  const bar='<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(TK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="tksel">'+TK.sel.size+'</b>건</span><span class="grow"></span><button class="btn pri" data-act="tksave">선택저장</button></div>';
+  const bar='<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(TK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="tksel">'+TK.sel.size+'</b>건</span><span class="grow"></span><button class="btn sm pri" data-act="tksave">선택저장</button></div>';
   if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 '+(TK.a.reg?'송장 등록된':'운송장 미입력')+' 주문이 없습니다. 수집일자를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
   const cars=carrierList();
   box.innerHTML=bar+

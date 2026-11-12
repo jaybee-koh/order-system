@@ -1212,6 +1212,31 @@ function fieldMalls(f){
   return _fmC.m[f.key].v;   /* null = 값이 어느 몰에도 없음 → 모든 몰에서 보임 */
 }
 const mallBase=m=>String(m||'').replace(/\s*\(.*\)\s*$/,'');   /* 스마트스토어(에이시즈)·스마트스토어(올곧은건강)는 같은 수집 양식 → 같은 그룹 */
+/* 기본 항목도 쇼핑몰(양식)별로 보일 곳을 정할 수 있음. only[key]=그 몰에서만 보임, not[key]=그 몰에서는 숨김(삭제).
+   상품주문번호·배송방법은 스마트스토어 양식에서만 기본으로 보입니다. (쇼핑몰을 고르기 전에는 이 두 항목이 보이지 않음) */
+const DEFAULT_FONLY={prodOrderNo:['스마트스토어'],shipMethod:['스마트스토어']};
+function baseVisible(c,key,mall){
+  const on=(c.only||DEFAULT_FONLY)[key],no=(c.not||{})[key];
+  if(!mall)return !on;
+  const g=mallBase(mall);
+  if(on&&!on.some(x=>mallBase(x)===g))return false;
+  if(no&&no.some(x=>mallBase(x)===g))return false;
+  return true;
+}
+function setBaseVis(c,key,mall,show){
+  if(!c.only)c.only=JSON.parse(JSON.stringify(DEFAULT_FONLY));
+  if(!c.not)c.not={};
+  const g=mallBase(mall),has=a=>(a||[]).some(x=>mallBase(x)===g),rm=a=>(a||[]).filter(x=>mallBase(x)!==g);
+  if(show){
+    if(c.not[key])c.not[key]=rm(c.not[key]);
+    if(c.only[key]&&!has(c.only[key]))c.only[key]=c.only[key].concat([g]);
+    if(!c.order.includes(key))c.order.push(key);
+  }else{
+    if(c.only[key])c.only[key]=rm(c.only[key]);
+    else if(!has(c.not[key]))c.not[key]=(c.not[key]||[]).concat([g]);
+  }
+}
+const defaultFieldVis=(key,mall)=>{const on=DEFAULT_FONLY[key];return !on||on.some(x=>mallBase(x)===mallBase(mall));};
 const fieldOfMall=(f,mall)=>{if(!mall)return true;const m=fieldMalls(f);return !m||m.some(x=>mallBase(x)===mallBase(mall));};
 function dropCustomForMall(c,mall,keys){
   c.custom=(c.custom||[]).filter(f=>{
@@ -1227,7 +1252,7 @@ function dropCustomForMall(c,mall,keys){
 }
 function curFields(mall){
   const c=fcfg(),base=new Map(ORDER_FIELDS.map(f=>[f.key,f])),cu=new Map((c.custom||[]).filter(x=>fieldOfMall(x,mall)).map(x=>[x.key,{key:x.key,label:x.label,custom:1}]));
-  return c.order.map(k=>base.get(k)||cu.get(k)).filter(Boolean);
+  return c.order.map(k=>{const b=base.get(k);if(b)return baseVisible(c,k,mall)?b:null;return cu.get(k);}).filter(Boolean);
 }
 const customFields=mall=>((fcfg().custom)||[]).filter(f=>fieldOfMall(f,mall));
 const saveCfg=c=>setMeta('orderFields',c);
@@ -1305,7 +1330,8 @@ function fixPhone(v){
 }
 function fixZip(v){v=String(v||'').trim();if(/^\d{4}$/.test(v))v='0'+v;return v;}
 function extractOrders(rows,hdrIdx,map,mall){
-  const get=(r,f)=>(map[f]||[]).map(i=>String(r[i]==null?'':r[i]).trim()).filter(Boolean);
+  const cfgNow=fcfg(),bv=f=>baseVisible(cfgNow,f,mall);   /* 이 쇼핑몰 양식에 없는 기본 항목은 읽지 않음 */
+  const get=(r,f)=>(BASE_KEYS.includes(f)&&!bv(f)?[]:(map[f]||[])).map(i=>String(r[i]==null?'':r[i]).trim()).filter(Boolean);
   const out=[];
   for(let i=hdrIdx+1;i<rows.length;i++){
     const r=rows[i];
@@ -1315,7 +1341,7 @@ function extractOrders(rows,hdrIdx,map,mall){
       prodOrderNo:get(r,'prodOrderNo')[0]||'',
       sellerId:mall===ESM_MALL?String(r[0]==null?'':r[0]).trim():'',
       esmNo:mall===ESM_MALL?String(r[1]==null?'':r[1]).trim():'',
-      shipMethod:isSSMall(mall)?String(r[SS_SHIP_COL]==null?'':r[SS_SHIP_COL]).trim():(get(r,'shipMethod')[0]||''),
+      shipMethod:isSSMall(mall)&&bv('shipMethod')?String(r[SS_SHIP_COL]==null?'':r[SS_SHIP_COL]).trim():(get(r,'shipMethod')[0]||''),
       orderDate:mall==='신세계'?fixDate8(get(r,'orderDate')[0]||''):fixDateVal(get(r,'orderDate')[0]||''),
       orderer:get(r,'orderer')[0]||'',
       receiver:get(r,'receiver')[0]||'',
@@ -2415,18 +2441,18 @@ function clRecalc(detect){
   if(detect)CL.headerRow=detectHeaderRow(clRows(),ORDER_HDR_RE)+1;
   const h=clHeaders();
   CL.map=S.meta[sigOf(h)]?JSON.parse(JSON.stringify(S.meta[sigOf(h)])):guessOrderCols(h);
+  CL.mall=S.meta[mallKey(h)]||'';
+  if(CL.mall===SS_MALL)CL.mall='';   /* 예전 '스마트스토어' 설정은 2개 쇼핑몰 중 다시 선택 */
   const keep=new Set(curFields(CL.mall).map(f=>f.key));keep.add('_pay');keep.add('_st');keep.add('_po');
   if(S.meta[sigOf(h)]&&!CL.map._pay){const g=guessOrderCols(h);if(g.payAmount&&!CL.map.payAmount)CL.map.payAmount=g.payAmount;CL.map._pay=1;}
   if(S.meta[sigOf(h)]&&!CL.map._po){const g=guessOrderCols(h);['prodOrderNo','shipMethod'].forEach(k=>{if(g[k]&&!CL.map[k])CL.map[k]=g[k];});CL.map._po=1;}
   if(S.meta[sigOf(h)]&&!CL.map._st){const g=guessOrderCols(h);if(g.settleAmount&&!CL.map.settleAmount)CL.map.settleAmount=g.settleAmount;CL.map._st=1;}
   Object.keys(CL.map).forEach(k=>{if(!keep.has(k))delete CL.map[k];});
-  CL.mall=S.meta[mallKey(h)]||'';
-  if(CL.mall===SS_MALL)CL.mall='';   /* 예전 '스마트스토어' 설정은 2개 쇼핑몰 중 다시 선택 */
   applyMallCols();
 }
 /* 쇼핑몰별 고정 열: 스마트스토어는 G열을 배송방법으로 사용 */
 function applyMallCols(){
-  if(isSSMall(CL.mall)&&CL.sheets&&clHeaders().length>SS_SHIP_COL&&curFields().some(f=>f.key==='shipMethod'))CL.map.shipMethod=[SS_SHIP_COL];
+  if(isSSMall(CL.mall)&&CL.sheets&&clHeaders().length>SS_SHIP_COL&&curFields(CL.mall).some(f=>f.key==='shipMethod'))CL.map.shipMethod=[SS_SHIP_COL];
 }
 function mallRow(){
   return '<tr><td></td><td></td><td><b>쇼핑몰</b></td><td><select data-chg="cmall"><option value="">(선택 안 함)</option>'+mallList().map(m=>'<option value="'+esc(m)+'"'+(CL.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__add">＋ 직접 입력…</option></select> <span class="mute small">(이 파일의 주문이 어느 쇼핑몰 것인지 선택)</span></td><td></td></tr>';
@@ -2588,30 +2614,31 @@ A.fdel=async()=>{
   if(del.length<keys.length)toast('주문번호·상품명은 중복 확인과 상품 매핑에 필요해서 삭제할 수 없습니다.','err',5000);
   if(!del.length){FC.sel.clear();route();return;}
   const names=curFields(CL.mall).filter(f=>del.includes(f.key)).map(f=>f.label.replace(' (매핑에 사용)','')).join(', ');
-  if(!confirm('선택한 항목을 삭제할까요?\n'+names+'\n(삭제한 기본 항목은 [항목 추가]에서 다시 추가할 수 있습니다.)'))return;
+  if(!confirm('선택한 항목을 삭제할까요?\n'+names+'\n'+(CL.mall?'('+CL.mall+' 양식에서만 삭제됩니다. 다시 추가하려면 [항목 추가]를 누르세요.)':'(삭제한 기본 항목은 [항목 추가]에서 다시 추가할 수 있습니다.)')))return;
   const c=fcopy();
-  dropCustomForMall(c,CL.mall,del);
-  c.order=c.order.filter(k=>!del.includes(k)||c.custom.some(x=>x.key===k));
-  c.hidden=(c.hidden||[]).filter(k=>!del.includes(k)||c.custom.some(x=>x.key===k));
+  const baseDel=del.filter(k=>BASE_KEYS.includes(k)),cuDel=del.filter(k=>!BASE_KEYS.includes(k));
+  dropCustomForMall(c,CL.mall,cuDel);
+  if(CL.mall){baseDel.forEach(k=>setBaseVis(c,k,CL.mall,false));}   /* 선택한 쇼핑몰 양식에서만 삭제 */
+  else{c.order=c.order.filter(k=>!baseDel.includes(k));c.hidden=(c.hidden||[]).filter(k=>!baseDel.includes(k));}
   del.forEach(k=>{delete CL.map[k];});
   FC.sel.clear();
   await saveCfg(c);route();
 };
 A.fadd=()=>{
-  const c=fcfg(),hidden=ORDER_FIELDS.filter(f=>!c.order.includes(f.key));
+  const c=fcfg(),shown=new Set(curFields(CL.mall).map(f=>f.key));
+  const hidden=ORDER_FIELDS.filter(f=>!shown.has(f.key)&&(CL.mall||!(c.only||DEFAULT_FONLY)[f.key]));
   openModal('<h2>항목 추가</h2>'+
-    (hidden.length?'<div class="small mute" style="margin-bottom:6px">삭제했던 기본 항목 다시 추가</div><div class="chips">'+hidden.map(f=>'<button class="chip" data-act="faddb" data-key="'+f.key+'">'+esc(f.label.replace(' (매핑에 사용)',''))+'</button>').join('')+'</div>':'')+
+    (hidden.length?'<div class="small mute" style="margin-bottom:6px">'+(CL.mall?esc(mallBase(CL.mall))+' 양식에 없는 ':'삭제했던 ')+'기본 항목 추가</div><div class="chips">'+hidden.map(f=>'<button class="chip" data-act="faddb" data-key="'+f.key+'">'+esc(f.label.replace(' (매핑에 사용)',''))+'</button>').join('')+'</div>':'')+
     '<div class="small mute" style="margin:14px 0 6px">새 항목 만들기 (파일의 열을 골라 주문과 함께 저장)</div><div class="row"><input type="text" id="fname" class="grow" placeholder="항목 이름 (예: 결제금액)"><button class="btn pri" data-act="faddc">추가</button></div>'+
     '<div class="foot"><button class="btn" data-act="close">닫기</button></div>');
   const i=$('#fname');if(i)i.focus();
 };
 A.faddb=async el=>{
   const k=el.dataset.key,c=fcopy();
-  if(!c.order.includes(k)){
-    c.order.push(k);
-    const g=guessOrderCols(clHeaders())[k];if(g)CL.map[k]=g;
-  }
-  await saveCfg(c);closeModal();route();
+  if(CL.mall)setBaseVis(c,k,CL.mall,true);
+  else if(!c.order.includes(k))c.order.push(k);
+  if(!(CL.map[k]||[]).length){const g=guessOrderCols(clHeaders())[k];if(g)CL.map[k]=g;}
+  await saveCfg(c);applyMallCols();closeModal();route();
 };
 A.faddc=async()=>{
   const name=(($('#fname')||{}).value||'').trim();
@@ -2626,7 +2653,9 @@ A.faddc=async()=>{
 A.freset=async()=>{
   if(!confirm('항목을 기본 구성과 순서로 되돌릴까요?\n(이 쇼핑몰에 직접 추가한 항목은 삭제됩니다.)'))return;
   FC.sel.clear();
-  {const c=fcopy();dropCustomForMall(c,CL.mall,null);c.order=BASE_KEYS.slice().concat(c.custom.map(x=>x.key));c.hidden=[];await saveCfg(c);}
+  {const c=fcopy();dropCustomForMall(c,CL.mall,null);c.order=BASE_KEYS.slice().concat(c.custom.map(x=>x.key));c.hidden=[];
+    if(CL.mall)BASE_KEYS.forEach(k=>setBaseVis(c,k,CL.mall,defaultFieldVis(k,CL.mall)));else{delete c.only;delete c.not;}
+    await saveCfg(c);}
   if(CL.sheets)clRecalc(false);
   route();
 };
@@ -2637,10 +2666,15 @@ C.cfile=async el=>{
   route();
 };
 C.cmall=el=>{
+  const oldKeys=new Set(curFields(CL.mall).map(f=>f.key));
   if(el.value==='__add'){
     const n=(prompt('쇼핑몰 이름을 입력하세요.')||'').trim();
     if(n){const cur=Array.isArray(S.meta.malls)?S.meta.malls.slice():[];if(!DEFAULT_MALLS.includes(n)&&!cur.includes(n)){cur.push(n);setMeta('malls',cur);}CL.mall=n;}
   }else CL.mall=el.value;
+  if(CL.sheets){
+    const g=guessOrderCols(clHeaders());
+    curFields(CL.mall).forEach(f=>{if(!f.custom&&!oldKeys.has(f.key)&&g[f.key]&&!(CL.map[f.key]||[]).length)CL.map[f.key]=g[f.key];});
+  }
   applyMallCols();
   route();
 };
@@ -3094,7 +3128,7 @@ function checkTableHtml(cur,allSel){
   const cols=[
     {i:0,t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>',cell:o=>'<td><input type="checkbox" data-chg="ckrow" data-id="'+o.id+'"'+(CK.sel.has(o.id)?' checked':'')+'></td>'},
     {i:1,t:'주문상태',cell:o=>'<td><div class="stcell">'+stTag(o)+'<button class="btn cs'+((o.csContent||o.csAction)?' on':'')+'" data-act="cs" data-id="'+o.id+'" title="'+((o.csContent||o.csAction)?'C/S 메모 있음 · 클릭하여 보기/수정':'C/S 메모 작성')+'">C/S</button>'+clmBtns(o)+'</div></td>'},
-    {i:2,t:'수집일',cell:o=>'<td>'+esc(o.collectedDate)+'</td>'},
+    {i:2,t:'<span style="color:#f76707">수집일</span><br><span style="color:#868e96">주문일</span>',cell:o=>'<td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+esc(o.collectedDate||'')+'</div><div style="color:#868e96;font-weight:600;min-height:1.3em">'+esc(ordDateOnly(o)||'')+'</div></td>'},
     {i:3,t:'쇼핑몰',cell:o=>'<td>'+mallHtml(o.mall)+'</td>'},
     {i:4,t:'주문번호 <span style="color:#1c7ed6">자체주문번호</span>',cell:o=>'<td class="brk">'+(v('orderNo')?esc(o.orderNo):'')+(o.ownNo?'<div class="sm2" style="color:#1c7ed6" title="자체주문번호">'+esc(o.ownNo)+'</div>':'')+'</td>'},
     {i:5,show:v('receiver')||v('orderer'),t:'수취인 / 주문자',cell:o=>'<td>'+(v('receiver')?'<b>'+esc(o.receiver)+'</b>':'')+(v('orderer')?'<div class="sm2">'+esc(o.orderer)+'</div>':'')+'</td>'},
@@ -3377,9 +3411,8 @@ A.tpldelall=async()=>{
   const t=Object.assign({},dlTpls());delete t[TP.mall];await setMeta('dlTpls',t);TP.cols=tplPreset(TP.mall);drawTpl();
 };
 async function ckDownload(list0,emptyMsg){
-  /* 신규주문은 엑셀 다운로드 불가 */
-  const list=list0.filter(o=>ordStatus(o)!=='new'),skipped=list0.length-list.length;
-  if(!list.length){toast(list0.length?'신규주문은 엑셀을 다운로드할 수 없습니다. 주문확인으로 변경한 뒤 다운로드하세요.':emptyMsg,'err',5000);return;}
+  const list=list0;
+  if(!list.length){toast(emptyMsg,'err',5000);return;}
   /* 출고완료 조회 + 쇼핑몰=스마트스토어: 스마트스토어 대량 발송처리 양식(상품주문번호·배송방법·택배사·송장번호) */
   const ct=CK.a.status==='shipped'&&CK.a.mall&&dlTpls()[CK.a.mall];
   const ss=!ct&&CK.a.status==='shipped'&&isSSMall(CK.a.mall);
@@ -3416,7 +3449,7 @@ async function ckDownload(list0,emptyMsg){
   await putMany('orders',list);
   const noCode=ct&&ct.cols.some(c=>c.src==='__carrierCode')?list.filter(o=>o.carrier&&!carrierCode(o.carrier)).length:0;
   const noPo=ss?list.filter(o=>!o.prodOrderNo).length:0,noSeller=esm?list.filter(o=>!esmSeller(o)).length:0;
-  toast(list.length+'건을 다운로드했습니다.'+(ct?' ('+CK.a.mall+' 등록 양식)':'')+(noCode?' · 택배사 코드를 찾지 못해 비워둔 주문 '+noCode+'건':'')+(esm?' (ESM 송장 대량업로드 양식)':ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(skipped?' · 신규주문 '+skipped+'건 제외':'')+(noPo?' · 상품주문번호가 없어 쇼핑몰주문번호로 대체한 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':'')+(noSeller?' · 계정(판매아이디)이 비어 있는 주문 '+noSeller+'건 (주문수집에서 ESM 주문서를 다시 올려 저장하면 채워집니다)':''),(noPo||noSeller||noCode)?'err':'ok',(noPo||noSeller||noCode)?8000:3500);
+  toast(list.length+'건을 다운로드했습니다.'+(ct?' ('+CK.a.mall+' 등록 양식)':'')+(noCode?' · 택배사 코드를 찾지 못해 비워둔 주문 '+noCode+'건':'')+(esm?' (ESM 송장 대량업로드 양식)':ss?' (스마트스토어 양식)':full?' (모든 항목 포함)':'')+(noPo?' · 상품주문번호가 없어 쇼핑몰주문번호로 대체한 주문 '+noPo+'건 (주문수집에서 같은 파일을 다시 올려 저장하면 채워집니다)':'')+(noSeller?' · 계정(판매아이디)이 비어 있는 주문 '+noSeller+'건 (주문수집에서 ESM 주문서를 다시 올려 저장하면 채워집니다)':''),(noPo||noSeller||noCode)?'err':'ok',(noPo||noSeller||noCode)?8000:3500);
 }
 
 

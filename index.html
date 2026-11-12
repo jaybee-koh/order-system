@@ -2924,7 +2924,7 @@ A.pick=async el=>{
   const pid=+el.dataset.id,p=M.prod.get(pid),o=M.ord.get(MT.orderId);
   if(!p||!o)return;
   const changed=[];
-  const lg=!!(MT&&MT.legacy);
+  const lg=!!(MT&&MT.legacy),ly=lg?(MT.y||0):0;
   delete o.snapP;delete o.snapS;o.productId=pid;o.matchedAuto=false;
   if(!o.legacy){o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;}   /* 사방넷 주문은 출고완료 상태 유지 */
   changed.push(o);
@@ -2938,7 +2938,7 @@ A.pick=async el=>{
   changed.forEach(x=>CF.keep.add(x.id));
   closeModal();MT=null;
   toast('매핑 완료: '+p.name+(extra?' (같은 상품 주문 '+extra+'건도 함께 매핑)':''));
-  if(lg){const y=window.scrollY;drawCheckTable();window.scrollTo(0,y);}else redrawConfirm();
+  if(lg){drawCheckTable();window.scrollTo(0,ly);requestAnimationFrame(()=>window.scrollTo(0,ly));}else redrawConfirm();
 };
 A.bulkmatch=async()=>{
   const sel=[...CF.sel].map(id=>M.ord.get(id)).filter(Boolean);
@@ -3422,7 +3422,7 @@ A.lgrun=async()=>{
 A.lgmap=el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;
   const ss=o.legacySup?S.suppliers.find(s=>norm(s.name)===norm(o.legacySup)):null;   /* 사방넷 거래선과 같은 이름의 매입처가 있으면 먼저 선택 */
-  MT={orderId:o.id,q:o.itemName||'',sup:ss?String(ss.id):'',legacy:true};
+  MT={orderId:o.id,q:o.itemName||'',sup:ss?String(ss.id):'',legacy:true,y:window.scrollY};   /* 팝업을 열기 전 스크롤 위치 기억 */
   drawMatch();
 };
 

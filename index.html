@@ -1168,6 +1168,8 @@ async function snapMapped(pidSet){
 }
 function stOf(o){const {p}=orderInfo(o);if(!p)return 'none';return 'matched';}
 const ST_LABEL={none:'미매핑',matched:'매핑완료',done:'발주완료'};
+/* 주문확정: 매핑만 한 주문은 [주문확정]을 눌러야 주문확인처리의 신규주문으로 넘어갑니다. (주문확인·출고완료·사방넷 이전주문은 이미 확정된 것으로 봄) */
+const fixedOf=o=>!!(o.fixed||o.confirmed||o.shipped||o.legacy);
 
 /* =====================================================================
    컬럼 자동 인식
@@ -1624,10 +1626,10 @@ function buildHome(){
   /* 판매관리: 주문 상태별 수량 */
   const st={pre:0,nw:0,cf:0,sh:0};
   const liveCnt=S.orders.filter(o=>!o.canceled).length;
-  S.orders.forEach(o=>{if(o.canceled)return;if(stOf(o)==='none'&&!o.confirmed){st.pre++;return;}const s=ordStatus(o);if(s==='shipped')st.sh++;else if(s==='confirmed')st.cf++;else st.nw++;});
+  S.orders.forEach(o=>{if(o.canceled)return;if(!fixedOf(o)){st.pre++;return;}const s=ordStatus(o);if(s==='shipped')st.sh++;else if(s==='confirmed')st.cf++;else st.nw++;});
   const tile=(href,l,n,c,hint)=>'<a class="htile" href="#'+href+'" style="--c:'+c+'"><span>'+l+'</span><b>'+n.toLocaleString()+'<small>건</small></b><em>'+hint+'</em></a>';
   const sale='<div class="card hbox hcol"><div class="row hhead"><h3 style="margin:0">판매관리</h3><span class="grow"></span><span class="mute small">전체 주문 '+liveCnt.toLocaleString()+'건 (취소 제외)</span></div><div class="htiles">'+
-    tile('/orders/confirm','주문확정 전',st.pre,'#e8890c','미매핑 · 상품 연결 필요')+tile('/orders/check','신규주문',st.nw,'#3b5bdb','주문확인 대기')+tile('/orders/check','주문확인',st.cf,'#12a150','출고 대기')+tile('/orders/tracking','출고완료',st.sh,'#7048e8','운송장 입력 완료')+'</div><div class="hnote">주문확정 전 = 상품 매핑이 안 된 주문 · 신규주문 = 매핑 후 확인 대기 · 건수는 전체 주문 기준</div></div>';
+    tile('/orders/confirm','주문확정 전',st.pre,'#e8890c','미매핑 · 확정 대기')+tile('/orders/check','신규주문',st.nw,'#3b5bdb','주문확인 대기')+tile('/orders/check','주문확인',st.cf,'#12a150','출고 대기')+tile('/orders/tracking','출고완료',st.sh,'#7048e8','운송장 입력 완료')+'</div><div class="hnote">주문확정 전 = 매핑 전이거나 매핑 후 [주문확정]을 누르기 전인 주문 · 신규주문 = 주문확정 후 확인 대기 · 건수는 전체 주문 기준</div></div>';
   /* 정산관리 */
   const sr={day:[t,t],yday:[addD(t,-1),addD(t,-1)],week:[mondayOf(t),t],month:[t.slice(0,8)+'01',t],all:[null,null]}[HD.set];
   const sa=agg(inR(rows,sr[0],sr[1])),sm=sa.margin,rate=sa.mpay?sm/sa.mpay*100:0;
@@ -2549,7 +2551,7 @@ A.moSave=async()=>{
   const now=new Date().toISOString();
   const o={orderNo,orderDate:normDay(MO.date)||day,orderer:MO.orderer.trim()||receiver,receiver,tel1,tel2:fixPhone(MO.tel2),zip:fixZip(MO.zip),addr,memo:MO.memo.trim(),
     itemName:p.name||'',itemOption:p.option||'',qty,payAmount:pay,settleAmount:settle,
-    collectedAt:now,collectedDate:day,mallFile:'직접등록',mall:MO.mall,manual:true,productId:p.id,matchedAuto:false,exportedAt:null,confirmed:false,confirmedAt:null,shipped:false,shippedAt:null};
+    collectedAt:now,collectedDate:day,mallFile:'직접등록',mall:MO.mall,manual:true,productId:p.id,matchedAuto:false,exportedAt:null,confirmed:false,confirmedAt:null,shipped:false,shippedAt:null,fixed:true,fixedAt:now};
   try{
     const freshOwn=ownNoAssign([o]);
     await putMany('orders',[o]);S.orders.push(o);rebuild();
@@ -2757,7 +2759,7 @@ A.collectSave=async()=>{
       if(seenLine.has(lk)){dup++;continue;}
       seenLine.add(lk);
     }
-    o.collectedAt=now;o.collectedDate=day;o.mallFile=CL.fileName;o.mall=CL.mall;o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
+    o.collectedAt=now;o.collectedDate=day;o.mallFile=CL.fileName;o.mall=CL.mall;o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;o.fixed=false;o.fixedAt=null;
     if(o.itemName){const pid=S.rules[ruleKey(o)];if(pid&&M.prod.has(pid)&&M.sup.has(M.prod.get(pid).supplierId)){o.productId=pid;o.matchedAuto=true;auto++;}}
     adds.push(o);
   }
@@ -2819,7 +2821,7 @@ function drawConfirmChips(){
 function pgConfirm(){
   const sc=scoped();
   CF.d={status:CF.status,q:CF.q,field:CF.field,from:CF.from,to:CF.to};
-  return '<h1>주문 확정 관리</h1><p class="sub">각 주문에 [매핑하기]로 상품을 연결하면 매입처가 표시됩니다. 매핑이 끝난 주문은 [주문확인처리]에서 조회·다운로드·상태변경을 할 수 있습니다.</p>'+
+  return '<h1>주문 확정 관리</h1><p class="sub">각 주문에 [매핑하기]로 상품을 연결하면 매입처가 표시됩니다. 매핑이 끝난 주문을 체크하고 [주문확정]을 누르면 [주문확인처리]에 신규주문으로 넘어가 조회·다운로드·상태변경을 할 수 있습니다.</p>'+
   '<div class="card row"><div class="chips" id="cchips"></div><span class="grow"></span>'+
   '<span class="mute small">수집일</span><input type="date" data-chg="cdf" data-k="from" value="'+esc(CF.from)+'"><span>~</span><input type="date" data-chg="cdf" data-k="to" value="'+esc(CF.to)+'">'+
   '<select data-chg="cdf" data-k="field">'+CF_FIELDS.map(f=>'<option value="'+f[0]+'"'+(CF.field===f[0]?' selected':'')+'>'+f[1]+'</option>').join('')+'</select>'+
@@ -2848,7 +2850,7 @@ function confirmTableHtml(cur,allSel){
     {i:6,show:v('itemName')||v('itemOption'),t:'주문 상품',cell:o=>'<td>'+(v('itemName')?esc(o.itemName):'')+(v('itemOption')&&o.itemOption?'<div class="sm2">'+esc(o.itemOption)+'</div>':'')+'</td>'},
     {i:7,show:v('qty'),t:'수량',c:'num',cell:o=>'<td class="num">'+o.qty+'</td>'},
     {i:8,t:'매핑',cell:(o,x)=>'<td>'+x.mc+'</td>'},
-    {i:9,t:'매입처',cell:(o,x)=>'<td>'+(x.s?'<b>'+esc(x.s.name)+'</b>'+(x.st==='done'?' <span class="tag gray">발주완료</span>':''):'')+'</td>'}
+    {i:9,t:'매입처',cell:(o,x)=>'<td>'+(x.s?'<b>'+esc(x.s.name)+'</b>'+(x.st==='done'?' <span class="tag gray">발주완료</span>':'')+(fixedOf(o)?'<div class="mini"><span class="tag ok">주문확정</span></div>':'<div class="mini"><span class="tag warn">확정 대기</span></div>'):'')+'</td>'}
   ];
   return fitCols('confirm',cols,cur,o=>{
     const {p,s}=orderInfo(o),st=stOf(o);
@@ -2864,7 +2866,7 @@ function drawConfirmTableInner(){
   const allSel=list.length&&list.every(o=>CF.sel.has(o.id));
   if(!S.orders.length){box.innerHTML='<div class="card mute">수집된 주문이 없습니다. <a href="#/orders/collect">주문 수집</a>에서 주문내역 파일을 올려주세요.</div>';return;}
   if(!list.length){box.innerHTML='<div class="card mute">조건에 맞는 주문이 없습니다.</div>';return;}
-  box.innerHTML='<div class="row" style="margin-bottom:6px"><span class="mute small">자료수 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</span><span class="grow"></span><button class="btn pri" data-act="bulkmatch">일괄매핑</button><button class="btn" data-act="bulkunmatch">매핑해제</button></div>'+
+  box.innerHTML='<div class="row" style="margin-bottom:6px"><span class="mute small">자료수 '+list.length.toLocaleString()+'건'+(pages>1?' · '+(CF.page+1)+'/'+pages+' 페이지':'')+'</span><span class="grow"></span><button class="btn pri" data-act="bulkmatch">일괄매핑</button><button class="btn" data-act="bulkunmatch">매핑해제</button><button class="btn ok" data-act="bulkfix">주문확정</button></div>'+
   confirmTableHtml(cur,allSel)+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="cpage" data-d="-1"'+(CF.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="cpage" data-d="1"'+(CF.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
@@ -2926,7 +2928,7 @@ A.pick=async el=>{
   const changed=[];
   const MT0=MT||{},lg=!!(MT&&MT.legacy),ly=lg?(MT.y||0):0,lty=lg?(MT.ty||0):0;
   delete o.snapP;delete o.snapS;o.productId=pid;o.matchedAuto=false;
-  if(!o.legacy){o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;}   /* 사방넷 주문은 출고완료 상태 유지 */
+  if(!o.legacy){o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;o.fixed=false;o.fixedAt=null;}   /* 사방넷 주문은 출고완료 상태 유지 */
   changed.push(o);
   let extra=0;
   if(o.itemName){
@@ -3000,7 +3002,7 @@ A.bulkmatch=async()=>{
     if(hit.length>1){multi++;return;}         /* 후보가 2개 이상이면 불확실 → 제외 */
     const pr=hit[0];
     delete o.snapP;delete o.snapS;
-    o.productId=pr.id;o.matchedAuto=true;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
+    o.productId=pr.id;o.matchedAuto=true;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;o.fixed=false;o.fixedAt=null;
     changed.push(o);
     const k=ruleKey(o);
     if(S.rules[k]!==pr.id){S.rules[k]=pr.id;ruleRows.push({key:k,productId:pr.id});}
@@ -3028,7 +3030,7 @@ A.bulkunmatch=async()=>{
     const k=ruleKey(o);
     if(o.itemName&&S.rules[k]===o.productId){delete S.rules[k];delKeys.add(k);}
     delete o.snapP;delete o.snapS;
-    o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
+    o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;o.fixed=false;o.fixedAt=null;
     CF.keep.add(o.id);
   });
   await putMany('orders',targets);
@@ -3036,12 +3038,28 @@ A.bulkunmatch=async()=>{
   toast('매핑 해제 완료: '+targets.length+'건');
   redrawConfirm();
 };
+A.bulkfix=async()=>{
+  const sel=[...CF.sel].map(id=>M.ord.get(id)).filter(Boolean);
+  if(!sel.length){toast('주문확정할 주문을 먼저 체크하세요.','err');return;}
+  const mapped=sel.filter(o=>stOf(o)!=='none');
+  const targets=mapped.filter(o=>!fixedOf(o));
+  if(!mapped.length){toast('선택한 주문이 모두 미매핑 상태입니다. 먼저 상품을 매핑하세요.','err',5000);return;}
+  if(!targets.length){toast('선택한 매핑 주문이 모두 이미 주문확정되어 있습니다.','err');return;}
+  const now=new Date().toISOString(),prev=targets.map(o=>[o.fixed,o.fixedAt]);
+  targets.forEach(o=>{o.fixed=true;o.fixedAt=now;});
+  try{await putMany('orders',targets);}
+  catch(e){targets.forEach((o,i)=>{o.fixed=prev[i][0];o.fixedAt=prev[i][1];});toast('저장 실패: '+e.message,'err',6000);return;}
+  targets.forEach(o=>{CF.keep.add(o.id);CF.sel.delete(o.id);});
+  const skip=sel.length-targets.length;
+  toast(targets.length.toLocaleString()+'건을 주문확정했습니다. [주문확인처리]에 신규주문으로 표시됩니다.'+(skip?' (미매핑·이미 확정된 '+skip.toLocaleString()+'건 제외)':''),'ok',6000);
+  redrawConfirm();
+};
 A.unmatch=async el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;
   const k=ruleKey(o);
   if(o.itemName&&S.rules[k]===o.productId){delete S.rules[k];await delMany('rules',[k]);}
   delete o.snapP;delete o.snapS;
-  o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;
+  o.productId=null;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;o.fixed=false;o.fixedAt=null;
   await putOne('orders',o);CF.keep.add(o.id);redrawConfirm();
 };
 
@@ -3110,6 +3128,7 @@ function ckList(skipStatus){
   return S.orders.filter(o=>{
     const {p,s}=orderInfo(o);
     if(!p&&!o.legacy)return false;   /* 사방넷에서 가져온 주문은 매핑 전에도 조회 */
+    if(!fixedOf(o))return false;     /* 매핑만 하고 아직 [주문확정]을 누르지 않은 주문은 조회되지 않음 */
     if(!skipStatus&&a.status&&!stMatch(o,a.status))return false;
     if(a.mall==='__none'){if(o.mall)return false;}else if(a.mall&&o.mall!==a.mall)return false;
     if(a.sup){
@@ -3131,7 +3150,7 @@ function pgCheck(){
   const malls=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];
   const sm='style="padding:2px 8px;font-size:12px"';
   const lb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
-  return '<h1>주문확인처리</h1><p class="sub">매핑이 끝난 주문만 조회됩니다. 조회 기준 일자는 수집일자·주문일자·출고일자 중에서 선택할 수 있습니다. (주문일자가 없는 주문은 주문일자 조회에서, 운송장이 없는 주문은 출고일자(송장등록일) 조회에서 제외됩니다) 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
+  return '<h1>주문확인처리</h1><p class="sub">매핑 후 [주문 확정 관리]에서 주문확정까지 끝난 주문만 조회됩니다. 조회 기준 일자는 수집일자·주문일자·출고일자 중에서 선택할 수 있습니다. (주문일자가 없는 주문은 주문일자 조회에서, 운송장이 없는 주문은 출고일자(송장등록일) 조회에서 제외됩니다) 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
   '<div class="card">'+
   '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value=""'+(d.status===''?' selected':'')+'>전체</option><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option><option value="canceled"'+(d.status==='canceled'?' selected':'')+'>취소건</option><option value="returned"'+(d.status==='returned'?' selected':'')+'>반품건</option></select>'+
   '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="ckf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
@@ -4123,6 +4142,14 @@ document.addEventListener('dblclick',e=>{
   try{
     db=await openDB();await pullFromServer();await loadAll();
     try{await ownNoBackfill();}catch(e){console.warn('자체주문번호 생성 실패',e);}
+    try{   /* 주문확정 단계 도입 전에 이미 매핑되어 신규주문으로 보이던 주문은 확정된 것으로 처리 (1회) */
+      if(!S.meta.fixedMig){
+        const nowF=new Date().toISOString(),mv=S.orders.filter(o=>!o.fixed&&stOf(o)!=='none');
+        mv.forEach(o=>{o.fixed=true;o.fixedAt=nowF;});
+        if(mv.length)await putMany('orders',mv);
+        await setMeta('fixedMig',nowF);
+      }
+    }catch(e){console.warn('주문확정 이전 실패',e);}
     try{const nowIso=new Date().toISOString();const mv=S.orders.filter(o=>autoShip(o,nowIso));if(mv.length)await putMany('orders',mv);}catch(e){console.warn('출고완료 자동 이동 실패',e);}
     try{
       const odf=ordDateField();

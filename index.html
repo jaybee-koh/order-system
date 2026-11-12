@@ -781,7 +781,7 @@ function colName(i){let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCo
 function colIndex(letters){let n=0;for(const ch of letters)n=n*26+ch.charCodeAt(0)-64;return n-1;}
 function strWidth(s){let w=0;for(const ch of String(s)){w+=ch.charCodeAt(0)>255?2:1;}return w;}
 /* rows: 배열의 배열. 값은 문자열 또는 숫자. 첫 행은 헤더(굵게) */
-function buildXlsx(rows,sheetName){
+function buildXlsx(rows,sheetName,opts){
   const ncol=Math.max(1,...rows.map(r=>r.length));
   const widths=new Array(ncol).fill(8);
   rows.forEach(r=>r.forEach((v,i)=>{const w=Math.min(50,strWidth(v==null?'':v)+2);if(w>widths[i])widths[i]=w;}));
@@ -797,7 +797,7 @@ function buildXlsx(rows,sheetName){
     sd+='</row>';
   });
   const cols='<cols>'+widths.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join('')+'</cols>';
-  const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'+cols+'<sheetData>'+sd+'</sheetData></worksheet>';
+  const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0">'+(opts&&opts.noFreeze?'':'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>')+'</sheetView></sheetViews>'+cols+'<sheetData>'+sd+'</sheetData></worksheet>';
   const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEEF2F7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   const sn=xmlEsc(String(sheetName||'Sheet1').replace(/[\[\]:*?\/\\]/g,'_').slice(0,31));
   const wb='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="'+sn+'" sheetId="1" r:id="rId1"/></sheets></workbook>';
@@ -3656,7 +3656,7 @@ async function ckDownload(list0,emptyMsg){
     rows=[tpl.headers];
     list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(tpl.mapping.map(m=>cellVal(o,p,s,i+1,m)));});
   }
-  download(buildXlsx(rows,ct?'송장업로드':esm?'송장업로드':ss?'발송처리':full?'주문내역':'발주서'),(ct?safeName(tplName)+'_송장업로드_':esm?'ESM_송장대량업로드_':ss?'스마트스토어_발송처리_':full?'출고완료_주문_':'주문확인_발주_')+localDate().replace(/-/g,'')+'.xlsx');
+  download(buildXlsx(rows,ct?'송장업로드':esm?'송장업로드':ss?'발송처리':full?'주문내역':'발주서',ct?{noFreeze:true}:null),   /* 쇼핑몰 송장업로드 양식은 틀고정 없이 */(ct?safeName(tplName)+'_송장업로드_':esm?'ESM_송장대량업로드_':ss?'스마트스토어_발송처리_':full?'출고완료_주문_':'주문확인_발주_')+localDate().replace(/-/g,'')+'.xlsx');
   const now=new Date().toISOString();
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});
   await putMany('orders',list);
@@ -3826,7 +3826,7 @@ function pgTrackBulk(){
   '<div class="row" style="margin-top:16px"><button class="btn pri" data-act="btsave"'+(BT.items&&BT.items.length?'':' disabled')+'>저장</button></div></div>';
 }
 ROUTES['/orders/tracking/bulk']=pgTrackBulk;
-A.btsample=(el,e)=>{e.preventDefault();download(buildXlsx([['자체주문번호','운송장번호','택배사'],['1234567890','123456789012','CJ대한통운']],'송장업로드'),'송장업로드양식.xlsx');};
+A.btsample=(el,e)=>{e.preventDefault();download(buildXlsx([['자체주문번호','운송장번호','택배사'],['1234567890','123456789012','CJ대한통운']],'송장업로드',{noFreeze:true}),'송장업로드양식.xlsx');};
 C.btcar=el=>{
   if(el.value==='__add'){
     const n=(prompt('추가할 택배사 이름을 입력하세요.')||'').trim();

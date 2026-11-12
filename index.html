@@ -1686,7 +1686,7 @@ function buildHome(){
     '<div class="hset"><span>매출액</span><b>'+won(sa.pay)+'<small>원</small></b><em>결제금액 합계 · '+sa.cnt.toLocaleString()+'건</em></div>'+
     '<div class="hset"><span>매입액</span><b>'+won(sa.buy)+'<small>원</small></b><em>매입가 × 수량</em></div>'+
     '<div class="hset mg"><span>마진</span><b class="'+(sm<0?'neg':'')+'">'+won(sm)+'<small>원</small></b><em>마진율 '+rate.toFixed(1)+'% · 수수료 −'+won(sa.fee)+' · 배송비 −'+won(sa.ship)+'</em></div></div>'+
-    '<div class="hnote">마진 = 결제금액 − 수수료(15%) − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.lgun?' · <a href="#/orders/check">사방넷 이전 주문 미매핑 '+sa.lgun.toLocaleString()+'건</a> 마진 제외 (매출액에는 포함)':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nobuy?' · <b style="color:#e03131">매입가가 비어 있는 상품 주문 '+sa.nobuy.toLocaleString()+'건 포함 (매입액 0원으로 계산되어 마진이 크게 나올 수 있음)</b>':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
+    '<div class="hnote">마진 = 결제금액 − 수수료(15%) − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.lgun?' · <a href="#/orders/check" data-act="hlg" data-f="'+(sr[0]||'')+'" data-t="'+(sr[1]||'')+'">사방넷 이전 주문 미매핑 '+sa.lgun.toLocaleString()+'건</a> 마진 제외 (매출액에는 포함)':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nobuy?' · <b style="color:#e03131">매입가가 비어 있는 상품 주문 '+sa.nobuy.toLocaleString()+'건 포함 (매입액 0원으로 계산되어 마진이 크게 나올 수 있음)</b>':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
   /* 판매성과 */
   const rg=perfRanges(HD.perf,t),cur=agg(inR(rows,rg.cur[0],rg.cur[1])),prv=agg(inR(rows,rg.prev[0],rg.prev[1]));
   const cu=cur.qty?cur.pay/cur.qty:0,pu=prv.qty?prv.pay/prv.qty:0;
@@ -3178,6 +3178,12 @@ function ckList(skipStatus){
     if(!p&&!o.legacy)return false;   /* 사방넷에서 가져온 주문은 매핑 전에도 조회 */
     if(!fixedOf(o))return false;     /* 매핑만 하고 아직 [주문확정]을 누르지 않은 주문은 조회되지 않음 */
     if(!skipStatus&&a.status&&!stMatch(o,a.status))return false;
+    if(!skipStatus&&o.canceled&&a.status!=='canceled'&&a.status!=='returned')return false;   /* 취소 주문은 [취소건]에서만 조회 (전체·신규주문·주문확인·출고완료에서는 숨김) */
+    if(a.unmapLg){   /* 홈 대시보드 [사방넷 이전 주문 미매핑] : 매핑 안 된 사방넷 이전 주문만, 대시보드와 같은 기준(취소 제외·주문일 또는 수집일·선택 기간) */
+      if(o.canceled||p||!o.legacy)return false;
+      const dd=ordDayOf(o);if(!dd)return false;
+      if(a.lgFrom&&dd<a.lgFrom)return false;if(a.lgTo&&dd>a.lgTo)return false;
+    }
     if(a.mall==='__none'){if(o.mall)return false;}else if(a.mall&&o.mall!==a.mall)return false;
     if(a.sup){
       if(s){if(s.id!==+a.sup)return false;}
@@ -3185,9 +3191,11 @@ function ckList(skipStatus){
     }
     /* 출고일자 = 송장(운송장) 등록일. 송장이 없는 주문은 날짜가 비어 기간 조회에서 제외 */
     const cd=a.dtype==='order'?ordDateOnly(o):a.dtype==='shipped'?((o.trackingNo&&(o.trackedAt||o.shippedAt))?localDate(new Date(o.trackedAt||o.shippedAt)):''):(o.collectedDate||'');
-    if((a.from||a.to)&&!cd)return false;
-    if(a.from&&cd<a.from)return false;
-    if(a.to&&cd>a.to)return false;
+    if(!a.unmapLg){
+      if((a.from||a.to)&&!cd)return false;
+      if(a.from&&cd<a.from)return false;
+      if(a.to&&cd>a.to)return false;
+    }
     if(q&&!norm(o[a.field]).includes(q))return false;
     return true;
   });
@@ -3235,7 +3243,7 @@ function drawCheckTable(){
   const kc=$('#kcnt');
   if(kc){
     const cnt={new:0,confirmed:0,shipped:0,canceled:0,returned:0};
-    ckList(true).forEach(o=>{cnt[ordStatus(o)]++;if(o.canceled)cnt.canceled++;if(o.claim&&o.claim.req==='반품')cnt.returned++;});
+    ckList(true).forEach(o=>{if(!o.canceled)cnt[ordStatus(o)]++;if(o.canceled)cnt.canceled++;if(o.claim&&o.claim.req==='반품')cnt.returned++;});
     kc.innerHTML='<div class="chips" style="display:inline-flex">'+['','new','confirmed','shipped','canceled','returned'].map(k=>'<button class="chip'+(CK.a.status===k?' on':'')+'" data-act="ckstat" data-s="'+k+'">'+(k?CK_LBL[k]:'전체')+' <b>'+(k?cnt[k]:cnt.new+cnt.confirmed+cnt.shipped).toLocaleString()+'</b></button>').join('')+'</div>';
   }
   const list=ckList();
@@ -3243,7 +3251,8 @@ function drawCheckTable(){
   const cur=list.slice(CK.page*PAGE_O,(CK.page+1)*PAGE_O);
   const allSel=list.length&&list.every(o=>CK.sel.has(o.id));
   const isConf=CK.a.status==='confirmed';
-  const bar='<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(CK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="ksel">'+CK.sel.size+'</b>건</span><span class="grow"></span>'+
+  const lgb=CK.a.unmapLg?'<div class="card" style="margin-bottom:8px;padding:8px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="small"><b>사방넷 이전 주문 중 미매핑 주문만 보는 중</b>'+((CK.a.lgFrom||CK.a.lgTo)?' · 주문일(없으면 수집일) '+esc(CK.a.lgFrom||'처음')+' ~ '+esc(CK.a.lgTo||'현재'):' · 전체 기간')+'</span><button class="btn sm" data-act="hlgoff">해제</button></div>':'';
+  const bar=lgb+'<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(CK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="ksel">'+CK.sel.size+'</b>건</span><span class="grow"></span>'+
     (CK.a.status==='shipped'?'<button class="btn sm" data-act="dltpl">송장양식 설정</button><select class="selsm" data-chg="cktpl" title="고르면 다운로드가 그 쇼핑몰 송장업로드 양식으로 내려받아집니다"><option value="">송장업로드양식선택</option>'+Object.keys(dlTpls()).map(m=>'<option value="'+esc(m)+'"'+(CK.tpl===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select>':'')+
     '<button class="btn sm ok" data-act="ckdl">선택 다운로드</button><button class="btn sm ok" data-act="ckdlall">전체 다운로드</button><button class="btn sm pri" data-act="ckstatus">주문상태변경</button>'+'<button class="btn sm danger" data-act="ckdel">선택 삭제</button></div>';
   if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 매핑 주문이 없습니다. 수집일자·주문상태를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
@@ -3327,6 +3336,15 @@ A.hstat=(el,e)=>{
   CK.a=Object.assign({},CK.d);CK.page=0;CK.sel.clear();
   if((location.hash||'')==='#/orders/check')route();else location.hash='#/orders/check';
 };
+/* 홈 대시보드 정산관리 [사방넷 이전 주문 미매핑 N건] → 주문확인처리에서 그 주문만 보기 */
+A.hlg=(el,e)=>{
+  e.preventDefault();
+  ckInit();
+  CK.d=Object.assign({},CK.d,{status:'',mall:'',sup:'',q:''});
+  CK.a=Object.assign({},CK.d,{unmapLg:true,lgFrom:el.dataset.f||'',lgTo:el.dataset.t||''});CK.page=0;CK.sel.clear();
+  if((location.hash||'')==='#/orders/check')route();else location.hash='#/orders/check';
+};
+A.hlgoff=()=>{delete CK.a.unmapLg;delete CK.a.lgFrom;delete CK.a.lgTo;CK.page=0;CK.sel.clear();drawCheckTable();};
 A.ckstat=el=>{
   const s=el.dataset.s;if(s&&!CK_LBL[s])return;
   CK.a.status=s;CK.d.status=s;CK.page=0;CK.sel.clear();

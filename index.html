@@ -2788,7 +2788,7 @@ A.collectSave=async()=>{
 const CF={status:'all',q:'',field:'ownNo',from:'',to:'',page:0,incDone:false,sel:new Set(),keep:new Set(),d:{status:'all',q:'',field:'ownNo',from:'',to:''}};  /* d = 화면에서 고른 값(검색 버튼을 눌러야 적용) */
 const CF_FIELDS=[['ownNo','자체주문번호'],['orderNo','주문번호'],['receiver','수취인'],['itemName','상품명']];
 const PAGE_O=100;
-const scoped=()=>S.orders.filter(o=>{if(o.confirmed)return false;const cd=o.collectedDate||'';if(CF.from&&cd<CF.from)return false;if(CF.to&&cd>CF.to)return false;return true;});
+const scoped=()=>S.orders.filter(o=>{if(o.confirmed||fixedOf(o))return false;   /* 주문확정된 주문은 이 화면에서 보이지 않음 */const cd=o.collectedDate||'';if(CF.from&&cd<CF.from)return false;if(CF.to&&cd>CF.to)return false;return true;});
 function cfQMatch(o,q){
   if(!q)return true;
   let v;

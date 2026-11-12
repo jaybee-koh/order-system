@@ -3685,6 +3685,7 @@ function tkList(){
     const {p,s}=orderInfo(o);
     if(!p)return false;
     if(ordStatus(o)==='new')return false;   /* 신규주문은 운송장 입력 불가 (주문확인 이후만) */
+    if(o.canceled)return false;             /* 취소 주문은 표시하지 않음 */
     if(a.mall==='__none'){if(o.mall)return false;}else if(a.mall&&o.mall!==a.mall)return false;
     if(a.sup&&s.id!==+a.sup)return false;
     if(a.reg?!o.trackingNo:!!o.trackingNo)return false; /* 기본: 운송장 미입력만 / 체크 시: 송장 등록된 주문만 */

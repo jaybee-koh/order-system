@@ -632,6 +632,30 @@ table.tbl tr.chdone td b,table.tbl tr.chdone td span{opacity:.75}
 .hset{align-content:center}
 .hkpi b{font-size:22px}
 .hbox h3{font-size:14.5px}
+
+/* ---------- 열어 본 페이지 탭 ---------- */
+#mainwrap{flex:1;min-width:0}
+#tabbar{
+  position:sticky;top:0;z-index:30;display:flex;gap:6px;align-items:flex-end;flex-wrap:nowrap;overflow-x:auto;
+  padding:12px 44px 0;background:var(--bg);scrollbar-width:thin;
+}
+#tabbar::-webkit-scrollbar{height:6px}
+#tabbar::-webkit-scrollbar-thumb{background:#d3d8e2;border-radius:6px}
+.ttab{
+  flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;
+  background:#fff;color:var(--ink2);border:1px solid var(--line);border-radius:6px;
+  font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;transition:background .15s,border-color .15s;
+}
+.ttab:hover{background:#f5f8f8;border-color:#cbd8d8}
+.ttab.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.ttab .tx{
+  width:18px;height:18px;margin-right:-4px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;
+  font:inherit;font-size:15px;line-height:1;cursor:pointer;opacity:.6;display:inline-grid;place-items:center;
+}
+.ttab .tx:hover{opacity:1;background:rgba(0,0,0,.12)}
+.ttab.on .tx:hover{background:rgba(255,255,255,.25)}
+@media(max-width:1100px){#tabbar{padding:12px 24px 0}}
+@media(max-width:800px){#mainwrap{width:100%}#tabbar{top:54px;padding:10px 15px 0}}
 </style>
 </head>
 <body>
@@ -671,7 +695,10 @@ table.tbl tr.chdone td b,table.tbl tr.chdone td span{opacity:.75}
   </header>
   <div id="nav-ov"></div>
   <nav id="nav"></nav>
-  <main id="view"></main>
+  <div id="mainwrap">
+    <div id="tabbar"></div>
+    <main id="view"></main>
+  </div>
 </div>
 <div id="modal"></div>
 <div id="toast"></div>
@@ -1444,11 +1471,32 @@ function drawNav(cur){
   const on=document.querySelector('#nav a.on');const tt=document.getElementById('mtop-ttl');if(tt)tt.textContent=on?on.textContent.trim():'OpsDesk';
   SYNC.paint();
 }
+/* 열어 본 페이지 탭: Dashboard는 항상 맨 앞에 고정, 나머지는 연 순서대로 쌓이고 ×로 닫음 (브라우저에 기억) */
+const TAB_KEY='tabs_'+window.__USER;
+let TABS=[];
+try{TABS=JSON.parse(localStorage.getItem(TAB_KEY)||'[]')||[];}catch(e){TABS=[];}
+const tabTitle=h=>{if(h==='/home')return 'Dashboard';const n=NAV.find(x=>x.h===h);return n?n.t:h;};
+function drawTabs(cur){
+  TABS=[...new Set(TABS.filter(h=>h!=='/home'&&NAV.some(n=>n.h===h)))];
+  if(cur!=='/home'&&!TABS.includes(cur))TABS.push(cur);
+  try{localStorage.setItem(TAB_KEY,JSON.stringify(TABS));}catch(e){}
+  const el=document.getElementById('tabbar');if(!el)return;
+  el.innerHTML=['/home'].concat(TABS).map(h=>'<a class="ttab'+(h===cur?' on':'')+'" href="#'+h+'">'+esc(tabTitle(h))+(h==='/home'?'':'<button type="button" class="tx" data-act="tabclose" data-h="'+esc(h)+'" aria-label="'+esc(tabTitle(h))+' 닫기" title="닫기">×</button>')+'</a>').join('');
+  const on=el.querySelector('.ttab.on');if(on&&on.scrollIntoView)on.scrollIntoView({block:'nearest',inline:'nearest'});
+}
+A.tabclose=(el,e)=>{
+  if(e){e.preventDefault();e.stopPropagation();}
+  const h=el.dataset.h,cur=(location.hash||'#/home').slice(1),i=TABS.indexOf(h);
+  TABS=TABS.filter(x=>x!==h);
+  if(cur===h){location.hash='#'+(i>0?TABS[i-1]:'/home');}   /* 보고 있던 탭을 닫으면 바로 앞 탭으로 이동 */
+  else drawTabs(cur);
+};
 const ROUTES={};
 function route(){
   const cur=(location.hash||'#/home').slice(1);
   const fn=ROUTES[cur]||ROUTES['/home'];
   drawNav(ROUTES[cur]?cur:'/home');
+  drawTabs(ROUTES[cur]?cur:'/home');
   $('#view').innerHTML=fn();
   if(ROUTES[cur]===pgConfirm)drawConfirmTable();
   if(ROUTES[cur]===pgCheck)drawCheckTable();

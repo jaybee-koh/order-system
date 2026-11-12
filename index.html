@@ -3656,7 +3656,7 @@ async function ckDownload(list0,emptyMsg){
     rows=[tpl.headers];
     list.forEach((o,i)=>{const {p,s}=orderInfo(o);rows.push(tpl.mapping.map(m=>cellVal(o,p,s,i+1,m)));});
   }
-  download(buildXlsx(rows,ct?'송장업로드':esm?'송장업로드':ss?'발송처리':full?'주문내역':'발주서',ct?{noFreeze:true}:null),   /* 쇼핑몰 송장업로드 양식은 틀고정 없이 */(ct?safeName(tplName)+'_송장업로드_':esm?'ESM_송장대량업로드_':ss?'스마트스토어_발송처리_':full?'출고완료_주문_':'주문확인_발주_')+localDate().replace(/-/g,'')+'.xlsx');
+  download(buildXlsx(rows,ct?(isSSMall(tplName)?'발송처리':'송장업로드'):esm?'송장업로드':ss?'발송처리':full?'주문내역':'발주서',ct?{noFreeze:true}:null),   /* 스마트스토어 양식은 시트명이 '발송처리'여야 스마트스토어에서 업로드됨 */   /* 쇼핑몰 송장업로드 양식은 틀고정 없이 */(ct?safeName(tplName)+'_송장업로드_':esm?'ESM_송장대량업로드_':ss?'스마트스토어_발송처리_':full?'출고완료_주문_':'주문확인_발주_')+localDate().replace(/-/g,'')+'.xlsx');
   const now=new Date().toISOString();
   list.forEach(o=>{if(!o.exportedAt)o.exportedAt=now;});
   await putMany('orders',list);

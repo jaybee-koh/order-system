@@ -1537,10 +1537,10 @@ function homeRows(){
 }
 const inR=(rows,a,b)=>rows.filter(x=>(!a||x.d>=a)&&(!b||x.d<=b));
 function agg(rows){
-  const r={cnt:0,qty:0,pay:0,buy:0,ship:0,fee:0,margin:0,mpay:0,unm:0,orph:0,nopay:0,nobuy:0};
+  const r={cnt:0,qty:0,pay:0,buy:0,ship:0,fee:0,margin:0,mpay:0,unm:0,orph:0,lgun:0,nopay:0,nobuy:0};
   rows.forEach(x=>{
     r.cnt++;r.qty+=x.qty;r.pay+=x.pay;if(!x.pay)r.nopay++;
-    if(x.mapped){r.buy+=x.buy;r.ship+=x.ship;r.fee+=x.fee;r.margin+=x.margin;r.mpay+=x.pay;if(x.nobuy)r.nobuy++;}else if(x.o.confirmed)r.orph++;else r.unm++;
+    if(x.mapped){r.buy+=x.buy;r.ship+=x.ship;r.fee+=x.fee;r.margin+=x.margin;r.mpay+=x.pay;if(x.nobuy)r.nobuy++;}else if(x.o.legacy)r.lgun++;else if(x.o.confirmed)r.orph++;else r.unm++;
   });
   return r;
 }
@@ -1636,7 +1636,7 @@ function buildHome(){
     '<div class="hset"><span>매출액</span><b>'+won(sa.pay)+'<small>원</small></b><em>결제금액 합계 · '+sa.cnt.toLocaleString()+'건</em></div>'+
     '<div class="hset"><span>매입액</span><b>'+won(sa.buy)+'<small>원</small></b><em>매입가 × 수량</em></div>'+
     '<div class="hset mg"><span>마진</span><b class="'+(sm<0?'neg':'')+'">'+won(sm)+'<small>원</small></b><em>마진율 '+rate.toFixed(1)+'% · 수수료 −'+won(sa.fee)+' · 배송비 −'+won(sa.ship)+'</em></div></div>'+
-    '<div class="hnote">마진 = 결제금액 − 수수료(15%) − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nobuy?' · <b style="color:#e03131">매입가가 비어 있는 상품 주문 '+sa.nobuy.toLocaleString()+'건 포함 (매입액 0원으로 계산되어 마진이 크게 나올 수 있음)</b>':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
+    '<div class="hnote">마진 = 결제금액 − 수수료(15%) − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.lgun?' · <a href="#/orders/check">사방넷 이전 주문 미매핑 '+sa.lgun.toLocaleString()+'건</a> 마진 제외 (매출액에는 포함)':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nobuy?' · <b style="color:#e03131">매입가가 비어 있는 상품 주문 '+sa.nobuy.toLocaleString()+'건 포함 (매입액 0원으로 계산되어 마진이 크게 나올 수 있음)</b>':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
   /* 판매성과 */
   const rg=perfRanges(HD.perf,t),cur=agg(inR(rows,rg.cur[0],rg.cur[1])),prv=agg(inR(rows,rg.prev[0],rg.prev[1]));
   const cu=cur.qty?cur.pay/cur.qty:0,pu=prv.qty?prv.pay/prv.qty:0;
@@ -2914,7 +2914,7 @@ function matchResults(){
 }
 function drawMatch(){
   const o=M.ord.get(MT.orderId);
-  openModal('<h2>상품 매핑</h2><div class="card" style="background:#f7f8fb;box-shadow:none"><div class="small mute">매핑할 주문</div><div><b>'+esc(o.itemName)+'</b>'+(o.itemOption?' <span class="mute">/ '+esc(o.itemOption)+'</span>':'')+'</div><div class="small mute">'+esc(o.orderNo)+' · '+esc(o.receiver)+' · 수량 '+o.qty+'</div></div>'+
+  openModal('<h2>상품 매핑</h2><div class="card" style="background:#f7f8fb;box-shadow:none"><div class="small mute">매핑할 주문</div><div><b>'+esc(o.itemName)+'</b>'+(o.itemOption?' <span class="mute">/ '+esc(o.itemOption)+'</span>':'')+'</div><div class="small mute">'+esc(o.orderNo)+' · '+esc(o.receiver)+' · 수량 '+o.qty+(o.legacySup?' · 사방넷 거래선 '+esc(o.legacySup):'')+'</div>'+(o.legacy?'<div class="small mute" style="margin-top:4px">사방넷에서 가져온 출고완료 주문입니다. 매핑해도 출고완료 상태와 운송장은 그대로 유지됩니다.</div>':'')+'</div>'+
     '<div class="row" style="margin-bottom:10px"><input type="text" id="mq" class="grow" placeholder="상품명 · 코드 · 옵션으로 검색" value="'+esc(MT.q)+'" data-inp="mq"><select data-chg="msup"><option value="">전체 매입처</option>'+S.suppliers.map(s=>'<option value="'+s.id+'"'+(String(MT.sup)===String(s.id)?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select></div><div id="mres">'+matchResults()+'</div><div class="foot"><button class="btn" data-act="close">닫기</button></div>','wide');
   const inp=$('#mq');if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
 }
@@ -2924,18 +2924,21 @@ A.pick=async el=>{
   const pid=+el.dataset.id,p=M.prod.get(pid),o=M.ord.get(MT.orderId);
   if(!p||!o)return;
   const changed=[];
-  delete o.snapP;delete o.snapS;o.productId=pid;o.matchedAuto=false;o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;changed.push(o);
+  const lg=!!(MT&&MT.legacy);
+  delete o.snapP;delete o.snapS;o.productId=pid;o.matchedAuto=false;
+  if(!o.legacy){o.exportedAt=null;o.confirmed=false;o.confirmedAt=null;o.shipped=false;o.shippedAt=null;}   /* 사방넷 주문은 출고완료 상태 유지 */
+  changed.push(o);
   let extra=0;
   if(o.itemName){
     const k=ruleKey(o);
     S.rules[k]=pid;await putOne('rules',{key:k,productId:pid});
-    S.orders.forEach(x=>{if(x.id!==o.id&&ruleKey(x)===k&&stOf(x)==='none'){x.productId=pid;x.matchedAuto=true;x.exportedAt=null;changed.push(x);extra++;}});
+    S.orders.forEach(x=>{if(x.id!==o.id&&ruleKey(x)===k&&stOf(x)==='none'){x.productId=pid;x.matchedAuto=true;if(!x.legacy)x.exportedAt=null;changed.push(x);extra++;}});
   }
   await putMany('orders',changed);
   changed.forEach(x=>CF.keep.add(x.id));
   closeModal();MT=null;
   toast('매핑 완료: '+p.name+(extra?' (같은 상품 주문 '+extra+'건도 함께 매핑)':''));
-  redrawConfirm();
+  if(lg){const y=window.scrollY;drawCheckTable();window.scrollTo(0,y);}else redrawConfirm();
 };
 A.bulkmatch=async()=>{
   const sel=[...CF.sel].map(id=>M.ord.get(id)).filter(Boolean);
@@ -3095,10 +3098,13 @@ function ckList(skipStatus){
   const a=CK.a,q=norm(a.q);
   return S.orders.filter(o=>{
     const {p,s}=orderInfo(o);
-    if(!p)return false;
+    if(!p&&!o.legacy)return false;   /* 사방넷에서 가져온 주문은 매핑 전에도 조회 */
     if(!skipStatus&&a.status&&!stMatch(o,a.status))return false;
     if(a.mall==='__none'){if(o.mall)return false;}else if(a.mall&&o.mall!==a.mall)return false;
-    if(a.sup&&s.id!==+a.sup)return false;
+    if(a.sup){
+      if(s){if(s.id!==+a.sup)return false;}
+      else{const ss=M.sup.get(+a.sup);if(!ss||norm(ss.name)!==norm(o.legacySup||''))return false;}   /* 미매핑: 사방넷 거래선 이름으로 비교 */
+    }
     const cd=a.dtype==='order'?ordDateOnly(o):(o.collectedDate||'');
     if(a.from&&cd<a.from)return false;
     if(a.to&&cd>a.to)return false;
@@ -3116,7 +3122,7 @@ function pgCheck(){
   '<div class="card">'+
   '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value=""'+(d.status===''?' selected':'')+'>전체</option><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option><option value="canceled"'+(d.status==='canceled'?' selected':'')+'>취소건</option><option value="returned"'+(d.status==='returned'?' selected':'')+'>반품건</option></select>'+
   '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="ckf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
-  '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="ckf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+
+  '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="ckf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select><span class="grow"></span><button class="btn sm" data-act="lgopen" title="사방넷에서 내려받은 이전 주문을 출고완료로 가져옵니다">사방넷 이전주문 가져오기</button></div>'+
   '<div class="row" style="margin-bottom:10px">'+'<select data-chg="ckf" data-k="dtype" style="min-width:86px"><option value="collected"'+(d.dtype!=='order'?' selected':'')+'>수집일자</option><option value="order"'+(d.dtype==='order'?' selected':'')+'>주문일자</option></select>'+'<input type="date" id="ckfrom" data-chg="ckf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ckto" data-chg="ckf" data-k="to" value="'+esc(d.to)+'">'+
   [['today','오늘'],['yesterday','어제'],['7','7일'],['30','30일'],['month','당월'],['prev','전월']].map(x=>'<button class="btn sm" '+sm+' data-act="ckrange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>'+
   '<div class="row">'+lb('검색')+'<select data-chg="ckf" data-k="field"><option value="orderNo"'+(d.field==='orderNo'?' selected':'')+'>쇼핑몰주문번호</option><option value="ownNo"'+(d.field==='ownNo'?' selected':'')+'>자체주문번호</option><option value="orderer"'+(d.field==='orderer'?' selected':'')+'>주문자명</option><option value="receiver"'+(d.field==='receiver'?' selected':'')+'>수취인명</option></select>'+
@@ -3128,7 +3134,7 @@ function checkTableHtml(cur,allSel){
   const V=hideSet(),v=k=>!V.has(k);
   const cols=[
     {i:0,t:'<input type="checkbox" data-chg="cksall"'+(allSel?' checked':'')+'>',cell:o=>'<td><input type="checkbox" data-chg="ckrow" data-id="'+o.id+'"'+(CK.sel.has(o.id)?' checked':'')+'></td>'},
-    {i:1,t:'주문상태',cell:o=>'<td><div class="stcell">'+stTag(o)+'<button class="btn cs'+((o.csContent||o.csAction)?' on':'')+'" data-act="cs" data-id="'+o.id+'" title="'+((o.csContent||o.csAction)?'C/S 메모 있음 · 클릭하여 보기/수정':'C/S 메모 작성')+'">C/S</button>'+clmBtns(o)+'</div></td>'},
+    {i:1,t:'주문상태',cell:o=>'<td><div class="stcell">'+stTag(o)+(o.legacy?' <span class="tag gray" title="사방넷에서 가져온 주문">사방넷</span>':'')+'<button class="btn cs'+((o.csContent||o.csAction)?' on':'')+'" data-act="cs" data-id="'+o.id+'" title="'+((o.csContent||o.csAction)?'C/S 메모 있음 · 클릭하여 보기/수정':'C/S 메모 작성')+'">C/S</button>'+clmBtns(o)+'</div></td>'},
     {i:2,t:'<span style="color:#f76707">수집일</span><br><span style="color:#868e96">주문일</span>',cell:o=>'<td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+esc(o.collectedDate||'')+'</div><div style="color:#868e96;font-weight:600;min-height:1.3em">'+esc(ordDateOnly(o)||'')+'</div></td>'},
     {i:3,t:'쇼핑몰',cell:o=>'<td>'+mallHtml(o.mall)+'</td>'},
     {i:4,t:'주문번호 <span style="color:#1c7ed6">자체주문번호</span>',cell:o=>'<td class="brk">'+(v('orderNo')?esc(o.orderNo):'')+(o.ownNo?'<div class="sm2" style="color:#1c7ed6" title="자체주문번호">'+esc(o.ownNo)+'</div>':'')+'</td>'},
@@ -3136,13 +3142,13 @@ function checkTableHtml(cur,allSel){
     {i:6,show:v('tel1')||v('tel2'),t:'연락처',cell:o=>'<td>'+(v('tel1')?esc(o.tel1):'')+(v('tel2')&&o.tel2?'<div class="sm2">'+esc(o.tel2)+'</div>':'')+'</td>'},
     {i:7,show:v('zip')||v('addr'),t:'우편번호 / 주소',cell:o=>'<td>'+(v('zip')&&o.zip?'<span class="mute small">['+esc(o.zip)+']</span> ':'')+(v('addr')?esc(o.addr):'')+'</td>'},
     {i:8,show:v('memo'),t:'배송메모',cell:o=>'<td>'+esc(o.memo)+'</td>'},
-    {i:9,show:v('itemName'),t:'상품명',cell:(o,x)=>'<td>'+esc(o.itemName||x.p.name)+'</td>'},
-    {i:10,t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>',cell:(o,x)=>'<td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+(v('itemOption')?esc(o.itemOption||''):'')+'</div><div style="color:#1c7ed6;font-weight:600;min-height:1.3em">'+esc(x.p.option||'')+'</div></td>'},
+    {i:9,show:v('itemName'),t:'상품명',cell:(o,x)=>'<td>'+esc(o.itemName||(x.p?x.p.name:''))+'</td>'},
+    {i:10,t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>',cell:(o,x)=>'<td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+(v('itemOption')?esc(o.itemOption||''):'')+'</div><div style="color:#1c7ed6;font-weight:600;min-height:1.3em">'+(x.p?esc(x.p.option||''):'')+'</div>'+lgMapBtn(o,x)+'</td>'},
     {i:11,show:v('qty'),t:'수량',c:'num',cell:o=>'<td class="num">'+o.qty+'</td>'},
-    {i:12,t:'거래선',cell:(o,x)=>'<td><b>'+esc(x.s.name)+'</b></td>'},
+    {i:12,t:'거래선',cell:(o,x)=>'<td>'+(x.s?'<b>'+esc(x.s.name)+'</b>':'<b style="color:#868e96" title="사방넷 거래선 (상품 매핑 전)">'+esc(o.legacySup||'')+'</b>')+'</td>'},
     {i:13,t:'택배사 / 운송장번호',cell:o=>'<td>'+(o.trackingNo?'<b>'+esc(o.carrier||'')+'</b><div class="sm2 brk">'+(o.shipped?'<a class="trk" data-act="trkpop" data-id="'+o.id+'" title="클릭하면 '+esc(o.carrier||'택배사')+' 배송조회 팝업이 열립니다">'+esc(o.trackingNo)+'</a>':esc(o.trackingNo))+'</div>':'')+'</td>'}
   ];
-  return fitCols('check',cols,cur,o=>{const {p,s}=orderInfo(o);return {p,s,cls:'m'};});
+  return fitCols('check',cols,cur,o=>{const {p,s}=orderInfo(o);return {p,s,cls:p?'m':''};});
 }
 function drawCheckTable(){
   const box=$('#ktbl');if(!box)return;
@@ -3297,6 +3303,129 @@ A.ckmallSave=async()=>{
 };
 A.ckdl=()=>ckDownload(ckPicked(),'다운로드할 주문을 체크하세요.');
 A.ckdlall=()=>ckDownload(ckList(),'다운로드할 주문이 없습니다.');
+/* =====================================================================
+   사방넷 이전 주문 가져오기 — 출고완료로 등록 · 같은 쇼핑몰주문번호가 이미 있으면 건너뜀
+   파일 열 이름: 주문일, 수집일, 쇼핑몰, 자체주문번호, 주문번호, 주문자, 수취인, 연락처, 우편번호/ 주소, 배송메모,
+                 상품명, 수집옵션명, 수량, 결제금액, 거래선, 택배사, 운송장번호
+===================================================================== */
+const LG={info:null};
+const LG_COLS={
+  orderDate:['주문일','주문일자','주문일시'],collected:['수집일','수집일자','수집일시'],mall:['쇼핑몰','쇼핑몰명'],
+  ownNo:['자체주문번호'],orderNo:['주문번호','쇼핑몰주문번호'],orderer:['주문자','주문자명'],receiver:['수취인','수취인명'],
+  tel1:['연락처','연락처1'],tel2:['연락처2'],zipAddr:['우편번호주소'],zip:['우편번호'],addr:['주소'],memo:['배송메모'],
+  itemName:['상품명','수집상품명'],itemOption:['수집옵션명','옵션명'],qty:['수량'],pay:['결제금액'],
+  sup:['거래선','매입처'],carrier:['택배사'],track:['운송장번호','송장번호']
+};
+function lgMapBtn(o,x){
+  if(!x.p)return '<div style="margin-top:3px"><button class="btn sm pri" data-act="lgmap" data-id="'+o.id+'" title="상품 매핑 (출고완료 상태는 그대로 유지됩니다)">매핑</button></div>';
+  if(o.legacy)return '<div style="margin-top:3px"><button class="btn sm" style="height:22px;padding:0 6px;font-size:11px" data-act="lgmap" data-id="'+o.id+'" title="매핑한 상품 바꾸기">재매핑</button></div>';
+  return '';
+}
+function lgBuild(rows,fileName){
+  let hi=-1,col=null;
+  for(let i=0;i<Math.min(15,rows.length);i++){
+    const hs=rows[i].map(norm),c={};
+    for(const k in LG_COLS){const ix=hs.findIndex(h=>LG_COLS[k].includes(h));if(ix>=0)c[k]=ix;}
+    if(c.orderNo!=null&&c.itemName!=null){hi=i;col=c;break;}
+  }
+  if(hi<0)throw new Error('열 이름을 찾지 못했습니다. 첫 줄에 "주문번호", "상품명" 열이 있는 파일을 올려 주세요.');
+  const get=(r,k)=>col[k]==null?'':String(r[col[k]]==null?'':r[col[k]]).trim();
+  const exist=new Set(S.orders.map(o=>o.orderNo?norm(o.orderNo):'').filter(Boolean));
+  const used=new Set();
+  S.orders.forEach(o=>{if(o.ownNo)used.add(o.ownNo);});
+  Object.keys(S.meta).forEach(k=>{if(k.startsWith(OWN_PFX))used.add(S.meta[k]);});
+  const seenOwn=new Set(),adds=[],byMall={};
+  let total=0,dup=0,bad=0,auto=0,regen=0,pay=0,min='',max='';
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i];
+    if(!r||r.every(v=>String(v==null?'':v).trim()===''))continue;
+    total++;
+    const orderNo=get(r,'orderNo'),itemName=get(r,'itemName');
+    if(!orderNo){bad++;continue;}
+    let own=get(r,'ownNo');
+    if(exist.has(norm(orderNo))||(own&&seenOwn.has(own))){dup++;continue;}   /* 이미 있는 쇼핑몰주문번호는 제외 */
+    if(own)seenOwn.add(own);
+    if(!own||used.has(own)){own=ownNoGen(used);regen++;}else used.add(own);
+    const od=normDay(get(r,'orderDate')),cRaw=get(r,'collected');
+    const cDate=normDay(cRaw)||od||localDate();
+    const tm=/^(\d{4})\D(\d{1,2})\D(\d{1,2})[ T](\d{1,2}):(\d{2})/.exec(cRaw);
+    const cAt=(tm?new Date(+tm[1],+tm[2]-1,+tm[3],+tm[4],+tm[5]):new Date(cDate+'T09:00:00')).toISOString();
+    let zip=get(r,'zip'),addr=get(r,'addr');
+    const za=get(r,'zipAddr');
+    if(za){const m=/^\[([^\]]*)\]\s*(.*)$/.exec(za);if(m){zip=zip||m[1].trim();addr=m[2].trim();}else addr=za;}
+    const pr=get(r,'pay').replace(/[,원\s]/g,''),payAmount=pr!==''&&!isNaN(Number(pr))?Number(pr):pr;
+    const qty=parseInt(get(r,'qty').replace(/[^\d-]/g,''),10)||1;
+    const trk=get(r,'track');
+    const o={
+      orderNo,prodOrderNo:'',sellerId:'',esmNo:'',shipMethod:'',orderDate:od,
+      orderer:get(r,'orderer'),receiver:get(r,'receiver'),tel1:fixPhone(get(r,'tel1')),tel2:fixPhone(get(r,'tel2')),
+      zip:fixZip(zip),addr,memo:get(r,'memo'),itemName,itemOption:get(r,'itemOption'),qty,payAmount,settleAmount:'',
+      ownNo:own,mall:get(r,'mall'),collectedAt:cAt,collectedDate:cDate,mallFile:'사방넷 이전주문',
+      productId:null,matchedAuto:false,exportedAt:cAt,confirmed:true,confirmedAt:cAt,shipped:true,shippedAt:null,
+      carrier:get(r,'carrier'),trackingNo:trk,trackedAt:trk?cAt:null,
+      legacy:true,legacySup:get(r,'sup')
+    };
+    if(itemName){const pid=S.rules[ruleKey(o)];if(pid&&M.prod.has(pid)&&M.sup.has(M.prod.get(pid).supplierId)){o.productId=pid;o.matchedAuto=true;auto++;}}
+    adds.push(o);
+    byMall[o.mall||'']=(byMall[o.mall||'']||0)+1;
+    pay+=nz(payAmount);
+    if(!min||cDate<min)min=cDate;if(!max||cDate>max)max=cDate;
+  }
+  const have=new Set(mallList());
+  const newMalls=[...new Set(adds.map(o=>o.mall).filter(m=>m&&!have.has(m)))];
+  return {adds,total,dup,bad,auto,regen,pay,min,max,byMall,newMalls,fileName};
+}
+function lgPreview(I){
+  if(!I.adds.length)return '<div class="card" style="background:#f7f8fb;box-shadow:none;margin:12px 0 0"><b>추가할 주문이 없습니다.</b><div class="mute small" style="margin-top:6px">파일 '+I.total.toLocaleString()+'행 중 '+I.dup.toLocaleString()+'건은 이미 같은 쇼핑몰주문번호가 있어 제외되었습니다.'+(I.bad?' (주문번호 없음 '+I.bad+'건)':'')+'</div></div>';
+  const chips=Object.entries(I.byMall).sort((a,b)=>b[1]-a[1]).map(([m,n])=>'<span class="tag gray" style="margin:2px 4px 2px 0">'+esc(m||'(미지정)')+' '+n.toLocaleString()+'</span>').join('');
+  return '<div class="card" style="background:#f7f8fb;box-shadow:none;margin:12px 0 0"><div><b style="font-size:20px">'+I.adds.length.toLocaleString()+'건</b>을 출고완료로 추가합니다.</div>'+
+    '<div class="mute small" style="margin-top:8px">파일 '+I.total.toLocaleString()+'행 · 이미 있는 쇼핑몰주문번호 제외 '+I.dup.toLocaleString()+'건'+(I.bad?' · 주문번호 없음 제외 '+I.bad.toLocaleString()+'건':'')+'</div>'+
+    '<div class="mute small">자동 매핑 '+I.auto.toLocaleString()+'건 · 미매핑 '+(I.adds.length-I.auto).toLocaleString()+'건 (가져온 뒤 옵션명 옆 [매핑] 버튼으로 연결)</div>'+
+    '<div class="mute small">수집일 '+esc(I.min)+' ~ '+esc(I.max)+' · 결제금액 합계 '+won(I.pay)+'원</div>'+
+    (I.regen?'<div class="mute small">자체주문번호가 비었거나 겹쳐 새로 만든 번호 '+I.regen.toLocaleString()+'건</div>':'')+
+    (I.newMalls.length?'<div class="mute small">쇼핑몰 목록에 새로 추가: '+I.newMalls.map(esc).join(', ')+'</div>':'')+
+    '<div style="margin-top:8px">'+chips+'</div></div>';
+}
+A.lgopen=()=>{
+  LG.info=null;
+  openModal('<h2>사방넷 이전주문 가져오기</h2>'+
+    '<div class="small mute" style="margin-bottom:10px">사방넷에서 내려받은 주문 엑셀을 올리면 <b>출고완료</b> 주문으로 등록합니다. 첫 줄 열 이름(주문일·수집일·쇼핑몰·자체주문번호·주문번호·…·결제금액·거래선·택배사·운송장번호)으로 읽으며, <b>이미 같은 쇼핑몰주문번호가 있는 주문은 제외</b>하고 추가합니다.</div>'+
+    '<input type="file" accept=".xlsx,.csv,.txt,.html,.htm" data-chg="lgfile"><div id="lgprev"></div>'+
+    '<div class="foot"><button class="btn" data-act="close">닫기</button><button class="btn pri" id="lgrun" data-act="lgrun" disabled>가져오기</button></div>');
+};
+C.lgfile=async el=>{
+  const f=el.files[0];if(!f)return;
+  const box=$('#lgprev'),btn=$('#lgrun');
+  LG.info=null;if(btn)btn.disabled=true;
+  if(box)box.innerHTML='<div class="mute small" style="margin-top:10px">파일을 읽는 중…</div>';
+  try{
+    const sheets=await parseAny(await readFileBuf(f));
+    const sh=sheets[firstNonEmptySheet(sheets)];
+    LG.info=lgBuild(sh.rows,f.name);
+    if(box)box.innerHTML=lgPreview(LG.info);
+    if(btn)btn.disabled=!LG.info.adds.length;
+  }catch(e){if(box)box.innerHTML='<div class="card err" style="margin-top:10px">'+esc(e.message)+'</div>';}
+};
+A.lgrun=async()=>{
+  const I=LG.info;if(!I||!I.adds.length)return;
+  const btn=$('#lgrun');if(btn)btn.disabled=true;
+  try{
+    await putMany('orders',I.adds);S.orders.push(...I.adds);rebuild();
+    if(I.newMalls.length){const cur=Array.isArray(S.meta.malls)?S.meta.malls.slice():[];I.newMalls.forEach(m=>{if(!cur.includes(m))cur.push(m);});await setMeta('malls',cur);}
+  }catch(e){toast('저장 실패: '+e.message,'err',6000);if(btn)btn.disabled=false;return;}
+  CK.d=Object.assign({},CK.d,{dtype:'collected',status:'shipped',mall:'',sup:'',from:I.min,to:I.max,field:'orderNo',q:''});
+  CK.a=Object.assign({},CK.d);CK.page=0;CK.sel.clear();
+  LG.info=null;closeModal();
+  toast(I.adds.length.toLocaleString()+'건을 출고완료로 가져왔습니다.'+(I.dup?' (이미 있는 주문 '+I.dup.toLocaleString()+'건 제외)':'')+(I.adds.length>I.auto?' · 미매핑 '+(I.adds.length-I.auto).toLocaleString()+'건은 옵션명 옆 [매핑] 버튼으로 연결하세요.':''),'ok',8000);
+  route();
+};
+A.lgmap=el=>{
+  const o=M.ord.get(+el.dataset.id);if(!o)return;
+  const ss=o.legacySup?S.suppliers.find(s=>norm(s.name)===norm(o.legacySup)):null;   /* 사방넷 거래선과 같은 이름의 매입처가 있으면 먼저 선택 */
+  MT={orderId:o.id,q:o.itemName||'',sup:ss?String(ss.id):'',legacy:true};
+  drawMatch();
+};
+
 /* ESM 계정(판매아이디): 수집 때 저장한 값, 없으면 [항목 추가]로 만든 판매아이디·계정 항목의 값 */
 function esmSeller(o){
   if(o.sellerId)return o.sellerId;
@@ -3437,7 +3566,7 @@ async function ckDownload(list0,emptyMsg){
     rows=[['번호','주문상태','수집일','주문일','쇼핑몰','쇼핑몰주문번호','상품주문번호','배송방법','자체주문번호','주문자','수취인','연락처1','연락처2','우편번호','주소','배송메모','수집상품명','수집옵션명','확정상품코드','확정상품명','확정옵션명','수량','결제금액','정산예정금액','매입처','매입가','택배사','운송장번호','출고일시','C/S 내용','C/S 처리내용'].concat(cf.map(c=>c.label))];
     list.forEach((o,i)=>{
       const {p,s}=orderInfo(o);
-      rows.push([i+1,ST_NAME[ordStatus(o)],o.collectedDate||'',ordDateOnly(o)||o.orderDate||'',o.mall||'',o.orderNo||'',o.prodOrderNo||'',o.shipMethod||'',o.ownNo||'',o.orderer||'',o.receiver||'',o.tel1||'',o.tel2||'',o.zip||'',o.addr||'',o.memo||'',o.itemName||'',o.itemOption||'',p?p.code||'':'',p?p.name||'':'',p?p.option||'':'',o.qty,num(o.payAmount),num(o.settleAmount),s?s.name:'',p?num(p.price):'',o.carrier||'',o.trackingNo||'',o.shippedAt?fmtDT(o.shippedAt):'',o.csContent||'',o.csAction||''].concat(cf.map(c=>(o.ex||{})[c.key]||'')));
+      rows.push([i+1,ST_NAME[ordStatus(o)],o.collectedDate||'',ordDateOnly(o)||o.orderDate||'',o.mall||'',o.orderNo||'',o.prodOrderNo||'',o.shipMethod||'',o.ownNo||'',o.orderer||'',o.receiver||'',o.tel1||'',o.tel2||'',o.zip||'',o.addr||'',o.memo||'',o.itemName||'',o.itemOption||'',p?p.code||'':'',p?p.name||'':'',p?p.option||'':'',o.qty,num(o.payAmount),num(o.settleAmount),s?s.name:(o.legacySup||''),p?num(p.price):'',o.carrier||'',o.trackingNo||'',o.shippedAt?fmtDT(o.shippedAt):'',o.csContent||'',o.csAction||''].concat(cf.map(c=>(o.ex||{})[c.key]||'')));
     });
   }else{
     const tpl=DEFAULT_TPL;

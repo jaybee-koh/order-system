@@ -1866,13 +1866,18 @@ const saleOf=p=>SALE_ST.includes(p.saleStatus)?p.saleStatus:'판매중';   /* �
 const saleSel=(cur,attrs,cls)=>'<select '+(cls?'class="'+cls+'" ':'')+attrs+' style="font-weight:600;color:'+SALE_CLR[cur]+'">'+SALE_ST.map(x=>'<option value="'+x+'"'+(cur===x?' selected':'')+'>'+x+'</option>').join('')+'</select>';
 const PAGE_P=200;
 /* ---- 자동 가격계산 (주영씨푸드·신흥유통·식품백억·마스터유통 / 카테고리 농축수산물) ----
-   마진율 = (판매가 - 판매가×수수료% - 배송비 - 매입가) ÷ 판매가. 목표 마진율 이상이 되는 가장 낮은 가격(100원 단위 올림)으로 계산하므로
-   14%대가 15%로 반올림되는 일이 없습니다. 정상가 = 종합몰판매가 ÷ 0.8 → 만원 이상은 천원 단위, 만원 미만은 백원 단위로 내림. */
+   마진율 = (판매가 - 판매가×수수료% - 배송비 - 매입가) ÷ 판매가. 목표 마진율 바로 윗단계(15%→16%, 20%→21%) 바로 아래의 100원 단위 가격으로 계산합니다.
+   (예: 목표 15%면 15.00~15.99% 구간에서 가장 높은 가격) 정상가 = 종합몰판매가 ÷ 0.8 → 만원 이상은 천원 단위, 만원 미만은 백원 단위로 내림. */
 const AUTO_SUP=['주영씨푸드','신흥유통','식품백억','마스터유통'];
 const AUTO_CAT='농축수산물';
 const PRICE_UNIT=100;
 const isAutoSup=sid=>{const x=M.sup.get(sid);return !!x&&AUTO_SUP.includes(String(x.name).replace(/\s/g,''));};
-const priceFor=(cost,feePct,marginPct)=>{const den=100-feePct-marginPct;return Math.ceil(Math.round(cost*100)/(den*PRICE_UNIT))*PRICE_UNIT;};
+const priceFor=(cost,feePct,marginPct)=>{
+  const den=100-feePct-marginPct,c100=Math.round(cost*100),u=PRICE_UNIT;
+  const kMin=Math.ceil(c100/(den*u));                  /* 목표 마진율 이상이 되는 가장 낮은 가격 */
+  const kTop=Math.ceil(c100/((den-1)*u))-1;            /* (목표+1)% 바로 아래 가격 (예: 목표 15% → 16% 미만 중 가장 높은 가격) */
+  return Math.max(kMin,kTop)*u;                        /* 100원 단위에 15%대 가격이 없으면 15% 이상이 되는 가장 낮은 가격 */
+};
 function calcPrices(p){
   if(!isAutoSup(p.supplierId)||p.category!==AUTO_CAT)return null;
   const buy=nz(p.price);if(buy<=0)return null;

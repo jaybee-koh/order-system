@@ -1865,6 +1865,35 @@ const SALE_CLR={'판매중':'#2b8a3e','품절':'#e8590c','단종':'#e03131'};
 const saleOf=p=>SALE_ST.includes(p.saleStatus)?p.saleStatus:'판매중';   /* 판매상태가 없으면 기본 판매중 */
 const saleSel=(cur,attrs,cls)=>'<select '+(cls?'class="'+cls+'" ':'')+attrs+' style="font-weight:600;color:'+SALE_CLR[cur]+'">'+SALE_ST.map(x=>'<option value="'+x+'"'+(cur===x?' selected':'')+'>'+x+'</option>').join('')+'</select>';
 const PAGE_P=200;
+/* ---- 자동 가격계산 (주영씨푸드·신흥유통·식품백억·마스터유통 / 카테고리 농축수산물) ----
+   마진율 = (판매가 - 판매가×수수료% - 배송비 - 매입가) ÷ 판매가. 목표 마진율 이상이 되는 가장 낮은 가격(100원 단위 올림)으로 계산하므로
+   14%대가 15%로 반올림되는 일이 없습니다. 정상가 = 종합몰판매가 ÷ 0.8 → 만원 이상은 천원 단위, 만원 미만은 백원 단위로 내림. */
+const AUTO_SUP=['주영씨푸드','신흥유통','식품백억','마스터유통'];
+const AUTO_CAT='농축수산물';
+const PRICE_UNIT=100;
+const isAutoSup=sid=>{const x=M.sup.get(sid);return !!x&&AUTO_SUP.includes(String(x.name).replace(/\s/g,''));};
+const priceFor=(cost,feePct,marginPct)=>{const den=100-feePct-marginPct;return Math.ceil(Math.round(cost*100)/(den*PRICE_UNIT))*PRICE_UNIT;};
+function calcPrices(p){
+  if(!isAutoSup(p.supplierId)||p.category!==AUTO_CAT)return null;
+  const buy=nz(p.price);if(buy<=0)return null;
+  const cost=buy+(p.shipFee==='포함'?0:nz(p.shipAmount));
+  const mall=priceFor(cost,15,20),open=priceFor(cost,12,20),sp=priceFor(cost,10,15);
+  const raw=Math.floor(mall*5/4);                         /* 종합몰판매가 ÷ 0.8 */
+  const normal=raw>=10000?Math.floor(raw/1000)*1000:Math.floor(raw/100)*100;
+  return {normal,mall,open,sp};
+}
+/* 대상 매입처 상품의 카테고리를 농축수산물로 한 번만 일괄 지정 (이후 직접 수정한 값은 유지) */
+let AC_BUSY=false;
+function ensureAutoCat(){
+  if(S.meta.autoCatV1||AC_BUSY)return;
+  const list=S.products.filter(p=>isAutoSup(p.supplierId)&&p.category!==AUTO_CAT);
+  const prev=list.map(p=>p.category);
+  AC_BUSY=true;list.forEach(p=>{p.category=AUTO_CAT;});
+  Promise.resolve(list.length?putMany('products',list):0).then(()=>setMeta('autoCatV1',1))
+    .then(()=>{if(list.length)toast('주영씨푸드·신흥유통·식품백억·마스터유통 상품 '+list.length.toLocaleString()+'개의 카테고리를 농축수산물로 지정했습니다.');})
+    .catch(e=>{list.forEach((p,i)=>{p.category=prev[i];});delete S.meta.autoCatV1;toast('카테고리 일괄 지정 실패: '+e.message,'err',5000);drawProducts();})
+    .finally(()=>{AC_BUSY=false;});
+}
 function pgProducts(){
   const sm='style="padding:2px 8px;font-size:12px"';
   const dateRow='<div class="card row"><select data-chg="pdt"><option value="created"'+(PL.dtype==='created'?' selected':'')+'>상품등록일</option><option value="updated"'+(PL.dtype==='updated'?' selected':'')+'>상품수정일</option></select>'+
@@ -1875,7 +1904,7 @@ function pgProducts(){
   return '<div class="row"><div class="grow"><h1>매입 상품 조회</h1><p class="sub">매입처별로 등록된 매입 상품을 검색하고 관리합니다.</p></div><a class="btn" href="#/products/bulk" style="text-decoration:none">상품대량등록</a><a class="btn pri" href="#/products/new" style="text-decoration:none">신규상품등록</a></div>'+dateRow+
   '<div id="ptbl"></div>';
 }
-ROUTES['/products']=()=>{setTimeout(drawProducts,0);return pgProducts();};
+ROUTES['/products']=()=>{ensureAutoCat();setTimeout(drawProducts,0);return pgProducts();};
 function pRange(k){
   const t=new Date(),y=t.getFullYear(),m=t.getMonth(),day=t.getDate();
   const back=n=>{const dim=new Date(y,m-n+1,0).getDate();return new Date(y,m-n,Math.min(day,dim));};
@@ -1908,9 +1937,9 @@ function drawProducts(){
   const list=filteredProducts();
   const pages=Math.max(1,Math.ceil(list.length/PAGE_P));if(PL.page>=pages)PL.page=pages-1;
   const cur=list.slice(PL.page*PAGE_P,(PL.page+1)*PAGE_P);
-  box.innerHTML='<div class="row" style="margin-bottom:6px"><span class="mute small">총 '+list.length.toLocaleString()+'개'+(pages>1?' · '+(PL.page+1)+'/'+pages+' 페이지':'')+'</span><span class="grow"></span><span class="small"><b>일괄변경하기</b></span><button class="btn sm" data-act="pbulk" data-k="sale">판매상태</button> <button class="btn sm" data-act="pbulk" data-k="tax">과면세</button> <button class="btn sm" data-act="pbulk" data-k="ship">배송비</button> <button class="btn sm" data-act="pbulk" data-k="sup">매입처</button> <button class="btn sm danger" data-act="pdel">선택 삭제</button></div>'+
-  (list.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th><input type="checkbox" data-chg="pselall"></th><th>자체 상품코드</th><th>상품명</th><th>옵션</th><th class="num">매입가</th><th>과면세</th><th>매입처</th><th>상품등록일</th><th>상품수정일</th><th>관리</th></tr></thead><tbody>'+
-  cur.map(p=>{const s=M.sup.get(p.supplierId);return '<tr><td><input type="checkbox" data-chg="prow" data-id="'+p.id+'"'+(PL.sel.has(p.id)?' checked':'')+'></td><td class="nw">'+esc(p.code)+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.option)+'</td><td class="num">'+won(p.price)+'</td><td class="nw">'+esc(p.taxType||'-')+'</td><td class="nw">'+esc(s?s.name:'')+'</td><td class="nw">'+esc(pDay(p.createdAt))+'</td><td class="nw">'+esc(pDay(p.updatedAt||p.createdAt))+'</td><td class="nw">'+saleSel(saleOf(p),'data-chg="psale" data-id="'+p.id+'"','selsm')+' <button class="btn sm" data-act="pEdit" data-id="'+p.id+'">수정</button> <button class="btn sm danger" data-act="pdelOne" data-id="'+p.id+'">삭제</button></td></tr>';}).join('')+'</tbody></table></div>':'<div class="card mute">조건에 맞는 상품이 없습니다.</div>')+
+  box.innerHTML='<div class="row" style="margin-bottom:6px"><span class="mute small">총 '+list.length.toLocaleString()+'개'+(pages>1?' · '+(PL.page+1)+'/'+pages+' 페이지':'')+'</span><span class="grow"></span><span class="small"><b>일괄변경하기</b></span><button class="btn sm" data-act="pbulk" data-k="sale">판매상태</button> <button class="btn sm" data-act="pbulk" data-k="tax">과면세</button> <button class="btn sm" data-act="pbulk" data-k="ship">배송비</button> <button class="btn sm" data-act="pbulk" data-k="sup">매입처</button> <button class="btn sm ok" data-act="pdl">선택다운로드</button> <button class="btn sm ok" data-act="pdlall">전체다운로드</button> <button class="btn sm danger" data-act="pdel">선택 삭제</button></div>'+
+  (list.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th><input type="checkbox" data-chg="pselall"></th><th>자체 상품코드</th><th>상품명</th><th>옵션</th><th class="num" style="line-height:1.4;white-space:nowrap">정상가<br>종합몰판매가<br>오픈마켓판매가<br>특가</th><th class="num">매입가</th><th>과면세</th><th>매입처</th><th>상품등록일</th><th>상품수정일</th><th>관리</th></tr></thead><tbody>'+
+  cur.map(p=>{const s=M.sup.get(p.supplierId);const pr=calcPrices(p);const prc=pr?[pr.normal,pr.mall,pr.open,pr.sp].map(v=>won(v)).join('<br>'):'-';return '<tr><td><input type="checkbox" data-chg="prow" data-id="'+p.id+'"'+(PL.sel.has(p.id)?' checked':'')+'></td><td class="nw">'+esc(p.code)+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.option)+'</td><td class="num nw" style="line-height:1.4">'+prc+'</td><td class="num">'+won(p.price)+'</td><td class="nw">'+esc(p.taxType||'-')+'</td><td class="nw">'+esc(s?s.name:'')+'</td><td class="nw">'+esc(pDay(p.createdAt))+'</td><td class="nw">'+esc(pDay(p.updatedAt||p.createdAt))+'</td><td class="nw">'+saleSel(saleOf(p),'data-chg="psale" data-id="'+p.id+'"','selsm')+' <button class="btn sm" data-act="pEdit" data-id="'+p.id+'">수정</button> <button class="btn sm danger" data-act="pdelOne" data-id="'+p.id+'">삭제</button></td></tr>';}).join('')+'</tbody></table></div>':'<div class="card mute">조건에 맞는 상품이 없습니다.</div>')+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="ppage" data-d="-1"'+(PL.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="ppage" data-d="1"'+(PL.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
 I.pq=el=>{PL.q=el.value;PL.page=0;drawProducts();};
@@ -1987,7 +2016,7 @@ A.pbApply=async()=>{
     });
     if(dup){toast('선택한 매입처에 같은 상품명·옵션명의 상품이 있어 이동할 수 없습니다. ('+dup+'건 중복)','err',6000);return;}
     const now=new Date().toISOString();
-    list.forEach(p=>{if(moving.has(p.id)){p.supplierId=sid;p.updatedAt=now;}});
+    list.forEach(p=>{if(moving.has(p.id)){p.supplierId=sid;p.updatedAt=now;if(isAutoSup(sid)&&!p.category)p.category=AUTO_CAT;}});
     label='매입처를 '+M.sup.get(sid).name;
   }else{
     const t=raw.replace(/[,원\s]/g,'');
@@ -2247,7 +2276,7 @@ A.pSave=async()=>{
   const code=$('#pe-code').value.trim();
   const name=$('#pe-name').value.trim();
   const option=$('#pe-option').value.trim();
-  const category=$('#pe-cat').value.trim();
+  const category=$('#pe-cat').value.trim()||(isAutoSup(sid)?AUTO_CAT:'');
   const taxType=$('#pe-tax').value;
   const shipFee=$('#pe-shipfee').value;
   const num=(id,label)=>{
@@ -2281,6 +2310,28 @@ A.pdelOne=async el=>{
   }catch(e){toast('삭제 실패: '+e.message,'err',6000);return;}
   S.products=S.products.filter(x=>x.id!==p.id);PL.sel.delete(p.id);rebuild();
   toast('삭제했습니다.');drawProducts();
+};
+/* ---- 매입 상품 엑셀 다운로드 (정상가·종합몰판매가·오픈마켓판매가·특가를 칸을 나눠 저장) ---- */
+function productsXlsx(list,label){
+  const rows=[['자체 상품코드','상품명','옵션','정상가','종합몰판매가','오픈마켓판매가','특가','매입가','과면세','배송비','카테고리','매입처','판매상태','상품등록일','상품수정일']];
+  list.forEach(p=>{
+    const s=M.sup.get(p.supplierId),pr=calcPrices(p);
+    rows.push([String(p.code==null?'':p.code),p.name||'',p.option||'',pr?pr.normal:'',pr?pr.mall:'',pr?pr.open:'',pr?pr.sp:'',
+      p.price===''||p.price==null?'':nz(p.price),p.taxType||'',p.shipFee==='미포함'?nz(p.shipAmount):(p.shipFee==='포함'?'포함':''),
+      p.category||'',s?s.name:'',saleOf(p),pDay(p.createdAt),pDay(p.updatedAt||p.createdAt)]);
+  });
+  download(buildXlsx(rows,'매입상품'),'매입상품_'+label+'_'+localDate().replace(/-/g,'')+'.xlsx');
+  toast(list.length.toLocaleString()+'개 상품을 엑셀로 다운로드했습니다.');
+}
+A.pdl=()=>{
+  const list=S.products.filter(p=>PL.sel.has(p.id));
+  if(!list.length){toast('다운로드할 상품을 체크하세요.','err');return;}
+  productsXlsx(list,'선택');
+};
+A.pdlall=()=>{
+  const list=filteredProducts();
+  if(!list.length){toast('다운로드할 상품이 없습니다.','err');return;}
+  productsXlsx(list,'전체');
 };
 A.pdel=async()=>{
   const ids=[...PL.sel].filter(id=>M.prod.has(id));
@@ -2378,7 +2429,7 @@ A.bulkSave=async()=>{
         if(it.code&&String(prev.code||'')!==it.code){if(prev.code)owner.delete(String(prev.code));prev.code=it.code;owner.set(it.code,prev);}
         if(exist.get(k)){if(!prev.code){prev.code=genCode(used);owner.set(prev.code,prev);}prev.updatedAt=new Date().toISOString();updSet.add(prev);}
       }else{
-        const p={supplierId:sp.id,code:it.code||genCode(used),name:it.name,option:it.option,price:it.price,category:'',taxType:'',shipFee:'',shipAmount:'',createdAt:new Date().toISOString()};
+        const p={supplierId:sp.id,code:it.code||genCode(used),name:it.name,option:it.option,price:it.price,category:isAutoSup(sp.id)?AUTO_CAT:'',taxType:'',shipFee:'',shipAmount:'',createdAt:new Date().toISOString()};
         applyProd(p,it);
         owner.set(String(p.code),p);
         adds.push(p);seen.set(k,p);
@@ -2435,7 +2486,7 @@ A.npSave=async()=>{
   if(code&&S.products.some(p=>p!==ex&&String(p.code||'')===code)){toast('이미 사용 중인 자체상품코드입니다. 다른 코드를 입력하거나 비워 두세요.','err',5000);return;}
   if(ex&&!confirm('이 매입처에 같은 상품명·옵션명의 상품이 이미 있습니다.\n입력한 내용으로 수정할까요?'))return;
   const now=new Date().toISOString();
-  const fields={name,option,price,category:NP.category.trim(),taxType:NP.tax,shipFee:NP.shipFee,shipAmount};
+  const fields={name,option,price,category:NP.category.trim()||(isAutoSup(sid)?AUTO_CAT:''),taxType:NP.tax,shipFee:NP.shipFee,shipAmount};
   try{
     if(ex){
       const next={...ex,...fields,updatedAt:now};

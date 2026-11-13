@@ -1299,7 +1299,9 @@ const PROD_FIELDS=[
   {key:'pOpen',label:'오픈마켓판매가'},
   {key:'pSpecial',label:'특가'},
   {key:'guide',label:'판매가가이드'},
-  {key:'image',label:'이미지주소'}
+  {key:'image',label:'이미지주소'},
+  {key:'attr',label:'상품속성'},
+  {key:'tags',label:'태그'}
 ];
 function makeTaker(headers){
   const H=headers.map(norm),used=new Set(),map={};
@@ -1355,13 +1357,15 @@ function guessProdCols(headers){
   take('pSpecial',/특가/);
   take('guide',/판매가가이드|가격가이드|가이드/);
   take('image',/이미지|image|img|사진/);
+  take('attr',/상품속성|속성/);
+  take('tags',/태그|tag|해시/);
   take('price',/매입가|공급가|원가|도매가|단가|가격/);
   take('tax',/부가세|과세|면세|세금/);
   take('ship',/배송비|택배비|배송료/);
   return map;
 }
 const ORDER_HDR_RE=/주문|수취인|받는|상품명|우편|주소|수량|배송|연락처|옵션/;
-const PROD_HDR_RE=/상품|코드|옵션|매입|공급|단가|가격|품명|카테고리|부가세|배송|정상가|특가|이미지|가이드/;
+const PROD_HDR_RE=/상품|코드|옵션|매입|공급|단가|가격|품명|카테고리|부가세|배송|정상가|특가|이미지|가이드|속성|태그/;
 
 /* ===== 주문/상품 추출 ===== */
 function fixPhone(v){
@@ -1410,10 +1414,10 @@ function extractProducts(rows,hdrIdx,map){
   const out=[];
   for(let i=hdrIdx+1;i<rows.length;i++){
     const r=rows[i]||[];
-    const raw={supplier:get(r,'supplier'),code:get(r,'code'),name:get(r,'name'),option:get(r,'option'),category:get(r,'category'),price:get(r,'price'),tax:get(r,'tax'),ship:get(r,'ship'),pNormal:get(r,'pNormal'),pMall:get(r,'pMall'),pOpen:get(r,'pOpen'),pSpecial:get(r,'pSpecial'),guide:get(r,'guide'),image:get(r,'image')};
+    const raw={supplier:get(r,'supplier'),code:get(r,'code'),name:get(r,'name'),option:get(r,'option'),category:get(r,'category'),price:get(r,'price'),tax:get(r,'tax'),ship:get(r,'ship'),pNormal:get(r,'pNormal'),pMall:get(r,'pMall'),pOpen:get(r,'pOpen'),pSpecial:get(r,'pSpecial'),guide:get(r,'guide'),image:get(r,'image'),attr:get(r,'attr'),tags:get(r,'tags')};
     if(!Object.keys(raw).some(k=>raw[k]))continue;
     const it={row:i+1,supplier:raw.supplier,code:raw.code,name:raw.name,option:raw.option,category:raw.category,
-      price:num(raw.price),taxType:'',shipFee:'',shipAmount:'',pNormal:num(raw.pNormal),pMall:num(raw.pMall),pOpen:num(raw.pOpen),pSpecial:num(raw.pSpecial),priceGuide:raw.guide,imageUrl:raw.image};
+      price:num(raw.price),taxType:'',shipFee:'',shipAmount:'',pNormal:num(raw.pNormal),pMall:num(raw.pMall),pOpen:num(raw.pOpen),pSpecial:num(raw.pSpecial),priceGuide:raw.guide,imageUrl:raw.image,productAttr:raw.attr,tags:raw.tags};
     it.badPrice=raw.price!==''&&it.price==='';
     if(raw.tax){
       if(/면세|비과세/.test(raw.tax))it.taxType='면세';else if(/과세/.test(raw.tax))it.taxType='과세';else it.badTax=true;
@@ -2299,6 +2303,8 @@ A.pEdit=el=>{
     fld('배송비 금액',0,inp('pe-shipamt',p.shipAmount,'숫자만 입력',1))+
     PRICE_INPUTS.map(x=>fld(x[1],0,inp('pe-pr-'+x[0],p[x[2]],'숫자만 입력',1))).join('')+
     fld('판매가가이드',0,inp('pe-guide',p.priceGuide,'판매가 가이드 입력'))+
+    '<div style="grid-column:1/-1"><label class="f">상품속성</label><input type="text" id="pe-attr" style="width:100%" value="'+esc(p.productAttr||'')+'" placeholder="상품속성 입력"></div>'+
+    '<div style="grid-column:1/-1"><label class="f">태그</label><input type="text" id="pe-tags" style="width:100%" value="'+esc(p.tags||'')+'" placeholder="태그 입력"></div>'+
     '<div style="grid-column:1/-1"><label class="f">이미지주소</label><textarea id="pe-img" class="csarea" style="min-height:130px" placeholder="https://...">'+esc(p.imageUrl||'')+'</textarea></div>'+
     '</div>'+
     '<div class="mute small" style="margin-top:8px">정상가·종합몰판매가·오픈마켓판매가·특가를 비워 두면, 주영씨푸드·신흥유통·식품백억·마스터유통의 농축수산물 상품은 매입가와 배송비로 자동계산된 값이 적용됩니다.</div>'+
@@ -2338,12 +2344,12 @@ A.pSave=async()=>{
   const pm=num('#pe-pr-mall','종합몰판매가');if(pm===null)return;
   const po=num('#pe-pr-open','오픈마켓판매가');if(po===null)return;
   const ps=num('#pe-pr-sp','특가');if(ps===null)return;
-  const priceGuide=$('#pe-guide').value.trim(),imageUrl=$('#pe-img').value.trim();
+  const priceGuide=$('#pe-guide').value.trim(),imageUrl=$('#pe-img').value.trim(),productAttr=$('#pe-attr').value.trim(),tags=$('#pe-tags').value.trim();
   if(code&&S.products.some(x=>x.id!==p.id&&String(x.code||'')===code)){toast('이미 사용 중인 자체상품코드입니다. 다른 코드를 입력하거나 비워 두세요.','err',5000);return;}
   if(S.products.some(x=>x.id!==p.id&&x.supplierId===sid&&norm(x.name)===norm(name)&&norm(x.option)===norm(option))){
     toast('선택한 매입처에 같은 상품명·옵션명의 상품이 이미 있어 저장할 수 없습니다.','err',6000);return;
   }
-  const next={...p,supplierId:sid,code:code||p.code||genCode(new Set(S.products.map(x=>String(x.code||'')))),name,option,category,price,taxType,shipFee,shipAmount,pNormal:pn,pMall:pm,pOpen:po,pSpecial:ps,priceGuide,imageUrl,updatedAt:new Date().toISOString()};
+  const next={...p,supplierId:sid,code:code||p.code||genCode(new Set(S.products.map(x=>String(x.code||'')))),name,option,category,price,taxType,shipFee,shipAmount,pNormal:pn,pMall:pm,pOpen:po,pSpecial:ps,priceGuide,imageUrl,productAttr,tags,updatedAt:new Date().toISOString()};
   try{await putOne('products',next);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
   Object.assign(p,next);rebuild();closeModal();PE=null;toast('수정했습니다.');drawProducts();
 };
@@ -2362,10 +2368,10 @@ A.pdelOne=async el=>{
 };
 /* ---- 매입 상품 엑셀 다운로드 (정상가·종합몰판매가·오픈마켓판매가·특가를 칸을 나눠 저장) ---- */
 function productsXlsx(list,label){
-  const rows=[['자체 상품코드','상품명','옵션','정상가','종합몰판매가','오픈마켓판매가','특가','판매가가이드','이미지주소','매입가','과면세','배송비','카테고리','매입처','판매상태','상품등록일','상품수정일']];
+  const rows=[['자체 상품코드','상품명','옵션','정상가','종합몰판매가','오픈마켓판매가','특가','판매가가이드','이미지주소','상품속성','태그','매입가','과면세','배송비','카테고리','매입처','판매상태','상품등록일','상품수정일']];
   list.forEach(p=>{
     const s=M.sup.get(p.supplierId),pr=effPrices(p);
-    rows.push([String(p.code==null?'':p.code),p.name||'',p.option||'',pr?pr.normal:'',pr?pr.mall:'',pr?pr.open:'',pr?pr.sp:'',p.priceGuide||'',p.imageUrl||'',
+    rows.push([String(p.code==null?'':p.code),p.name||'',p.option||'',pr?pr.normal:'',pr?pr.mall:'',pr?pr.open:'',pr?pr.sp:'',p.priceGuide||'',p.imageUrl||'',p.productAttr||'',p.tags||'',
       p.price===''||p.price==null?'':nz(p.price),p.taxType||'',p.shipFee==='미포함'?nz(p.shipAmount):(p.shipFee==='포함'?'포함':''),
       p.category||'',s?s.name:'',saleOf(p),pDay(p.createdAt),pDay(p.updatedAt||p.createdAt)]);
   });
@@ -2416,7 +2422,7 @@ function pgBulk(){
     (BK.sheets.length>1?'<span class="mute small">시트:</span><select data-chg="bsheet">'+BK.sheets.map((s,i)=>'<option value="'+i+'"'+(i===BK.sheetIdx?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select>':'')+
     '<span class="mute small">제목 행:</span><input type="number" min="1" style="width:70px" value="'+BK.headerRow+'" data-chg="bhdr"><span class="mute small">번째 줄</span></div>'+
     '<h3 style="margin-top:16px">열 확인</h3>'+mapTable(PROD_FIELDS,hdr,BK.map,'bulk')+
-    '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+prod.length.toLocaleString()+'개 상품)</span></h3>'+previewTable([['supplier','매입처'],['code','자체상품코드'],['name','상품명'],['option','옵션명'],['category','카테고리'],['price','매입가'],['taxType','부가세'],['shipDisp','배송비'],['pNormal','정상가'],['pMall','종합몰판매가'],['pOpen','오픈마켓판매가'],['pSpecial','특가'],['priceGuide','판매가가이드'],['imageUrl','이미지주소']],prod);
+    '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+prod.length.toLocaleString()+'개 상품)</span></h3>'+previewTable([['supplier','매입처'],['code','자체상품코드'],['name','상품명'],['option','옵션명'],['category','카테고리'],['price','매입가'],['taxType','부가세'],['shipDisp','배송비'],['pNormal','정상가'],['pMall','종합몰판매가'],['pOpen','오픈마켓판매가'],['pSpecial','특가'],['priceGuide','판매가가이드'],['imageUrl','이미지주소'],['productAttr','상품속성'],['tags','태그']],prod);
   }
   let res='';
   if(BK.result){
@@ -2425,7 +2431,7 @@ function pgBulk(){
     (r.fails.length?'<div class="card"><h3 style="margin:0 0 8px">등록되지 않은 건 ('+r.fails.length.toLocaleString()+'건)</h3><div class="tblwrap" style="max-height:240px"><table class="tbl"><thead><tr><th>엑셀 행</th><th>사유</th></tr></thead><tbody>'+
       r.fails.slice(0,100).map(f=>'<tr><td class="nw">'+f.row+'</td><td>'+esc(f.why)+'</td></tr>').join('')+'</tbody></table></div>'+(r.fails.length>100?'<div class="mute small">처음 100건만 표시했습니다.</div>':'')+'</div>':'');
   }
-  return '<h1>상품대량등록</h1><p class="sub">엑셀 파일에 매입처, 자체상품코드, 상품명, 옵션명, 카테고리, 매입가, 부가세, 배송비(필요하면 정상가, 종합몰판매가, 오픈마켓판매가, 특가, 판매가가이드, 이미지주소도)를 적어 올리면 상품이 한 번에 등록됩니다. 매입처는 미리 등록된 매입처 이름과 같아야 합니다. 자체상품코드를 비워 두면 8자리 숫자가 자동으로 부여되고(중복 없음), 적으면 그 코드가 사용됩니다. 같은 매입처에 같은 상품명+옵션명이 이미 있으면 입력한 내용으로 갱신합니다.</p>'+
+  return '<h1>상품대량등록</h1><p class="sub">엑셀 파일에 매입처, 자체상품코드, 상품명, 옵션명, 카테고리, 매입가, 부가세, 배송비(필요하면 정상가, 종합몰판매가, 오픈마켓판매가, 특가, 판매가가이드, 이미지주소, 상품속성, 태그도)를 적어 올리면 상품이 한 번에 등록됩니다. 매입처는 미리 등록된 매입처 이름과 같아야 합니다. 자체상품코드를 비워 두면 8자리 숫자가 자동으로 부여되고(중복 없음), 적으면 그 코드가 사용됩니다. 같은 매입처에 같은 상품명+옵션명이 이미 있으면 입력한 내용으로 갱신합니다.</p>'+
   res+
   '<div class="card"><h3>① 상품 파일 업로드</h3>'+step2+'<div class="mute small" style="margin-top:10px">부가세: 과세 / 면세 · 배송비: 금액(숫자), 배송비 포함이면 0 · 정상가·종합몰판매가·오픈마켓판매가·특가를 비워 두면 주영씨푸드·신흥유통·식품백억·마스터유통의 농축수산물 상품은 자동계산됩니다 · 매입처, 상품명, 옵션명, 매입가는 꼭 있어야 합니다.</div></div>'+
   '<div class="card"><h3>② 저장</h3><button class="btn pri" data-act="bulkSave"'+(BK.sheets&&prod.length?'':' disabled')+'>저장 (상품 등록)</button> <span class="mute small">'+(BK.sheets?prod.length.toLocaleString()+'개 상품을 등록합니다.':'')+'</span></div>';
@@ -2437,7 +2443,7 @@ C.bhdr=el=>{BK.headerRow=Math.max(1,parseInt(el.value,10)||1);bkRecalc(false);ro
 A.sample=(el,e)=>{
   e.preventDefault();
   const sn=S.suppliers.length?S.suppliers[0].name:'매입처명';
-  download(buildXlsx([['매입처','자체상품코드','상품명','옵션명','카테고리','매입가','부가세','배송비','정상가','종합몰판매가','오픈마켓판매가','특가','판매가가이드','이미지주소'],[sn,'A0001','샘플 상품','블랙/L','의류',12000,'과세','포함',20000,16000,15000,14000,'15,000원 이상','https://example.com/image1.jpg'],[sn,'','샘플 상품2','없음','식품',8500,'면세',3000,'','','','','','']],'상품'),'상품대량등록_샘플양식.xlsx');
+  download(buildXlsx([['매입처','자체상품코드','상품명','옵션명','카테고리','매입가','부가세','배송비','정상가','종합몰판매가','오픈마켓판매가','특가','판매가가이드','이미지주소','상품속성','태그'],[sn,'A0001','샘플 상품','블랙/L','의류',12000,'과세','포함',20000,16000,15000,14000,'15,000원 이상','https://example.com/image1.jpg','색상:블랙','태그1,태그2'],[sn,'','샘플 상품2','없음','식품',8500,'면세',3000,'','','','','','','','']],'상품'),'상품대량등록_샘플양식.xlsx');
 };
 A.bulkSave=async()=>{
   const need=[['supplier','매입처'],['name','상품명'],['option','옵션명'],['price','매입가']];
@@ -2461,6 +2467,8 @@ A.bulkSave=async()=>{
     if(it.pSpecial!=='')p.pSpecial=it.pSpecial;
     if(it.priceGuide)p.priceGuide=it.priceGuide;
     if(it.imageUrl)p.imageUrl=it.imageUrl;
+    if(it.productAttr)p.productAttr=it.productAttr;
+    if(it.tags)p.tags=it.tags;
   };
   const adds=[],updSet=new Set(),fails=[],seen=new Map();
   try{
@@ -2504,7 +2512,7 @@ A.bulkSave=async()=>{
 /* =====================================================================
    신규상품등록 (1건씩 직접 입력)
 ===================================================================== */
-const NP={supplierId:'',code:'',name:'',option:'',category:'',price:'',tax:'과세',shipFee:'포함',shipAmt:'',pNormal:'',pMall:'',pOpen:'',pSpecial:'',priceGuide:'',imageUrl:'',result:null};
+const NP={supplierId:'',code:'',name:'',option:'',category:'',price:'',tax:'과세',shipFee:'포함',shipAmt:'',pNormal:'',pMall:'',pOpen:'',pSpecial:'',priceGuide:'',imageUrl:'',productAttr:'',tags:'',result:null};
 function pgNewProd(){
   const res=NP.result;NP.result=null;
   const fld=(label,req,html)=>'<div><label class="f'+(req?' rq':'')+'">'+label+'</label>'+html+'</div>';
@@ -2519,6 +2527,8 @@ function pgNewProd(){
   fld('부가세',0,sel('tax',['과세','면세']))+fld('배송비',0,sel('shipFee',['포함','미포함']))+fld('배송비 금액',0,txt('shipAmt','숫자만 입력',1))+
   PRICE_INPUTS.map(x=>fld(x[1],0,'<input type="text" id="np-pr-'+x[0]+'" style="width:100%" inputmode="numeric" data-inp="npf" data-k="'+x[2]+'" value="'+esc(NP[x[2]])+'" placeholder="숫자만 입력">')).join('')+
   fld('판매가가이드',0,txt('priceGuide','판매가 가이드 입력'))+
+  '<div style="grid-column:1/-1"><label class="f">상품속성</label><input type="text" style="width:100%" data-inp="npf" data-k="productAttr" value="'+esc(NP.productAttr)+'" placeholder="상품속성 입력"></div>'+
+  '<div style="grid-column:1/-1"><label class="f">태그</label><input type="text" style="width:100%" data-inp="npf" data-k="tags" value="'+esc(NP.tags)+'" placeholder="태그 입력"></div>'+
   '<div style="grid-column:1/-1"><label class="f">이미지주소</label><textarea class="csarea" style="min-height:130px" data-inp="npf" data-k="imageUrl" placeholder="https://...">'+esc(NP.imageUrl)+'</textarea></div>'+
   '</div><div class="mute small" style="margin-top:10px">정상가·종합몰판매가·오픈마켓판매가·특가를 비워 두면, 주영씨푸드·신흥유통·식품백억·마스터유통의 농축수산물 상품은 매입가와 배송비로 자동계산된 값이 적용됩니다.</div><div class="row" style="margin-top:22px"><button class="btn pri" data-act="npSave">상품 등록</button><button class="btn" data-act="npReset">입력 지우기</button></div></div>';
 }
@@ -2529,7 +2539,7 @@ function npHint(){
 }
 I.npf=el=>{NP[el.dataset.k]=el.value;npHint();};
 C.npf=el=>{NP[el.dataset.k]=el.value;npHint();};
-A.npReset=()=>{NP.code=NP.name=NP.option=NP.category=NP.price=NP.shipAmt=NP.pNormal=NP.pMall=NP.pOpen=NP.pSpecial=NP.priceGuide=NP.imageUrl='';NP.tax='과세';NP.shipFee='포함';route();};
+A.npReset=()=>{NP.code=NP.name=NP.option=NP.category=NP.price=NP.shipAmt=NP.pNormal=NP.pMall=NP.pOpen=NP.pSpecial=NP.priceGuide=NP.imageUrl=NP.productAttr=NP.tags='';NP.tax='과세';NP.shipFee='포함';route();};
 A.npSave=async()=>{
   const sid=+NP.supplierId,name=NP.name.trim(),option=NP.option.trim();
   if(!sid||!M.sup.has(sid)){toast('매입처를 선택하세요.','err');return;}
@@ -2552,11 +2562,11 @@ A.npSave=async()=>{
   if(code&&S.products.some(p=>p!==ex&&String(p.code||'')===code)){toast('이미 사용 중인 자체상품코드입니다. 다른 코드를 입력하거나 비워 두세요.','err',5000);return;}
   if(ex&&!confirm('이 매입처에 같은 상품명·옵션명의 상품이 이미 있습니다.\n입력한 내용으로 수정할까요?'))return;
   const now=new Date().toISOString();
-  const fields={name,option,price,category:NP.category.trim()||(isAutoSup(sid)?AUTO_CAT:''),taxType:NP.tax,shipFee:NP.shipFee,shipAmount,pNormal:pn,pMall:pm,pOpen:po,pSpecial:ps,priceGuide:NP.priceGuide.trim(),imageUrl:NP.imageUrl.trim()};
+  const fields={name,option,price,category:NP.category.trim()||(isAutoSup(sid)?AUTO_CAT:''),taxType:NP.tax,shipFee:NP.shipFee,shipAmount,pNormal:pn,pMall:pm,pOpen:po,pSpecial:ps,priceGuide:NP.priceGuide.trim(),imageUrl:NP.imageUrl.trim(),productAttr:NP.productAttr.trim(),tags:NP.tags.trim()};
   try{
     if(ex){
       const next={...ex,...fields,updatedAt:now};
-      ['pNormal','pMall','pOpen','pSpecial','priceGuide','imageUrl'].forEach(k=>{if(fields[k]===''||fields[k]==null)next[k]=ex[k];});   /* 비워 둔 항목은 기존 값 유지 */
+      ['pNormal','pMall','pOpen','pSpecial','priceGuide','imageUrl','productAttr','tags'].forEach(k=>{if(fields[k]===''||fields[k]==null)next[k]=ex[k];});   /* 비워 둔 항목은 기존 값 유지 */
       if(code)next.code=code;
       if(!next.code)next.code=genCode(new Set(S.products.map(p=>String(p.code||''))));
       await putOne('products',next);Object.assign(ex,next);
@@ -2568,7 +2578,7 @@ A.npSave=async()=>{
     }
   }catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
   rebuild();
-  NP.code=NP.name=NP.option=NP.category=NP.price=NP.shipAmt=NP.pNormal=NP.pMall=NP.pOpen=NP.pSpecial=NP.priceGuide=NP.imageUrl='';
+  NP.code=NP.name=NP.option=NP.category=NP.price=NP.shipAmt=NP.pNormal=NP.pMall=NP.pOpen=NP.pSpecial=NP.priceGuide=NP.imageUrl=NP.productAttr=NP.tags='';
   toast('상품을 '+(ex?'수정':'등록')+'했습니다.');
   route();
 };

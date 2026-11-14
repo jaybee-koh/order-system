@@ -1875,7 +1875,7 @@ A.supToList=el=>{PL.sup=String(el.dataset.id);PL.q='';PL.page=0;location.hash='#
 /* =====================================================================
    상품 목록
 ===================================================================== */
-const PL={q:'',sup:'',page:0,sel:new Set(),dtype:'created',from:'',to:''};
+const PL={q:'',sup:'',sale:'',page:0,sel:new Set(),dtype:'created',from:'',to:''};
 const SALE_ST=['판매중','품절','단종'];
 const SALE_CLR={'판매중':'#2b8a3e','품절':'#e8590c','단종':'#e03131'};
 const saleOf=p=>SALE_ST.includes(p.saleStatus)?p.saleStatus:'판매중';   /* 판매상태가 없으면 기본 판매중 */
@@ -1936,6 +1936,7 @@ function pgProducts(){
   '<input type="date" id="pfrom" data-chg="pdfilter" data-k="from" value="'+esc(PL.from)+'"><span>~</span><input type="date" id="pto" data-chg="pdfilter" data-k="to" value="'+esc(PL.to)+'">'+
   [['today','오늘'],['yesterday','어제'],['week','금주'],['month','당월'],['prev','전월'],['3','3개월'],['6','6개월'],['12','1년']].map(x=>'<button class="btn sm" '+sm+' data-act="prange" data-r="'+x[0]+'">'+x[1]+'</button>').join('')+
   '<select data-chg="psup"><option value="">전체 매입처</option>'+S.suppliers.map(s=>'<option value="'+s.id+'"'+(String(PL.sup)===String(s.id)?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select>'+
+  '<select data-chg="psalef"><option value="">전체 판매상태</option>'+SALE_ST.map(x=>'<option value="'+x+'"'+(PL.sale===x?' selected':'')+'>'+x+'</option>').join('')+'</select>'+
   '<input type="text" id="pq" placeholder="상품명 · 코드 · 옵션 검색" style="width:280px" data-inp="pq" value="'+esc(PL.q)+'"></div>';
   return '<div class="row"><div class="grow"><h1>매입 상품 조회</h1><p class="sub">매입처별로 등록된 매입 상품을 검색하고 관리합니다.</p></div><a class="btn" href="#/products/bulk" style="text-decoration:none">상품대량등록</a><a class="btn pri" href="#/products/new" style="text-decoration:none">신규상품등록</a></div>'+dateRow+
   '<div id="ptbl"></div>';
@@ -1960,6 +1961,7 @@ function filteredProducts(){
   const q=norm(PL.q),f=PL.from,t=PL.to;
   return S.products.filter(p=>{
     if(PL.sup&&p.supplierId!==+PL.sup)return false;
+    if(PL.sale&&saleOf(p)!==PL.sale)return false;
     if(q&&!(M.hay.get(p.id)||'').includes(q))return false;
     if(f||t){
       const d=pDay(PL.dtype==='updated'?(p.updatedAt||p.createdAt):p.createdAt);
@@ -1983,6 +1985,7 @@ C.pdt=el=>{PL.dtype=el.value;PL.page=0;drawProducts();};
 C.pdfilter=el=>{PL[el.dataset.k]=el.value;PL.page=0;drawProducts();};
 A.prange=el=>{const r=pRange(el.dataset.r);PL.from=r[0];PL.to=r[1];PL.page=0;const f=$('#pfrom'),t=$('#pto');if(f)f.value=r[0];if(t)t.value=r[1];drawProducts();};
 C.psup=el=>{PL.sup=el.value;PL.page=0;drawProducts();};
+C.psalef=el=>{PL.sale=el.value;PL.page=0;drawProducts();};
 A.ppage=el=>{PL.page+=+el.dataset.d;drawProducts();};
 C.prow=el=>{const id=+el.dataset.id;el.checked?PL.sel.add(id):PL.sel.delete(id);};
 /* ---- 판매상태 (판매중 / 품절 / 단종) ---- */

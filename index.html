@@ -143,6 +143,8 @@ a{color:var(--pri)}
 .btn.danger{color:var(--err);border-color:#f3c7c7;background:#fff}
 .btn.danger:hover{background:var(--err-soft);border-color:#eba3a3;color:var(--err)}
 .btn.sm{height:28px;padding:0 10px;font-size:12px;border-radius:6px;box-shadow:none}
+.btn.rg.on{background:#f08c00;border-color:#f08c00;color:#fff;font-weight:700}
+.btn.rg.on:hover{background:#d97a00;border-color:#d97a00;color:#fff}
 .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;pointer-events:none}
 a.btn{text-decoration:none}
 
@@ -4245,15 +4247,17 @@ function ssResult(){
   }).join('')+'</div><div class="hnote" style="margin-top:12px">취소 주문 제외 · 주문일자 기준(없으면 수집일) · 판매금액은 결제금액 합계 · 상품결제건수는 주문 행 수 · 결제고객수는 주문자(없으면 수취인)+연락처 기준으로 중복을 뺀 인원 · 객단가 = 판매금액 ÷ 결제고객수 · 그래프의 가운데 선이 비교 기간의 값이며, 조회 기간이 더 크면 선 위로(빨강) · 더 작으면 선 아래로(파랑) 그려집니다. 막대 길이는 변화율이고 두 막대는 같은 눈금을 씁니다. 매입처를 선택하면 상품이 매핑된 주문만 집계합니다.</div>'+
     ssTrendBox(R)+ssTopBoxes(R);
 }
+const ssRgOn=n=>!!(SS.res&&SS.res.n===n&&SS.res.to===addD(localDate(),-1));
 function pgSalesSummary(){
   const d=SS;
+  if(!d.from&&!d.to&&!d.res){d.to=addD(localDate(),-1);d.from=addD(d.to,-6);}   /* 기본 7일 (오늘 제외, 어제까지) */
   const malls=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];
   const mo='<option value="">전체 쇼핑몰</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option>';
   const so='<option value="">전체 매입처</option>'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('');
   return '<h1>요약 리포트</h1><p class="sub">쇼핑몰·매입처·기간을 선택해 조회하면 판매금액, 상품결제건수, 결제고객수, 객단가를 이전 기간과 비교하고, 트렌드와 상품·쇼핑몰·매입처별 TOP10을 보여줍니다. 1일·7일·30일 버튼은 오늘을 뺀 어제까지의 기간을 채웁니다.</p>'+
   '<div class="card"><div class="row" style="margin-bottom:10px">'+ssLb('쇼핑몰')+'<select data-chg="ssf" data-k="mall">'+mo+'</select><span style="width:10px"></span>'+ssLb('매입처')+'<select data-chg="ssf" data-k="sup">'+so+'</select></div>'+
   '<div class="row">'+ssLb('조회기간')+'<input type="date" id="ssfrom" data-chg="ssf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ssto" data-chg="ssf" data-k="to" value="'+esc(d.to)+'">'+
-  [1,7,30].map(n=>'<button class="btn sm" style="padding:2px 8px;font-size:12px" data-act="ssrange" data-n="'+n+'">'+n+'일</button>').join('')+
+  [1,7,30].map(n=>'<button class="btn sm rg'+(ssRgOn(n)?' on':'')+'" style="padding:2px 8px;font-size:12px" data-act="ssrange" data-n="'+n+'">'+n+'일</button>').join('')+
   '<span style="width:10px"></span><button class="btn pri" data-act="sssearch">조회</button><button class="btn" data-act="ssreset">초기화</button></div></div>'+
   '<div id="ssres">'+ssResult()+'</div>';
 }
@@ -4269,6 +4273,7 @@ A.sssearch=()=>{
   if(SS.from>SS.to){toast('시작일이 종료일보다 늦습니다.','err',4500);return;}
   SS.res=ssCompute();
   const b=$('#ssres');if(b)b.innerHTML=ssResult();
+  document.querySelectorAll('.btn.rg[data-act="ssrange"]').forEach(x=>x.classList.toggle('on',ssRgOn(+x.dataset.n)));
 };
 A.ssreset=()=>{Object.assign(SS,{mall:'',sup:'',from:'',to:'',res:null,tg:'',tm:'pay'});route();};
 const ssRedraw=()=>{const b=$('#ssres');if(b)b.innerHTML=ssResult();};

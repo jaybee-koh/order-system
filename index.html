@@ -4272,6 +4272,7 @@ A.ssrange=el=>{
 A.sssearch=()=>{
   if(!SS.from||!SS.to){toast('조회기간의 시작일과 종료일을 선택하세요. (1일·7일·30일 버튼으로도 채울 수 있습니다)','err',4500);return;}
   if(SS.from>SS.to){toast('시작일이 종료일보다 늦습니다.','err',4500);return;}
+  SS.tg='';   /* 조회하면 일·주·월 선택은 풀리고, 맨 위 조회기간 기준으로 트렌드·TOP10을 다시 보여줌 */
   SS.res=ssCompute();
   const b=$('#ssres');if(b)b.innerHTML=ssResult();
   document.querySelectorAll('.btn.rg[data-act="ssrange"]').forEach(x=>x.classList.toggle('on',ssRgOn(+x.dataset.n)));

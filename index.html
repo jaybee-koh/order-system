@@ -4251,6 +4251,7 @@ const ssRgOn=n=>!!(SS.res&&SS.res.n===n&&SS.res.to===addD(localDate(),-1));
 function pgSalesSummary(){
   const d=SS;
   if(!d.from&&!d.to&&!d.res){d.to=addD(localDate(),-1);d.from=addD(d.to,-6);}   /* 기본 7일 (오늘 제외, 어제까지) */
+  if(!d.res&&d.from&&d.to&&d.from<=d.to){try{d.res=ssCompute();}catch(e){console.error(e);}}   /* 메뉴를 열면 기본 7일 데이터를 바로 조회 */
   const malls=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];
   const mo='<option value="">전체 쇼핑몰</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option>';
   const so='<option value="">전체 매입처</option>'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('');

@@ -623,6 +623,20 @@ table.tbl tr.chdone td b,table.tbl tr.chdone td span{opacity:.75}
 .hbv small{display:block;font-size:11px;font-weight:500;color:var(--mute)}
 @media(max-width:1200px){.hgrid2,.hg2{grid-template-columns:1fr}.hkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+.hgrid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;margin-bottom:16px}
+.hgrid3 .hbox{margin-bottom:0}
+.hcol .htiles.htiles3{grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(3,minmax(0,1fr))}
+@media(max-width:1500px){.hgrid3{grid-template-columns:repeat(2,minmax(0,1fr))}.hgrid3>:nth-child(3){grid-column:1/-1}}
+@media(max-width:1000px){.hgrid3{grid-template-columns:1fr}}
+.ssgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:start}
+.ssbox{margin-bottom:0;min-width:0}
+.sslab{font-size:13px;font-weight:600;color:var(--mute)}
+.ssval{font-size:26px;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums;margin:6px 0 14px}
+.ssval small{font-size:13px;font-weight:600;margin-left:3px;color:var(--mute);letter-spacing:0}
+.sscap{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;margin-bottom:2px}
+.sscap span{font-size:11px;color:var(--mute)}
+@media(max-width:1500px){.ssgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.ssgrid{grid-template-columns:1fr}}
 .hcol{display:flex;flex-direction:column}
 .hhead{margin-bottom:12px;min-height:36px}
 .hcol .htiles{flex:1;grid-template-rows:repeat(2,minmax(0,1fr))}
@@ -1448,7 +1462,9 @@ const NAV=[
   {parent:'주문관리'},
   {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1},
   {parent:'C/S관리'},
-  {h:'/cs/claims',t:'클레임접수관리',sub:1},{h:'/cs/memos',t:'C/S메모관리',sub:1}
+  {h:'/cs/claims',t:'클레임접수관리',sub:1},{h:'/cs/memos',t:'C/S메모관리',sub:1},
+  {parent:'매출관리'},
+  {h:'/sales/summary',t:'요약',sub:1}
 ];
 /* 메뉴 그룹 펼침 상태: 기본은 모두 접힘, 클릭하면 펼쳐진 채 고정되고 다시 클릭하면 접힘 (브라우저에 기억) */
 const NAV_KEY='nav_open_'+window.__USER;
@@ -1554,7 +1570,7 @@ function previewTable(cols,rows){
 /* =====================================================================
    홈
 ===================================================================== */
-/* ===== 홈 대시보드 (판매관리 · 정산관리 · 판매성과 · 판매분석) ===== */
+/* ===== 홈 대시보드 (판매관리 · 상품관리 · 정산관리 · 판매성과) ===== */
 const HD={perf:'day',set:'month',an:1,tm:'pay'};
 const HD_WD=['일','월','화','수','목','금','토'];
 const HD_FEE=0.15;   /* 쇼핑몰 수수료율 15% */
@@ -1711,20 +1727,16 @@ function buildHome(){
     '<div class="hkpis">'+kpi('상품결제건수',cur.cnt.toLocaleString(),'건',dlt(cur.cnt,prv.cnt,'건'))+kpi('상품결제수량',cur.qty.toLocaleString(),'개',dlt(cur.qty,prv.qty,'개'))+kpi('상품결제단가',won(Math.round(cu)),'원',dlt(Math.round(cu),Math.round(pu),'',1))+kpi('판매금액(총)',won(cur.pay),'원',dlt(cur.pay,prv.pay,'',1))+'</div>'+
     '<div class="row" style="margin:14px 0 2px"><b style="font-size:13px">'+(HD.perf==='day'?'최근 14일':HD.perf==='week'?'최근 8주 (월요일 시작)':'최근 12개월')+' '+HD_TM[HD.tm].l+' 추이</b><span class="grow"></span>'+chip('htm',HD.tm,[['pay','판매금액'],['buy','매입금액'],['cnt','주문건수']])+'</div>'+
     trendSvg(trendSeries(rows,HD.perf,t),hcw(false),HD.tm)+'<div class="mute small" style="margin-top:4px">주문일자 기준(없으면 수집일) · 상품결제단가 = 판매금액 ÷ 수량 · 매입금액은 매핑된 주문만 집계</div></div>';
-  /* 판매분석 */
-  const anR=HD.an===-1?[addD(t,-1),addD(t,-1)]:[HD.an?addD(t,-(HD.an-1)):null,t],ar=inR(rows,anR[0],anR[1]),aa=agg(ar),wd=wdChart(rows,t,hcw(true));HD.wdFn=H=>wdChart(rows,t,hcw(true),H).svg;
-  const malls=groupBy(ar,r=>r.o.mall||'미지정').sort((a,b)=>b.pay-a.pay);
-  const mallH=hbars(malls.slice(0,8).map(x=>({l:x.l,v:x.pay,t:won(x.pay)+'원',s:(aa.pay?(x.pay/aa.pay*100).toFixed(1):'0.0')+'% · '+x.cnt.toLocaleString()+'건'})),'#3b5bdb');
-  const tops=groupBy(ar,r=>r.p?r.p.name+(r.p.option?' / '+r.p.option:''):(r.o.itemName||'(상품명 없음)')+(r.o.itemOption?' / '+r.o.itemOption:'')).sort((a,b)=>b.pay-a.pay||b.qty-a.qty).slice(0,10);
-  const topH=hbars(tops.map(x=>({l:x.l,v:x.pay,t:won(x.pay)+'원',s:x.qty.toLocaleString()+'개 · '+x.cnt.toLocaleString()+'건'})),'#12a150');
-  const supAll=groupBy(ar.filter(r=>r.mapped&&r.s),r=>r.s.id,r=>r.s.name).sort((a,b)=>b.pay-a.pay),supT=supAll.reduce((a,x)=>a+x.pay,0);
-  const supH=hbars(supAll.slice(0,8).map(x=>({l:x.l,v:x.pay,t:won(x.pay)+'원',s:(supT?(x.pay/supT*100).toFixed(1):'0.0')+'% · '+x.cnt.toLocaleString()+'건'})),'#7048e8');
-  const anl='<div class="row" style="margin:22px 0 12px"><h3 style="margin:0">판매분석</h3><span class="mute small">수집 주문 '+aa.cnt.toLocaleString()+'건 · 판매금액 '+won(aa.pay)+'원 · 평균 객단가 '+won(aa.cnt?Math.round(aa.pay/aa.cnt):0)+'원</span><span class="grow"></span>'+chip('han',HD.an,[[1,'오늘'],[-1,'어제'],[7,'최근 7일'],[30,'최근 30일'],[90,'최근 90일'],[0,'전체']])+'</div>'+
-    '<div class="hg2"><div class="card hbox" id="hwdbox"><h3>요일별 판매 <span class="mute small" style="font-weight:500">최근 7일 · 오늘 기준 · 판매금액'+(wd.best?' · 최고 <b style="color:#7048e8">'+wd.best+'요일</b>':'')+'</span></h3><div id="hwdsvg">'+wd.svg+'</div></div>'+
-    '<div class="card hbox"><h3>쇼핑몰별 판매 비중 <span class="mute small" style="font-weight:500">판매금액 기준</span></h3>'+mallH+'</div>'+
-    '<div class="card hbox"><h3>상품별 판매 TOP 10 <span class="mute small" style="font-weight:500">판매금액 기준</span></h3>'+topH+'</div>'+
-    '<div class="card hbox"><h3>매입처별 판매 비중 <span class="mute small" style="font-weight:500">판매금액 기준 · 매핑된 주문</span></h3>'+supH+'</div></div>';
-  return '<div class="hgrid2">'+sale+settle+'</div>'+perf+anl;
+  /* 상품관리: 판매중 · 품절 · 수정요청(상품변경사항에서 반영여부를 아직 체크하지 않은 상품) */
+  const stN={'판매중':0,'품절':0};
+  S.products.forEach(p=>{const v=saleOf(p);if(v in stN)stN[v]++;});
+  const reqRec=(S.meta.prodChanges||[]).filter(r=>!r.applied),reqSet=new Set(reqRec.map(r=>r.productId||('c:'+r.code)));
+  const ptile=(href,l,n,c,hint,s)=>'<a class="htile" href="#'+href+'"'+(s?' data-act="hprod" data-s="'+s+'"':'')+' style="--c:'+c+'"><span>'+l+'</span><b>'+n.toLocaleString()+'<small>개</small></b><em>'+hint+'</em></a>';
+  const prodBox='<div class="card hbox hcol"><div class="row hhead"><h3 style="margin:0">상품관리</h3><span class="grow"></span><span class="mute small">전체 상품 '+S.products.length.toLocaleString()+'개</span></div><div class="htiles htiles3">'+
+    ptile('/products','판매중 상품',stN['판매중'],'#12a150','누르면 매입 상품 조회에서 판매중만 보기','판매중')+
+    ptile('/products','품절 상품',stN['품절'],'#e8590c','누르면 매입 상품 조회에서 품절만 보기','품절')+
+    ptile('/products/changes','수정요청 상품',reqSet.size,'#3b5bdb','상품변경사항 · 반영여부 미체크 '+reqRec.length.toLocaleString()+'건')+'</div><div class="hnote">판매상태가 비어 있는 상품은 판매중으로 계산 · 단종 상품은 제외 · 수정요청 = 상품변경사항에서 [반영여부]를 아직 체크하지 않은 상품</div></div>';
+  return '<div class="hgrid3">'+sale+prodBox+settle+'</div>'+perf;
 }
 function pgHome(){
   const nod=S.orders.filter(o=>!ordDateOnly(o)).length;
@@ -1739,7 +1751,6 @@ function redrawHome(){const b=$('#hdash');if(b){b.innerHTML=buildHome();fitWd();
 A.htm=el=>{HD.tm=el.dataset.m;redrawHome();};
 A.hperf=el=>{HD.perf=el.dataset.m;redrawHome();};
 A.hset=el=>{HD.set=el.dataset.m;redrawHome();};
-A.han=el=>{HD.an=+el.dataset.m;redrawHome();};
 ROUTES['/home']=()=>{setTimeout(redrawHome,0);return pgHome();};
 let _hrz2=0,_hw2=0;
 window.addEventListener('resize',()=>{clearTimeout(_hrz2);_hrz2=setTimeout(()=>{const b=$('#hdash');if(b&&b.clientWidth&&Math.abs(b.clientWidth-_hw2)>4){_hw2=b.clientWidth;redrawHome();}},150);});
@@ -1870,7 +1881,7 @@ A.supDel=async el=>{
   rebuild();toast('삭제했습니다.');route();
 };
 A.supToBulk=el=>{NP.supplierId=+el.dataset.id;NP.result=null;location.hash='#/products/new';};
-A.supToList=el=>{PL.sup=String(el.dataset.id);PL.q='';PL.page=0;location.hash='#/products';};
+A.supToList=el=>{PL.sup=String(el.dataset.id);PL.sale='';PL.q='';PL.page=0;location.hash='#/products';};
 
 /* =====================================================================
    상품 목록
@@ -1986,6 +1997,13 @@ C.pdfilter=el=>{PL[el.dataset.k]=el.value;PL.page=0;drawProducts();};
 A.prange=el=>{const r=pRange(el.dataset.r);PL.from=r[0];PL.to=r[1];PL.page=0;const f=$('#pfrom'),t=$('#pto');if(f)f.value=r[0];if(t)t.value=r[1];drawProducts();};
 C.psup=el=>{PL.sup=el.value;PL.page=0;drawProducts();};
 C.psalef=el=>{PL.sale=el.value;PL.page=0;drawProducts();};
+/* 홈 대시보드 상품관리 [판매중 / 품절 상품] → 매입 상품 조회에서 그 판매상태 상품만 보기 */
+A.hprod=(el,e)=>{
+  e.preventDefault();
+  const v=el.dataset.s;if(!SALE_ST.includes(v))return;
+  Object.assign(PL,{q:'',sup:'',sale:v,from:'',to:'',page:0});PL.sel.clear();
+  if((location.hash||'')==='#/products')route();else location.hash='#/products';
+};
 A.ppage=el=>{PL.page+=+el.dataset.d;drawProducts();};
 C.prow=el=>{const id=+el.dataset.id;el.checked?PL.sel.add(id):PL.sel.delete(id);};
 /* ---- 판매상태 (판매중 / 품절 / 단종) ---- */
@@ -4067,6 +4085,92 @@ A.btsave=async()=>{
   BT.items=null;BT.fileName='';BT.err='';
   route();
 };
+
+/* =====================================================================
+   매출관리 > 요약 — 쇼핑몰·매입처·기간을 골라 조회하면 판매금액 · 상품결제건수 · 결제고객수 · 객단가를
+   직전 기간과 비교하는 막대 그래프로 보여줍니다. (취소 주문 제외, 주문일자 기준·없으면 수집일)
+   비교 기간은 조회 기간과 같은 길이로 앞쪽으로 옮겨서 계산합니다.
+     1일  → 전일 / 7일 전          7일 → 이전 7일 / 30일 전          30일 → 이전 30일 / 전년 같은 기간
+===================================================================== */
+ICONS['p_매출관리']=IC('<path d="M4 20V11"/><path d="M10 20V5"/><path d="M16 20v-6"/><path d="M21 20H3"/>');
+const SS={mall:'',sup:'',from:'',to:'',res:null};
+const ssLb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
+const ssDays=(a,b)=>Math.round((pDate(b)-pDate(a))/86400000);
+const ssYearBack=k=>{const d=pDate(k);d.setFullYear(d.getFullYear()-1);return localDate(d);};
+const ssRng=(a,b)=>a===b?a:a+' ~ '+b;
+const ssFmt=(v,u)=>{v=Math.round(v);return (u==='원'&&v>=1e9?fmtCompact(v):v.toLocaleString())+u;};
+const ssCust=o=>{const n=norm(o.orderer||o.receiver||''),t=String(o.tel1||o.tel2||'').replace(/\D/g,'');return (n||t)?n+'|'+t:'o:'+(o.orderNo||o.id||'');};
+function ssAgg(rows,a,b){
+  const cu=new Set();let pay=0,cnt=0;
+  rows.forEach(r=>{if(r.d<a||r.d>b)return;pay+=r.pay;cnt++;cu.add(ssCust(r.o));});
+  return {pay,cnt,cust:cu.size,aov:cu.size?Math.round(pay/cu.size):0};
+}
+function ssCompute(){
+  const {mall,sup,from,to}=SS;
+  const rows=homeRows().filter(r=>(!mall||(mall==='__none'?!r.o.mall:r.o.mall===mall))&&(!sup||(r.s&&String(r.s.id)===String(sup))));
+  const n=ssDays(from,to)+1;
+  const s=M.sup.get(+sup);
+  const cmp=(lab,a,b)=>({lab,a,b,v:ssAgg(rows,a,b)});
+  const c1=cmp(n===1?'전일':'이전 '+n+'일',addD(from,-n),addD(to,-n));
+  const c2=n===1?cmp('이전 7일',addD(from,-7),addD(to,-7)):n<=7?cmp('이전 30일',addD(from,-30),addD(to,-30)):cmp('전년',ssYearBack(from),ssYearBack(to));
+  return {mall,sup,supName:s?s.name:'',from,to,n,cur:ssAgg(rows,from,to),c1,c2};
+}
+/* 막대 2개(비교 기간 · 조회 기간) 그래프. top 값을 두 그래프가 똑같이 써서 기준선(0)과 눈금이 같다.
+   상승 → 막대 아래에 상승률(빨강), 하락 → 막대 위에 하락률(파랑) */
+function ssChart(c,cur,top,col,unit){
+  const base=c.v,W=240,H=198,T=44,B=52,ph=H-T-B,y0=T+ph,bw=64,x1=W*0.29,x2=W*0.71;
+  const hh=v=>v>0?Math.max(2,v/top*ph):0,h1=hh(base),h2=hh(cur);
+  const r=base?(cur-base)/base*100:null,pc=r==null?'':Math.abs(r).toFixed(1);
+  let g='<line x1="10" x2="'+(W-10)+'" y1="'+y0+'" y2="'+y0+'" stroke="#c9cfdb"/>';
+  if(h1)g+='<line x1="'+(x1-bw/2)+'" x2="'+(x2+bw/2)+'" y1="'+(y0-h1)+'" y2="'+(y0-h1)+'" stroke="#9aa3b5" stroke-dasharray="3 3"/>';
+  g+='<rect x="'+(x1-bw/2)+'" y="'+(y0-h1)+'" width="'+bw+'" height="'+h1+'" rx="4" fill="#c5cad6"/>';
+  g+='<rect x="'+(x2-bw/2)+'" y="'+(y0-h2)+'" width="'+bw+'" height="'+h2+'" rx="4" fill="'+col+'"/>';
+  g+='<text x="'+x1+'" y="'+(y0-h1-6)+'" text-anchor="middle" class="av">'+ssFmt(base,unit)+'</text>';
+  g+='<text x="'+x2+'" y="'+(y0-h2-6)+'" text-anchor="middle" class="av">'+ssFmt(cur,unit)+'</text>';
+  g+='<text x="'+x1+'" y="'+(y0+17)+'" text-anchor="middle" class="ax2">'+esc(c.lab)+'</text><text x="'+x2+'" y="'+(y0+17)+'" text-anchor="middle" class="ax2" style="font-weight:700">조회기간</text>';
+  if(r==null){if(cur>0)g+='<text x="'+x2+'" y="'+(y0+38)+'" text-anchor="middle" class="ax">비교 불가</text>';}
+  else if(pc==='0.0')g+='<text x="'+x2+'" y="'+(y0+38)+'" text-anchor="middle" class="ax">변동 없음</text>';
+  else if(r>0)g+='<text x="'+x2+'" y="'+(y0+38)+'" text-anchor="middle" style="fill:#e03131;font-size:13px;font-weight:700">▲ '+pc+'%</text>';
+  else g+='<text x="'+x2+'" y="'+(y0-h2-24)+'" text-anchor="middle" style="fill:#1c7ed6;font-size:13px;font-weight:700">▼ '+pc+'%</text>';
+  return '<div class="sscap"><b>'+esc(c.lab)+' 대비</b><span>'+esc(ssRng(c.a,c.b))+'</span></div><svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="'+esc(c.lab)+' 대비 '+esc(c.lab)+' '+ssFmt(base,unit)+', 조회기간 '+ssFmt(cur,unit)+'">'+g+'</svg>';
+}
+function ssResult(){
+  const R=SS.res;
+  if(!R)return '<div class="card mute" style="text-align:center;padding:40px 16px">쇼핑몰·매입처·조회기간을 선택하고 [조회]를 누르면 판매금액 · 상품결제건수 · 결제고객수 · 객단가가 표시됩니다.</div>';
+  const defs=[['pay','판매금액','원','#3b5bdb'],['cnt','상품결제건수','건','#e8890c'],['cust','결제고객수','명','#12a150'],['aov','객단가','원','#7048e8']];
+  const cond='쇼핑몰 <b>'+(R.mall?(R.mall==='__none'?'(미지정)':esc(R.mall)):'전체')+'</b> · 매입처 <b>'+(R.sup?esc(R.supName||'선택됨'):'전체')+'</b> · 조회기간 <b>'+esc(ssRng(R.from,R.to))+'</b> ('+R.n+'일)';
+  return '<div class="row" style="margin:2px 0 12px"><span class="small">'+cond+'</span></div><div class="ssgrid">'+defs.map(d=>{
+    const k=d[0],top=Math.max(R.cur[k],R.c1.v[k],R.c2.v[k],1);
+    return '<div class="card ssbox"><div class="sslab">'+d[1]+'</div><div class="ssval" style="color:'+d[3]+'">'+Number(R.cur[k]).toLocaleString()+'<small>'+d[2]+'</small></div>'+
+      ssChart(R.c1,R.cur[k],top,d[3],d[2])+'<div style="height:10px"></div>'+ssChart(R.c2,R.cur[k],top,d[3],d[2])+'</div>';
+  }).join('')+'</div><div class="hnote" style="margin-top:12px">취소 주문 제외 · 주문일자 기준(없으면 수집일) · 판매금액은 결제금액 합계 · 상품결제건수는 주문 행 수 · 결제고객수는 주문자(없으면 수취인)+연락처 기준으로 중복을 뺀 인원 · 객단가 = 판매금액 ÷ 결제고객수 · 두 그래프는 같은 눈금(기준선)을 쓰며, 점선은 비교 기간의 값입니다. 매입처를 선택하면 상품이 매핑된 주문만 집계합니다.</div>';
+}
+function pgSalesSummary(){
+  const d=SS;
+  const malls=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];
+  const mo='<option value="">전체 쇼핑몰</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option>';
+  const so='<option value="">전체 매입처</option>'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('');
+  return '<h1>매출 요약</h1><p class="sub">쇼핑몰·매입처·기간을 선택해 조회하면 판매금액, 상품결제건수, 결제고객수, 객단가를 이전 기간과 비교해서 보여줍니다. 1일·7일·30일 버튼은 오늘을 뺀 어제까지의 기간을 채웁니다.</p>'+
+  '<div class="card"><div class="row" style="margin-bottom:10px">'+ssLb('쇼핑몰')+'<select data-chg="ssf" data-k="mall">'+mo+'</select><span style="width:10px"></span>'+ssLb('매입처')+'<select data-chg="ssf" data-k="sup">'+so+'</select></div>'+
+  '<div class="row">'+ssLb('조회기간')+'<input type="date" id="ssfrom" data-chg="ssf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ssto" data-chg="ssf" data-k="to" value="'+esc(d.to)+'">'+
+  [1,7,30].map(n=>'<button class="btn sm" style="padding:2px 8px;font-size:12px" data-act="ssrange" data-n="'+n+'">'+n+'일</button>').join('')+
+  '<span style="width:10px"></span><button class="btn pri" data-act="sssearch">조회</button><button class="btn" data-act="ssreset">초기화</button></div></div>'+
+  '<div id="ssres">'+ssResult()+'</div>';
+}
+ROUTES['/sales/summary']=pgSalesSummary;
+C.ssf=el=>{SS[el.dataset.k]=el.value;};
+A.ssrange=el=>{
+  const n=+el.dataset.n,e=addD(localDate(),-1);   /* 오늘은 빼고 어제까지 */
+  SS.to=e;SS.from=addD(e,-(n-1));
+  const f=$('#ssfrom'),t=$('#ssto');if(f)f.value=SS.from;if(t)t.value=SS.to;
+};
+A.sssearch=()=>{
+  if(!SS.from||!SS.to){toast('조회기간의 시작일과 종료일을 선택하세요. (1일·7일·30일 버튼으로도 채울 수 있습니다)','err',4500);return;}
+  if(SS.from>SS.to){toast('시작일이 종료일보다 늦습니다.','err',4500);return;}
+  SS.res=ssCompute();
+  const b=$('#ssres');if(b)b.innerHTML=ssResult();
+};
+A.ssreset=()=>{Object.assign(SS,{mall:'',sup:'',from:'',to:'',res:null});route();};
 
 /* =====================================================================
    클레임(출고완료 주문) · 취소 · C/S관리 (클레임접수관리 / C/S메모관리)

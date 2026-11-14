@@ -4105,7 +4105,7 @@ A.btsave=async()=>{
      1일  → 전일 / 7일 전          7일 → 이전 7일 / 30일 전          30일 → 이전 30일 / 전년 같은 기간
 ===================================================================== */
 ICONS['p_매출관리']=IC('<path d="M4 20V11"/><path d="M10 20V5"/><path d="M16 20v-6"/><path d="M21 20H3"/>');
-const SS={mall:'',sup:'',from:'',to:'',res:null,tg:'day',tm:'pay',cmp:0};
+const SS={mall:'',sup:'',from:'',to:'',res:null,tg:'day',tm:'pay'};
 const ssLb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
 const ssDays=(a,b)=>Math.round((pDate(b)-pDate(a))/86400000);
 const ssYearBack=k=>{const d=pDate(k);d.setFullYear(d.getFullYear()-1);return localDate(d);};
@@ -4155,52 +4155,60 @@ function ssChart2(cs,cur,k,unit){
 }
 const ssChip=(act,cur,list)=>'<div class="chips">'+list.map(x=>'<button class="chip'+(String(cur)===String(x[0])?' on':'')+'" data-act="'+act+'" data-m="'+x[0]+'">'+esc(x[1])+'</button>').join('')+'</div>';
 const SS_C1='#3b5bdb',SS_C2='#f08c00',SS_GRAY='#d9dde5';
-/* 트렌드: 조회 데이터 = 종료일까지의 구간, 비교 데이터 = 같은 구간을 비교 기준만큼 앞으로 옮긴 값.
+/* 트렌드: 조회 데이터 = 종료일까지의 구간, 비교 데이터 = 각 구간의 바로 이전 구간 (일 → 전일 · 주 → 전주 · 월 → 전월).
    조회기간이 짧으면 일간 최소 14일 · 주간 최소 8주 · 월간 최소 6개월을 종료일 기준으로 보여준다. */
-function ssTrend(R,c,tg,k){
+const SS_TGLAB={day:'전일',week:'전주',month:'전월'};
+function ssTrend(R,tg,k){
   const end=R.to,n=R.n,bk=[];
-  if(tg==='day'){const W=Math.max(n,14);for(let i=W-1;i>=0;i--){const d=addD(end,-i);bk.push({a:d,b:d,l:d.slice(5),t:d});}}
-  else if(tg==='week'){const W=Math.max(Math.ceil(n/7),8);for(let i=W-1;i>=0;i--){const b=addD(end,-7*i),a=addD(b,-6);bk.push({a,b,l:a.slice(5),t:a+' ~ '+b});}}
+  if(tg==='day'){const W=Math.max(n,14);for(let i=W-1;i>=0;i--){const d=addD(end,-i);bk.push({a:d,b:d,l:d.slice(5),t:d,pa:addD(d,-1),pb:addD(d,-1)});}}
+  else if(tg==='week'){const W=Math.max(Math.ceil(n/7),8);for(let i=W-1;i>=0;i--){const b=addD(end,-7*i),a=addD(b,-6);bk.push({a,b,l:a.slice(5),t:a+' ~ '+b,pa:addD(a,-7),pb:addD(b,-7)});}}
   else{
     const e=pDate(end),f0=pDate(R.from),W=Math.max((e.getFullYear()-f0.getFullYear())*12+e.getMonth()-f0.getMonth()+1,6);
     for(let i=W-1;i>=0;i--){
-      const f=new Date(e.getFullYear(),e.getMonth()-i,1),a=localDate(f),b=i===0?end:localDate(new Date(e.getFullYear(),e.getMonth()-i+1,0));
-      bk.push({a,b,l:(f.getMonth()+1)+'월',l2:(f.getMonth()===0||i===W-1)?String(f.getFullYear()):'',t:a+' ~ '+b});
+      const f=new Date(e.getFullYear(),e.getMonth()-i,1),lastD=new Date(e.getFullYear(),e.getMonth()-i+1,0),a=localDate(f),b=i===0?end:localDate(lastD);
+      const full=b===localDate(lastD),pf=new Date(f.getFullYear(),f.getMonth()-1,1),pl=new Date(f.getFullYear(),f.getMonth(),0);
+      /* 전월: 한 달이 다 지난 달은 전월 전체, 아직 진행 중인 마지막 달은 전월의 같은 일수(1일~같은 일자)와 비교 */
+      const pb=full?localDate(pl):localDate(new Date(pf.getFullYear(),pf.getMonth(),Math.min(pDate(b).getDate(),pl.getDate())));
+      bk.push({a,b,l:(f.getMonth()+1)+'월',l2:(f.getMonth()===0||i===W-1)?String(f.getFullYear()):'',t:a+' ~ '+b,pa:localDate(pf),pb});
     }
   }
-  const ser=bk.map(x=>({l:x.l,l2:x.l2||'',t:x.t,c:ssAgg(R.rows,x.a,x.b)[k],p:ssAgg(R.rows,c.sh(x.a),c.sh(x.b))[k]}));
-  return {ser,ca:bk[0].a,cb:bk[bk.length-1].b,pa:c.sh(bk[0].a),pb:c.sh(bk[bk.length-1].b)};
+  const ser=bk.map(x=>({l:x.l,l2:x.l2||'',t:x.t,c:ssAgg(R.rows,x.a,x.b)[k],p:ssAgg(R.rows,x.pa,x.pb)[k]}));
+  return {ser,ca:bk[0].a,cb:bk[bk.length-1].b,pa:bk[0].pa,pb:bk[bk.length-1].pb,last:bk[bk.length-1]};
 }
 function ssLineSvg(ser,mon,unit){
+  /* 막대 그래프: 구간마다 조회 데이터(색) 막대와 비교 데이터(연한 회색) 막대를 나란히 */
   const W=900,H=290,L=64,Rr=22,T=18,B=ser.some(x=>x.l2)?52:40,pw=W-L-Rr,ph=H-T-B,n=ser.length;
-  const top=niceTop(Math.max(0,...ser.map(x=>Math.max(x.c,x.p))));
-  const X=i=>n===1?L+pw/2:L+pw*i/(n-1),Y=v=>T+ph-v/top*ph;
+  const top=niceTop(Math.max(0,...ser.map(x=>Math.max(x.c,x.p)))),slot=pw/n,bw=Math.max(3,Math.min(26,slot*.36));
   const F=v=>mon?fmtCompact(v):Number(v).toLocaleString();
   let g='';
   for(let i=0;i<=4;i++){const y=T+ph-ph*i/4;g+='<line x1="'+L+'" x2="'+(W-Rr)+'" y1="'+y+'" y2="'+y+'" stroke="#eef0f4"/><text x="'+(L-8)+'" y="'+(y+4)+'" text-anchor="end" class="ax">'+F(top*i/4)+'</text>';}
   const step=Math.max(1,Math.ceil(n/Math.max(2,Math.floor(pw/56))));
-  ser.forEach((x,i)=>{if((n-1-i)%step)return;g+='<text x="'+X(i)+'" y="'+(T+ph+18)+'" text-anchor="middle" class="ax2">'+esc(x.l)+'</text>'+(x.l2?'<text x="'+X(i)+'" y="'+(T+ph+34)+'" text-anchor="middle" class="ax">'+esc(x.l2)+'</text>':'');});
-  const line=(key,col)=>'<polyline fill="none" stroke="'+col+'" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" points="'+ser.map((x,i)=>X(i).toFixed(1)+','+Y(x[key]).toFixed(1)).join(' ')+'"/>';
-  g+=line('p',SS_C2)+line('c',SS_C1);
   const fv=v=>Number(v).toLocaleString()+unit;
   ser.forEach((x,i)=>{
-    g+='<g><title>'+esc(x.t)+' · 조회 '+fv(x.c)+' · 비교 '+fv(x.p)+'</title><circle cx="'+X(i)+'" cy="'+Y(x.p)+'" r="3.2" fill="#fff" stroke="'+SS_C2+'" stroke-width="2"/><circle cx="'+X(i)+'" cy="'+Y(x.c)+'" r="3.6" fill="'+SS_C1+'"/><rect x="'+(X(i)-Math.max(6,pw/n/2))+'" y="'+T+'" width="'+Math.max(12,pw/n)+'" height="'+ph+'" fill="transparent"/></g>';
+    const cx=L+slot*i+slot/2,hc=x.c>0?Math.max(2,x.c/top*ph):0,hp=x.p>0?Math.max(2,x.p/top*ph):0;
+    g+='<g><title>'+esc(x.t)+' · 조회 '+fv(x.c)+' · 비교 '+fv(x.p)+'</title>'+
+      '<rect x="'+(cx-bw-1)+'" y="'+(T+ph-hc)+'" width="'+bw+'" height="'+hc+'" rx="2.5" fill="'+SS_C1+'"/>'+
+      '<rect x="'+(cx+1)+'" y="'+(T+ph-hp)+'" width="'+bw+'" height="'+hp+'" rx="2.5" fill="'+SS_GRAY+'"/>'+
+      '<rect x="'+(cx-slot/2)+'" y="'+T+'" width="'+slot+'" height="'+ph+'" fill="transparent"/></g>';
+    if(!((n-1-i)%step))g+='<text x="'+cx+'" y="'+(T+ph+18)+'" text-anchor="middle" class="ax2">'+esc(x.l)+'</text>'+(x.l2?'<text x="'+cx+'" y="'+(T+ph+34)+'" text-anchor="middle" class="ax">'+esc(x.l2)+'</text>':'');
   });
-  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="조회 데이터와 비교 데이터 추이 그래프">'+g+'</svg>';
+  g+='<line x1="'+L+'" x2="'+(W-Rr)+'" y1="'+(T+ph)+'" y2="'+(T+ph)+'" stroke="#d9dde5"/>';
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="조회 데이터와 비교 데이터 추이 막대 그래프">'+g+'</svg>';
 }
-function ssTrendBox(R,c){
-  const tg=SS.tg,k=SS.tm,T=ssTrend(R,c,tg,k),U={pay:'원',cnt:'건',cust:'명'}[k];
-  const legend='<span class="hleg"><i style="background:'+SS_C1+'"></i>조회 데이터 '+esc(ssRng(T.ca,T.cb))+'</span><span class="hleg"><i style="background:'+SS_C2+'"></i>비교 데이터('+esc(c.lab)+') '+esc(ssRng(T.pa,T.pb))+'</span>';
+function ssTrendBox(R){
+  const tg=SS.tg,k=SS.tm,T=ssTrend(R,tg,k),U={pay:'원',cnt:'건',cust:'명'}[k];
+  const legend='<span class="hleg"><i style="background:'+SS_C1+'"></i>조회 데이터 '+esc(ssRng(T.ca,T.cb))+'</span><span class="hleg"><i style="background:'+SS_GRAY+'"></i>비교 데이터('+SS_TGLAB[tg]+') '+esc(ssRng(T.pa,T.pb))+'</span>';
   return '<div class="card hbox" style="margin-top:16px"><div class="row hhead" style="margin-bottom:6px"><h3 style="margin:0">트렌드 확인하기</h3><span class="grow"></span>'+ssChip('sstg',tg,[['day','일'],['week','주'],['month','월']])+'</div>'+
     '<div class="row" style="margin:4px 0 8px">'+ssChip('sstm',k,[['pay','판매금액'],['cnt','상품결제건수'],['cust','결제고객수']])+'<span class="grow"></span>'+legend+'</div>'+
     '<div style="overflow-x:auto"><div style="min-width:560px">'+ssLineSvg(T.ser,k==='pay',U)+'</div></div>'+
-    '<div class="hnote">일 = 하루 단위(최소 14일) · 주 = 종료일 기준 7일 단위(최소 8주) · 월 = 달력 월(마지막 달은 종료일까지, 최소 6개월). 조회기간이 더 길면 조회기간 전체를 보여줍니다. 비교 데이터는 같은 구간을 비교 기준만큼 앞으로 옮긴 값이며, 점에 마우스를 올리면 값이 보입니다.</div></div>';
+    '<div class="hnote">일 = 하루 단위(최소 14일) · 주 = 종료일 기준 7일 단위(최소 8주) · 월 = 달력 월(마지막 달은 종료일까지, 최소 6개월). 조회기간이 더 길면 조회기간 전체를 보여줍니다. 비교 데이터(연한 회색)는 각 구간의 바로 이전 구간입니다 — 일은 전일, 주는 전주(7일 전), 월은 전월(진행 중인 마지막 달은 전월의 같은 일수)과 비교합니다. 막대에 마우스를 올리면 값이 보입니다. 아래 상품·쇼핑몰·매입처별 TOP10도 이 일·주·월 선택을 따라 마지막 구간(종료일 기준)과 그 이전 구간을 비교합니다.</div></div>';
 }
-/* TOP10: 조회기간 값 기준 상위 10개, 막대는 조회(색) 아래에 비교(연한 회색) */
-function ssTop(R,c,keyFn,labFn,valFn){
+/* TOP10: 트렌드의 일·주·월 선택을 따름 — 조회 = 트렌드 마지막 구간(종료일 기준), 비교 = 그 바로 이전 구간(전일·전주·전월).
+   조회 구간 값 기준 상위 10개, 막대는 조회(색) 아래에 비교(연한 회색) */
+function ssTop(R,P,keyFn,labFn,valFn){
   const m=new Map();
   R.rows.forEach(r=>{
-    const ic=r.d>=R.from&&r.d<=R.to,ip=r.d>=c.a&&r.d<=c.b;if(!ic&&!ip)return;
+    const ic=r.d>=P.a&&r.d<=P.b,ip=r.d>=P.pa&&r.d<=P.pb;if(!ic&&!ip)return;
     const key=keyFn(r);if(key==null)return;
     let g=m.get(key);if(!g){g={l:labFn(r),cur:0,cmp:0};m.set(key,g);}
     const v=valFn(r);if(ic)g.cur+=v;if(ip)g.cmp+=v;
@@ -4214,27 +4222,26 @@ function ssHbars(list,unit,col){
     '<div class="ssbar"><div class="sstrk"><i style="width:'+Math.max(1.5,g.cur/mx*100)+'%;background:'+col+'"></i></div><span style="font-weight:700">'+f(g.cur)+'</span></div>'+
     '<div class="ssbar"><div class="sstrk"><i style="width:'+(g.cmp?Math.max(1.5,g.cmp/mx*100):0)+'%;background:'+SS_GRAY+'"></i></div><span class="mute">'+f(g.cmp)+'</span></div></div></div>').join('')+'</div>';
 }
-function ssTopBoxes(R,c){
-  const box=(title,note,list,unit,col)=>'<div class="card hbox"><div class="row" style="margin-bottom:12px;flex-wrap:wrap"><h3 style="margin:0">'+title+'</h3><span class="grow"></span><span class="hleg"><i style="background:'+col+'"></i>조회</span><span class="hleg"><i style="background:'+SS_GRAY+'"></i>비교('+esc(c.lab)+')</span></div>'+ssHbars(list,unit,col)+(note?'<div class="hnote">'+note+'</div>':'')+'</div>';
+function ssTopBoxes(R){
+  const tg=SS.tg,P=ssTrend(R,tg,'pay').last,c={lab:SS_TGLAB[tg]};
+  const box=(title,note,list,unit,col)=>'<div class="card hbox"><div class="row" style="margin-bottom:12px;flex-wrap:wrap"><h3 style="margin:0">'+title+'</h3><span class="grow"></span><span class="hleg"><i style="background:'+col+'"></i>조회 '+esc(ssRng(P.a,P.b))+'</span><span class="hleg"><i style="background:'+SS_GRAY+'"></i>비교('+esc(c.lab)+') '+esc(ssRng(P.pa,P.pb))+'</span></div>'+ssHbars(list,unit,col)+(note?'<div class="hnote">'+note+'</div>':'')+'</div>';
   const pk=r=>r.p?'p'+r.p.id:'n:'+(r.o.itemName||'')+'|'+(r.o.itemOption||''),pl=r=>r.p?r.p.name+(r.p.option?' / '+r.p.option:''):(r.o.itemName||'(상품명 없음)')+(r.o.itemOption?' / '+r.o.itemOption:'');
   const mk=r=>r.o.mall||'미지정',sk=r=>r.s?r.s.id:null,sl=r=>r.s.name;
   const pay=r=>r.pay,qty=r=>r.qty;
-  return '<div class="ssg2">'+box('상품별 판매금액 TOP10','',ssTop(R,c,pk,pl,pay),'원','#3b5bdb')+box('상품별 판매수량 TOP10','',ssTop(R,c,pk,pl,qty),'개','#12a150')+'</div>'+
-    '<div class="ssg2">'+box('쇼핑몰별 판매금액 TOP10','',ssTop(R,c,mk,mk,pay),'원','#e8890c')+box('매입처별 판매금액 TOP10','상품이 매핑된 주문만 집계합니다.',ssTop(R,c,sk,sl,pay),'원','#7048e8')+'</div>';
+  return '<div class="ssg2">'+box('상품별 판매금액 TOP10','',ssTop(R,P,pk,pl,pay),'원','#3b5bdb')+box('상품별 판매수량 TOP10','',ssTop(R,P,pk,pl,qty),'개','#12a150')+'</div>'+
+    '<div class="ssg2">'+box('쇼핑몰별 판매금액 TOP10','',ssTop(R,P,mk,mk,pay),'원','#e8890c')+box('매입처별 판매금액 TOP10','상품이 매핑된 주문만 집계합니다.',ssTop(R,P,sk,sl,pay),'원','#7048e8')+'</div>';
 }
 function ssResult(){
   const R=SS.res;
   if(!R)return '<div class="card mute" style="text-align:center;padding:40px 16px">쇼핑몰·매입처·조회기간을 선택하고 [조회]를 누르면 판매금액 · 상품결제건수 · 결제고객수 · 객단가와 트렌드, TOP10이 표시됩니다.</div>';
   const defs=[['pay','판매금액','원','#3b5bdb'],['cnt','상품결제건수','건','#e8890c'],['cust','결제고객수','명','#12a150'],['aov','객단가','원','#7048e8']];
   const cond='쇼핑몰 <b>'+(R.mall?(R.mall==='__none'?'(미지정)':esc(R.mall)):'전체')+'</b> · 매입처 <b>'+(R.sup?esc(R.supName||'선택됨'):'전체')+'</b> · 조회기간 <b>'+esc(ssRng(R.from,R.to))+'</b> ('+R.n+'일)';
-  const c=SS.cmp===1?R.c2:R.c1;
   return '<div class="row" style="margin:2px 0 12px"><span class="small">'+cond+'</span></div><div class="ssgrid">'+defs.map(d=>{
     const k=d[0];
     return '<div class="card ssbox"><div class="sslab">'+d[1]+'</div><div class="ssval" style="color:'+d[3]+'">'+Number(R.cur[k]).toLocaleString()+'<small>'+d[2]+'</small></div>'+
       ssChart2([R.c1,R.c2],R.cur[k],k,d[2])+'</div>';
   }).join('')+'</div><div class="hnote" style="margin-top:12px">취소 주문 제외 · 주문일자 기준(없으면 수집일) · 판매금액은 결제금액 합계 · 상품결제건수는 주문 행 수 · 결제고객수는 주문자(없으면 수취인)+연락처 기준으로 중복을 뺀 인원 · 객단가 = 판매금액 ÷ 결제고객수 · 그래프의 가운데 선이 비교 기간의 값이며, 조회 기간이 더 크면 선 위로(빨강) · 더 작으면 선 아래로(파랑) 그려집니다. 막대 길이는 변화율이고 두 막대는 같은 눈금을 씁니다. 매입처를 선택하면 상품이 매핑된 주문만 집계합니다.</div>'+
-    '<div class="row" style="margin:20px 0 -4px"><span class="small"><b>비교 기준</b> <span class="mute">(트렌드·TOP10에 적용)</span></span>'+ssChip('sscmp',SS.cmp,[[0,R.c1.lab],[1,R.c2.lab]])+'</div>'+
-    ssTrendBox(R,c)+ssTopBoxes(R,c);
+    ssTrendBox(R)+ssTopBoxes(R);
 }
 function pgSalesSummary(){
   const d=SS;
@@ -4261,11 +4268,10 @@ A.sssearch=()=>{
   SS.res=ssCompute();
   const b=$('#ssres');if(b)b.innerHTML=ssResult();
 };
-A.ssreset=()=>{Object.assign(SS,{mall:'',sup:'',from:'',to:'',res:null,tg:'day',tm:'pay',cmp:0});route();};
+A.ssreset=()=>{Object.assign(SS,{mall:'',sup:'',from:'',to:'',res:null,tg:'day',tm:'pay'});route();};
 const ssRedraw=()=>{const b=$('#ssres');if(b)b.innerHTML=ssResult();};
 A.sstg=el=>{SS.tg=el.dataset.m;ssRedraw();};
 A.sstm=el=>{SS.tm=el.dataset.m;ssRedraw();};
-A.sscmp=el=>{SS.cmp=+el.dataset.m;ssRedraw();};
 
 /* =====================================================================
    클레임(출고완료 주문) · 취소 · C/S관리 (클레임접수관리 / C/S메모관리)

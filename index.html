@@ -1474,7 +1474,7 @@ const NAV=[
   {parent:'상품관리'},
   {h:'/products/changes',t:'상품변경사항',sub:1},{h:'/products/new',t:'신규상품등록',sub:1},{h:'/products/bulk',t:'상품대량등록',sub:1},{h:'/products',t:'매입상품조회',sub:1},
   {parent:'주문관리'},
-  {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1},
+  {h:'/orders/collect',t:'주문수집',sub:1},{h:'/orders/collect/single',t:'주문수집(건별)',sub:1},{h:'/orders/confirm',t:'주문확정관리',sub:1},{h:'/orders/check',t:'주문확인처리',sub:1},{h:'/orders/tracking',t:'운송장입력(건별)',sub:1},{h:'/orders/tracking/bulk',t:'운송장입력(대량)',sub:1},
   {parent:'C/S관리'},
   {h:'/cs/claims',t:'클레임접수관리',sub:1},{h:'/cs/memos',t:'C/S메모관리',sub:1},
   {parent:'매출관리'},
@@ -1502,6 +1502,7 @@ const ICONS={
   '/products/bulk':IC('<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/>'),
   '/products':IC('<path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>'),
   '/orders/collect':IC('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 19h14"/>'),
+  '/orders/collect/single':IC('<path d="M12 5v14"/><path d="M5 12h14"/>'),
   '/orders/confirm':IC('<path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/>'),
   '/orders/check':IC('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="m9 14 2 2 4-4"/>')
 };
@@ -2684,13 +2685,18 @@ function pgCollect(){
     '<h3 style="margin-top:16px">미리보기 <span class="mute small">(총 '+orders.length.toLocaleString()+'건)</span></h3>'+
     previewTable(curFields(CL.mall).filter(f=>!hideSet().has(f.key)).map(f=>[f.custom?'c_'+f.key:f.key,f.label.replace(' (매핑에 사용)','')]).concat([['mall','쇼핑몰']]),orders);
   }
-  return '<h1>주문 수집</h1><p class="sub">쇼핑몰 주문내역 파일을 올리고 저장하면 [주문 확정 관리]에 표시됩니다. 이전에 매핑한 상품은 자동으로 매핑됩니다. 도소매·전화주문처럼 파일이 없는 주문은 ② 주문 직접 등록으로 입력하세요.</p>'+
-  '<div class="card"><h3>① 주문내역 파일 업로드</h3>'+body+
-  '<div class="row" style="margin-top:16px"><button class="btn pri" data-act="collectSave"'+(CL.sheets&&orders.length?'':' disabled')+'>저장</button> <span class="mute small">'+(CL.sheets?orders.length.toLocaleString()+'건을 저장합니다.':'파일을 올리면 저장할 수 있습니다.')+'</span></div></div>'+
-  '<div class="card"><h3>② 주문 직접 등록 <span class="mute small" style="font-weight:500">도소매 · 전화주문 등 파일이 없는 주문</span></h3>'+moForm()+'</div>';
+  return '<h1>주문 수집</h1><p class="sub">쇼핑몰 주문내역 파일을 올리고 저장하면 [주문 확정 관리]에 표시됩니다. 이전에 매핑한 상품은 자동으로 매핑됩니다. 도소매·전화주문처럼 파일이 없는 주문은 <a href="#/orders/collect/single">주문수집(건별)</a>에서 직접 등록하세요.</p>'+
+  '<div class="card"><h3>주문내역 파일 업로드</h3>'+body+
+  '<div class="row" style="margin-top:16px"><button class="btn pri" data-act="collectSave"'+(CL.sheets&&orders.length?'':' disabled')+'>저장</button> <span class="mute small">'+(CL.sheets?orders.length.toLocaleString()+'건을 저장합니다.':'파일을 올리면 저장할 수 있습니다.')+'</span></div></div>';
 }
 ROUTES['/orders/collect']=pgCollect;
-/* ===== ② 주문 직접 등록 (도소매 · 전화주문 등) — 상품을 바로 연결해 [주문확인처리]에 신규주문으로 올림 ===== */
+/* ===== 주문수집(건별): 도소매 · 전화주문 등 파일이 없는 주문을 한 건씩 직접 등록 ===== */
+function pgCollectSingle(){
+  return '<h1>주문 수집(건별)</h1><p class="sub">도소매·전화주문처럼 주문내역 파일이 없는 주문을 한 건씩 직접 등록합니다. 등록하면 [주문확인처리]에 신규주문으로 표시되고 상품은 바로 연결됩니다. 쇼핑몰 파일 주문은 <a href="#/orders/collect">주문수집</a>에서 올려주세요.</p>'+
+  '<div class="card"><h3>주문 직접 등록 <span class="mute small" style="font-weight:500">도소매 · 전화주문 등 파일이 없는 주문</span></h3>'+moForm()+'</div>';
+}
+ROUTES['/orders/collect/single']=pgCollectSingle;
+/* ===== 주문 직접 등록 (도소매 · 전화주문 등) — 상품을 바로 연결해 [주문확인처리]에 신규주문으로 올림 ===== */
 const blankMO=()=>({mall:'',date:localDate(),orderNo:'',orderer:'',receiver:'',tel1:'',tel2:'',zip:'',addr:'',memo:'',qty:'1',pay:'',settle:'',pid:null,q:'',sup:''});
 let MO=blankMO();
 const MO_MALLS=['도소매','전화주문'];

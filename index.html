@@ -4181,7 +4181,7 @@ function pgPurchase(){
   const tot=parties.map((p,i)=>c.buy[i]);
   const sum=a=>a.reduce((x,y)=>x+y,0);
   const inp=(k,f,val,auto)=>'<input type="text" inputmode="numeric" style="width:112px;text-align:right'+(auto?';color:#8b95ad':'')+'" data-chg="pdep" data-k="'+esc(k)+'" data-f="'+f+'" value="'+(val?won(val):'')+'" placeholder="0">';
-  const balHtml=v=>'<b'+(v<0?' style="color:#1c7ed6"':'')+'>'+(v?won(Math.round(v)):'0')+'</b>';
+  const balHtml=v=>'<b'+(v>0?' style="color:#e03131"':v<0?' style="color:#1c7ed6"':'')+'>'+(v?won(Math.round(v)):'0')+'</b>';
   let h1='<thead><tr><th>구분</th>';
   for(let w=0;w<nwk;w++)h1+='<th class="num" title="'+(w*7+1)+'일 ~ '+(w===4?last:(w+1)*7)+'일">'+(w+1)+'주차</th>';
   h1+='<th class="num">거래선 계</th><th class="num">누적매출</th><th class="num">누적수익</th><th class="num">입금액</th><th class="num">전월미입금액</th><th class="num">잔액</th></tr></thead>';
@@ -4203,12 +4203,12 @@ function pgPurchase(){
     const day=di+1,fut=future||(isCur&&day>td),dt=PM.month+'-'+pad(day),wd=HD_WD[pDate(dt).getDay()],sm=sum(row),rowD=dailyDep[di],smD=sum(rowD);
     const isSaved=d.saved.has(dt),editing=!fut&&(!isSaved||PURED.has(dt));
     if(isSaved){run+=sm;runD+=smD;}
-    const bg=isCur&&day===td?' style="background:#f4f7ff"':'';
+    const cD=isCur&&day===td?'#f4f7ff':'#fff',bgB=' style="background:#fff3bf"',bgD=' style="background:'+cD+'"';
     const cells=(arr,attr)=>arr.map((v,i)=>'<td class="num">'+(fut?dash:editing?inpD(attr,dt,parties[i].key,v):cell(v))+'</td>').join('');
     const act=fut?'':editing?'<button class="btn sm pri" data-act="pdSave" data-d="'+dt+'">저장</button>'+(isSaved?'<br><button class="btn sm" style="margin-top:4px" data-act="pdCancel" data-d="'+dt+'">취소</button>':''):'<button class="btn sm" data-act="pdEdit" data-d="'+dt+'">수정</button>';
-    return '<tr'+bg+'><td class="nw" rowspan="2">'+pad(+PM.month.slice(5))+'/'+pad(day)+' <span class="mute small">('+wd+')</span></td><td class="nw">매입금액</td>'+cells(row,'data-pd')+
-      '<td class="num"><b>'+(isSaved?cell(sm):dash)+'</b></td><td class="num">'+(isSaved?cell(run):'')+'</td><td class="nw" rowspan="2">'+act+'</td></tr>'+
-      '<tr'+bg+'><td class="nw">입금액</td>'+cells(rowD,'data-pp')+
+    return '<tr'+bgB+'><td class="nw" rowspan="2" style="background:'+cD+'">'+pad(+PM.month.slice(5))+'/'+pad(day)+' <span class="mute small">('+wd+')</span></td><td class="nw"><b>매입금액</b></td>'+cells(row,'data-pd')+
+      '<td class="num"><b>'+(isSaved?cell(sm):dash)+'</b></td><td class="num">'+(isSaved?cell(run):'')+'</td><td class="nw" rowspan="2" style="background:'+cD+'">'+act+'</td></tr>'+
+      '<tr'+bgD+'><td class="nw">입금액</td>'+cells(rowD,'data-pp')+
       '<td class="num"><b>'+(isSaved?cell(smD):dash)+'</b></td><td class="num">'+(isSaved?cell(runD):'')+'</td></tr>';
   }).join('');
   const gt=sum(tot),st='background:#f1f3f9;font-weight:700',gd=sum(d.deposit);

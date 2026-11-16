@@ -4115,6 +4115,7 @@ A.btsave=async()=>{
 ===================================================================== */
 ICONS['p_정산관리']=IC('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 14.5h2"/>');
 const PUR_BASE=['아이젠트','신비인터내셔널','로움랩','더원글로벌','썬라이즈','식품백억','신흥유통','주영씨푸드','마스터유통'];
+const PUR_RED=['아이젠트','신비인터내셔널','마스터유통'];   /* 잔액이 0을 넘으면 빨간색으로 표시할 매입처 (식품백억·신흥유통은 발주와 동시에 입금) */
 const PM={month:''},PURED=new Set();   /* PURED: 수정 중인 일자 */
 const purNm=x=>norm(String(x||'').replace(/\(주\)|㈜|주식회사/g,''));
 const purMonthAdd=(m,k)=>{const a=m.split('-').map(Number),d=new Date(a[0],a[1]-1+k,1);return d.getFullYear()+'-'+pad(d.getMonth()+1);};
@@ -4181,14 +4182,14 @@ function pgPurchase(){
   const tot=parties.map((p,i)=>c.buy[i]);
   const sum=a=>a.reduce((x,y)=>x+y,0);
   const inp=(k,f,val,auto)=>'<input type="text" inputmode="numeric" style="width:112px;text-align:right'+(auto?';color:#8b95ad':'')+'" data-chg="pdep" data-k="'+esc(k)+'" data-f="'+f+'" value="'+(val?won(val):'')+'" placeholder="0">';
-  const balHtml=v=>'<b'+(v>0?' style="color:#e03131"':v<0?' style="color:#1c7ed6"':'')+'>'+(v?won(Math.round(v)):'0')+'</b>';
+  const balHtml=(v,red)=>'<b'+(v>0&&red?' style="color:#e03131"':'')+'>'+(v?won(Math.round(v)):'0')+'</b>';
   let h1='<thead><tr><th>구분</th>';
   for(let w=0;w<nwk;w++)h1+='<th class="num" title="'+(w*7+1)+'일 ~ '+(w===4?last:(w+1)*7)+'일">'+(w+1)+'주차</th>';
   h1+='<th class="num">거래선 계</th><th class="num">누적매출</th><th class="num">누적수익</th><th class="num">입금액</th><th class="num">전월미입금액</th><th class="num">잔액</th></tr></thead>';
   let b1='<tbody>'+parties.map((p,i)=>{
     let r='<tr><td class="nw"><b>'+esc(p.name)+'</b></td>';
     for(let w=0;w<nwk;w++)r+='<td class="num">'+cell(wk[w][i])+'</td>';
-    return r+'<td class="num"><b>'+cell(tot[i])+'</b></td><td class="num">'+cell(c.pay[i])+'</td><td class="num">'+cell(c.mar[i])+'</td><td class="num">'+cell(d.deposit[i])+'</td><td class="num">'+inp(p.key,'prev',d.prevUn[i],!d.ovr[i])+'</td><td class="num">'+balHtml(d.bal[i])+'</td></tr>';
+    return r+'<td class="num"><b>'+cell(tot[i])+'</b></td><td class="num">'+cell(c.pay[i])+'</td><td class="num">'+cell(c.mar[i])+'</td><td class="num">'+cell(d.deposit[i])+'</td><td class="num">'+inp(p.key,'prev',d.prevUn[i],!d.ovr[i])+'</td><td class="num">'+balHtml(d.bal[i],PUR_RED.includes(p.name))+'</td></tr>';
   }).join('');
   let tr='<tr style="background:#f1f3f9;font-weight:700"><td class="nw">합계</td>';
   for(let w=0;w<nwk;w++)tr+='<td class="num">'+cell(sum(wk[w]))+'</td>';

@@ -3315,7 +3315,7 @@ function stMatch(o,s){
   return ordStatus(o)===s;
 }
 const CK_LBL={new:'신규주문',confirmed:'주문확인',shipped:'출고완료',shipfixed:'출고확정',canceled:'취소건',returned:'반품건'};
-function stTag(o){const s=ordStatus(o);return '<span class="tag'+(s==='confirmed'?' ok':s==='shipped'?' ship':s==='shipfixed'?' sfix':'')+'">'+ST_NAME[s]+'</span>'+(o.canceled?' <span class="tag warn">취소</span>':'')+(o.claim&&o.claim.req==='반품'?' <span class="tag gray">반품</span>':'');}
+function stTag(o){const s=ordStatus(o);return '<span class="tag'+(s==='confirmed'?' ok':s==='shipped'?' ship':s==='shipfixed'?' sfix':'')+'">'+ST_NAME[s]+'</span>'+(o.canceled?' <span class="tag warn">취소</span>':'')+(!o.legacy&&!orderInfo(o).p?' <span class="tag warn" title="상품 또는 매입처가 삭제되어 매핑이 끊긴 주문입니다">매핑없음</span>':'')+(o.claim&&o.claim.req==='반품'?' <span class="tag gray">반품</span>':'');}
 function setOrdStatus(o,st,now){
   o.confirmed=st!=='new';o.confirmedAt=st==='new'?null:(o.confirmedAt||now);
   o.shipped=st==='shipped';o.shippedAt=st==='shipped'?now:null;
@@ -3350,7 +3350,7 @@ function ckList(skipStatus){
   const a=CK.a,q=norm(a.q);
   return S.orders.filter(o=>{
     const {p,s}=orderInfo(o);
-    if(!p&&!o.legacy)return false;   /* 사방넷에서 가져온 주문은 매핑 전에도 조회 */
+    /* 주문확정 전 주문은 아래 fixedOf에서 걸러지므로, 확정·출고된 주문은 상품/매입처가 삭제돼 매핑이 끊겨도 조회합니다 (대시보드 건수와 일치) */
     if(!fixedOf(o))return false;     /* 매핑만 하고 아직 [주문확정]을 누르지 않은 주문은 조회되지 않음 */
     if(!skipStatus&&a.status&&!stMatch(o,a.status))return false;
     if(!skipStatus&&o.canceled&&a.status!=='canceled'&&a.status!=='returned')return false;   /* 취소 주문은 [취소건]에서만 조회 (전체·신규주문·주문확인·출고완료에서는 숨김) */

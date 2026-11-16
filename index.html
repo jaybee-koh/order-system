@@ -4116,7 +4116,7 @@ A.btsave=async()=>{
 ICONS['p_정산관리']=IC('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 14.5h2"/>');
 const PUR_BASE=['아이젠트','신비인터내셔널','로움랩','더원글로벌','썬라이즈','식품백억','신흥유통','주영씨푸드','마스터유통'];
 const PUR_RED=['아이젠트','신비인터내셔널','마스터유통'];   /* 잔액이 0을 넘으면 빨간색으로 표시할 매입처 (식품백억·신흥유통은 발주와 동시에 입금) */
-const PM={month:''},PURED=new Set();   /* PURED: 수정 중인 일자 */
+const PM={month:''},PURED=new Set(),PURREF=new Set();   /* PURREF: CS환불금액 줄을 열어 둔 일자 */   /* PURED: 수정 중인 일자 */
 const purNm=x=>norm(String(x||'').replace(/\(주\)|㈜|주식회사/g,''));
 const purMonthAdd=(m,k)=>{const a=m.split('-').map(Number),d=new Date(a[0],a[1]-1+k,1);return d.getFullYear()+'-'+pad(d.getMonth()+1);};
 function purParties(){
@@ -4132,10 +4132,10 @@ function purParties(){
 }
 function purCalc(month){
   const parties=purParties(),n=parties.length,ix=new Map(parties.map((p,i)=>[p.key,i]));
-  const zero=()=>({buy:new Array(n).fill(0),pay:new Array(n).fill(0),mar:new Array(n).fill(0),dpt:new Array(n).fill(0)});
+  const zero=()=>({buy:new Array(n).fill(0),pay:new Array(n).fill(0),mar:new Array(n).fill(0),dpt:new Array(n).fill(0),ref:new Array(n).fill(0)});
   const bm=new Map(),dep=S.meta.purDeposit||{};
   const ym=month.split('-').map(Number),last=new Date(ym[0],ym[1],0).getDate();
-  const daily=Array.from({length:last},()=>new Array(n).fill(0)),dailyDep=Array.from({length:last},()=>new Array(n).fill(0));
+  const daily=Array.from({length:last},()=>new Array(n).fill(0)),dailyDep=Array.from({length:last},()=>new Array(n).fill(0)),dailyRef=Array.from({length:last},()=>new Array(n).fill(0));
   homeRows().forEach(r=>{
     if(!r.s)return;const i=ix.get(String(r.s.id));if(i==null)return;
     const rd=r.o.collectedDate||String(r.o.collectedAt||'').slice(0,10)||r.d,m=rd.slice(0,7);let c=bm.get(m);   /* 수집일자 기준 */if(!c){c=zero();bm.set(m,c);}
@@ -4155,25 +4155,32 @@ function purCalc(month){
     const dd=+dt.slice(8,10);
     Object.keys(pp[dt]||{}).forEach(k=>{const i=ix.get(k);if(i==null)return;const v=nz(pp[dt][k]);c.dpt[i]+=v;if(m===month&&dd>=1&&dd<=last)dailyDep[dd-1][i]+=v;});
   });
+  /* CS환불금액: 고객 반품 시 업체가 일부만 환불해 바로 예치금으로 넣어준 금액 (입금과 같이 잔액에서 차감) */
+  const pr=S.meta.purRefund||{},refSet=new Set();
+  Object.keys(pr).forEach(dt=>{
+    const m=dt.slice(0,7);let c=bm.get(m);if(!c){c=zero();bm.set(m,c);}
+    const dd=+dt.slice(8,10);if(m===month)refSet.add(dt);
+    Object.keys(pr[dt]||{}).forEach(k=>{const i=ix.get(k);if(i==null)return;const v=nz(pr[dt][k]);c.ref[i]+=v;if(m===month&&dd>=1&&dd<=last)dailyRef[dd-1][i]+=v;});
+  });
   const months=[...bm.keys(),...Object.keys(dep)].filter(Boolean).sort();
   const first=months.length&&months[0]<month?months[0]:month;
   let prev=new Array(n).fill(0),info=null;
   for(let m=first;m<=month;m=purMonthAdd(m,1)){
     const c=bm.get(m)||zero(),dm=dep[m]||{};
-    const prevUn=[],deposit=[],bal=[],ovr=[];
+    const prevUn=[],deposit=[],refund=[],bal=[],ovr=[];
     parties.forEach((p,i)=>{
       const e=dm[p.key]||{},o=e.prev!=null?Number(e.prev):null,pu=o!=null?o:prev[i],dp=c.dpt[i];   /* 전월미입금액: 직접 입력이 없으면 전월 잔액을 이어받음 */
-      prevUn.push(pu);deposit.push(dp);bal.push(c.buy[i]-dp+pu);ovr.push(o!=null);
+      prevUn.push(pu);deposit.push(dp);refund.push(c.ref[i]);bal.push(c.buy[i]-dp-c.ref[i]+pu);ovr.push(o!=null);
     });
     prev=bal;
-    if(m===month)info={parties,n,c,daily,dailyDep,last,prevUn,deposit,bal,ovr,months,saved};
+    if(m===month)info={parties,n,c,daily,dailyDep,dailyRef,last,prevUn,deposit,refund,bal,ovr,months,saved,refSet};
   }
   return info;
 }
 function pgPurchase(){
   const cur=localDate().slice(0,7);
   if(!PM.month)PM.month=cur;
-  const d=purCalc(PM.month),parties=d.parties,n=d.n,c=d.c,daily=d.daily,dailyDep=d.dailyDep,last=d.last;
+  const d=purCalc(PM.month),parties=d.parties,n=d.n,c=d.c,daily=d.daily,dailyDep=d.dailyDep,dailyRef=d.dailyRef,last=d.last;
   const ms=new Set(d.months);ms.add(cur);ms.add(PM.month);
   const mo=[...ms].sort().reverse().map(m=>'<option value="'+m+'"'+(m===PM.month?' selected':'')+'>'+m.slice(0,4)+'년 '+(+m.slice(5))+'월</option>').join('');
   const nwk=last>=29?5:4,cell=v=>v?won(Math.round(v)):'<span class="mute">-</span>';
@@ -4185,48 +4192,56 @@ function pgPurchase(){
   const balHtml=(v,red)=>'<b'+(v>0&&red?' style="color:#e03131"':'')+'>'+(v?won(Math.round(v)):'0')+'</b>';
   let h1='<thead><tr><th>구분</th>';
   for(let w=0;w<nwk;w++)h1+='<th class="num" title="'+(w*7+1)+'일 ~ '+(w===4?last:(w+1)*7)+'일">'+(w+1)+'주차</th>';
-  h1+='<th class="num">거래선 계</th><th class="num">누적매출</th><th class="num">누적수익</th><th class="num">입금액</th><th class="num">전월미입금액</th><th class="num">잔액</th></tr></thead>';
+  h1+='<th class="num">거래선 계</th><th class="num">누적매출</th><th class="num">누적수익</th><th class="num">입금액</th><th class="num">CS환불금액</th><th class="num">전월미입금액</th><th class="num">잔액</th></tr></thead>';
   let b1='<tbody>'+parties.map((p,i)=>{
     let r='<tr><td class="nw"><b>'+esc(p.name)+'</b></td>';
     for(let w=0;w<nwk;w++)r+='<td class="num">'+cell(wk[w][i])+'</td>';
-    return r+'<td class="num"><b>'+cell(tot[i])+'</b></td><td class="num">'+cell(c.pay[i])+'</td><td class="num">'+cell(c.mar[i])+'</td><td class="num">'+cell(d.deposit[i])+'</td><td class="num">'+inp(p.key,'prev',d.prevUn[i],!d.ovr[i])+'</td><td class="num">'+balHtml(d.bal[i],PUR_RED.includes(p.name))+'</td></tr>';
+    return r+'<td class="num"><b>'+cell(tot[i])+'</b></td><td class="num">'+cell(c.pay[i])+'</td><td class="num">'+cell(c.mar[i])+'</td><td class="num">'+cell(d.deposit[i])+'</td><td class="num">'+cell(d.refund[i])+'</td><td class="num">'+inp(p.key,'prev',d.prevUn[i],!d.ovr[i])+'</td><td class="num">'+balHtml(d.bal[i],PUR_RED.includes(p.name))+'</td></tr>';
   }).join('');
   let tr='<tr style="background:#f1f3f9;font-weight:700"><td class="nw">합계</td>';
   for(let w=0;w<nwk;w++)tr+='<td class="num">'+cell(sum(wk[w]))+'</td>';
-  tr+='<td class="num">'+cell(sum(tot))+'</td><td class="num">'+cell(sum(c.pay))+'</td><td class="num">'+cell(sum(c.mar))+'</td><td class="num">'+cell(sum(d.deposit))+'</td><td class="num">'+cell(sum(d.prevUn))+'</td><td class="num">'+balHtml(sum(d.bal))+'</td></tr>';
+  tr+='<td class="num">'+cell(sum(tot))+'</td><td class="num">'+cell(sum(c.pay))+'</td><td class="num">'+cell(sum(c.mar))+'</td><td class="num">'+cell(sum(d.deposit))+'</td><td class="num">'+cell(sum(d.refund))+'</td><td class="num">'+cell(sum(d.prevUn))+'</td><td class="num">'+balHtml(sum(d.bal))+'</td></tr>';
   b1+=tr+'</tbody>';
-  /* 일별 매입금액: 일자마다 2줄(매입금액 / 입금액). 직접 입력 → 저장하면 입력칸이 사라지고 [수정]으로 다시 고칠 수 있음 */
+  /* 일별 매입금액: 일자마다 2줄(매입금액 / 입금액), 일자 옆 [+]를 누르면 3번째 줄(CS환불금액) 추가.
+     직접 입력 → 저장하면 입력칸이 사라지고 [수정]으로 다시 고칠 수 있음 */
   const today=localDate(),isCur=PM.month===cur,future=PM.month>cur,td=+today.slice(8,10);
   let h2='<thead><tr><th>일자</th><th>구분</th>'+parties.map(p=>'<th class="num">'+esc(p.name)+'</th>').join('')+'<th class="num">계</th><th class="num">누적</th><th></th></tr></thead>';
-  let run=0,runD=0;
+  let run=0,runD=0,runR=0;
   const dash='<span class="mute">-</span>',inpD=(attr,dt,k,v)=>'<input type="text" inputmode="numeric" style="width:88px;text-align:right" '+attr+'="'+dt+'" data-k="'+esc(k)+'" value="'+(v?won(v):'')+'" placeholder="0">';
   let b2='<tbody>'+daily.map((row,di)=>{
-    const day=di+1,fut=future||(isCur&&day>td),dt=PM.month+'-'+pad(day),wd=HD_WD[pDate(dt).getDay()],sm=sum(row),rowD=dailyDep[di],smD=sum(rowD);
-    const isSaved=d.saved.has(dt),editing=!fut&&(!isSaved||PURED.has(dt));
-    if(isSaved){run+=sm;runD+=smD;}
-    const cD=isCur&&day===td?'#f4f7ff':'#fff',bgB=' style="background:#fff3bf"',bgD=' style="background:'+cD+'"';
+    const day=di+1,fut=future||(isCur&&day>td),dt=PM.month+'-'+pad(day),wd=HD_WD[pDate(dt).getDay()],sm=sum(row),rowD=dailyDep[di],smD=sum(rowD),rowR=dailyRef[di],smR=sum(rowR);
+    const isSaved=d.saved.has(dt),hasRef=d.refSet.has(dt),showRef=!fut&&(hasRef||PURREF.has(dt)),editing=!fut&&(!isSaved||PURED.has(dt));
+    if(isSaved){run+=sm;runD+=smD;runR+=smR;}
+    const cD=isCur&&day===td?'#f4f7ff':'#fff',bgB=' style="background:#fff3bf"',bgD=' style="background:'+cD+'"',bgR=' style="background:#e6f7ee"',rs=showRef?3:2;
     const cells=(arr,attr)=>arr.map((v,i)=>'<td class="num">'+(fut?dash:editing?inpD(attr,dt,parties[i].key,v):cell(v))+'</td>').join('');
     const act=fut?'':editing?'<button class="btn sm pri" data-act="pdSave" data-d="'+dt+'">저장</button>'+(isSaved?'<br><button class="btn sm" style="margin-top:4px" data-act="pdCancel" data-d="'+dt+'">취소</button>':''):'<button class="btn sm" data-act="pdEdit" data-d="'+dt+'">수정</button>';
-    return '<tr'+bgB+'><td class="nw" rowspan="2" style="background:'+cD+'">'+pad(+PM.month.slice(5))+'/'+pad(day)+' <span class="mute small">('+wd+')</span></td><td class="nw"><b>매입금액</b></td>'+cells(row,'data-pd')+
-      '<td class="num"><b>'+(isSaved?cell(sm):dash)+'</b></td><td class="num">'+(isSaved?cell(run):'')+'</td><td class="nw" rowspan="2" style="background:'+cD+'">'+act+'</td></tr>'+
+    const plus=fut?'':!showRef?' <button class="btn sm" style="padding:0 7px" data-act="prAdd" data-d="'+dt+'" title="CS환불금액 줄 추가">+</button>':!hasRef?' <button class="btn sm" style="padding:0 7px" data-act="prDel" data-d="'+dt+'" title="CS환불금액 줄 닫기">−</button>':'';
+    let h='<tr'+bgB+'><td class="nw" rowspan="'+rs+'" style="background:'+cD+'">'+pad(+PM.month.slice(5))+'/'+pad(day)+' <span class="mute small">('+wd+')</span>'+plus+'</td><td class="nw"><b>매입금액</b></td>'+cells(row,'data-pd')+
+      '<td class="num"><b>'+(isSaved?cell(sm):dash)+'</b></td><td class="num">'+(isSaved?cell(run):'')+'</td><td class="nw" rowspan="'+rs+'" style="background:'+cD+'">'+act+'</td></tr>'+
       '<tr'+bgD+'><td class="nw">입금액</td>'+cells(rowD,'data-pp')+
       '<td class="num"><b>'+(isSaved?cell(smD):dash)+'</b></td><td class="num">'+(isSaved?cell(runD):'')+'</td></tr>';
+    if(showRef)h+='<tr'+bgR+'><td class="nw"><b>CS환불금액</b></td>'+cells(rowR,'data-pr')+
+      '<td class="num"><b>'+(isSaved?cell(smR):dash)+'</b></td><td class="num">'+(isSaved?cell(runR):'')+'</td></tr>';
+    return h;
   }).join('');
-  const gt=sum(tot),st='background:#f1f3f9;font-weight:700',gd=sum(d.deposit);
+  const gt=sum(tot),st='background:#f1f3f9;font-weight:700',gd=sum(d.deposit),gr=sum(d.refund);
   b2+='<tr style="'+st+'"><td class="nw" colspan="2">거래선 계</td>'+tot.map(v=>'<td class="num">'+cell(v)+'</td>').join('')+'<td class="num">'+cell(gt)+'</td><td></td><td></td></tr>'+
     '<tr style="'+st+'"><td class="nw" colspan="2">입금 계</td>'+d.deposit.map(v=>'<td class="num">'+cell(v)+'</td>').join('')+'<td class="num">'+cell(gd)+'</td><td></td><td></td></tr>'+
+    (gr?'<tr style="'+st+'"><td class="nw" colspan="2">CS환불 계</td>'+d.refund.map(v=>'<td class="num">'+cell(v)+'</td>').join('')+'<td class="num">'+cell(gr)+'</td><td></td><td></td></tr>':'')+
     '<tr style="'+st+'"><td class="nw" colspan="2">매입비중</td>'+tot.map(v=>'<td class="num">'+(gt?(v/gt*100).toFixed(1)+'%':'<span class="mute">-</span>')+'</td>').join('')+'<td class="num">'+(gt?'100.0%':'<span class="mute">-</span>')+'</td><td></td><td></td></tr></tbody>';
-  return '<h1>매입현황</h1><p class="sub">월을 선택하면 매입처별 매입금액과 입금·잔액을 보여줍니다. 일별 매입금액은 직접 입력하며, 저장한 매입금액은 위 표의 주차별 금액·거래선 계에 반영됩니다. 누적매출·누적수익은 수집일자 기준 주문(취소 제외)에서 계산합니다. 주차는 1~7일=1주차, 8~14일=2주차, 15~21일=3주차, 22~28일=4주차, 29일~말일=5주차입니다. 입금액은 일별 매입금액 표의 입금액 줄에 입력하면 월 합계가 위 표에 반영됩니다. 전월미입금액은 직접 입력할 수 있고, 비워 두면 전월 잔액이 자동으로 들어갑니다(회색 숫자).</p>'+
-  '<div class="card"><div class="row" style="margin-bottom:10px"><span class="mute small">조회 월</span><select data-chg="pmonth">'+mo+'</select><span class="mute small">잔액 = 거래선 계 − 입금액 + 전월미입금액</span></div>'+
+  return '<h1>매입현황</h1><p class="sub">월을 선택하면 매입처별 매입금액과 입금·잔액을 보여줍니다. 일별 매입금액은 직접 입력하며, 저장한 매입금액은 위 표의 주차별 금액·거래선 계에 반영됩니다. 누적매출·누적수익은 수집일자 기준 주문(취소 제외)에서 계산합니다. 주차는 1~7일=1주차, 8~14일=2주차, 15~21일=3주차, 22~28일=4주차, 29일~말일=5주차입니다. 입금액은 일별 매입금액 표의 입금액 줄에 입력하면 월 합계가 위 표에 반영됩니다. 반품 때 업체가 일부만 환불해 예치금으로 넣어준 금액은 일자 옆 [+]를 눌러 CS환불금액 줄에 입력하면 입금처럼 잔액에서 차감됩니다. 전월미입금액은 직접 입력할 수 있고, 비워 두면 전월 잔액이 자동으로 들어갑니다(회색 숫자).</p>'+
+  '<div class="card"><div class="row" style="margin-bottom:10px"><span class="mute small">조회 월</span><select data-chg="pmonth">'+mo+'</select><span class="mute small">잔액 = 거래선 계 − 입금액 − CS환불금액 + 전월미입금액</span></div>'+
   '<div class="tblwrap" style="max-height:none"><table class="tbl">'+h1+b1+'</table></div></div>'+
   '<div class="card"><h3>일별 매입금액</h3><div class="tblwrap" style="max-height:none"><table class="tbl">'+h2+b2+'</table></div></div>';
 }
 ROUTES['/settle/purchase']=pgPurchase;
-C.pmonth=el=>{PM.month=el.value;PURED.clear();route();};
+C.pmonth=el=>{PM.month=el.value;PURED.clear();PURREF.clear();route();};
+A.prAdd=el=>{PURREF.add(el.dataset.d);PURED.add(el.dataset.d);route();};
+A.prDel=el=>{PURREF.delete(el.dataset.d);route();};
 A.pdEdit=el=>{PURED.add(el.dataset.d);route();};
-A.pdCancel=el=>{PURED.delete(el.dataset.d);route();};
+A.pdCancel=el=>{PURED.delete(el.dataset.d);PURREF.delete(el.dataset.d);route();};
 A.pdSave=async el=>{
-  const dt=el.dataset.d,rec={},recD={};
+  const dt=el.dataset.d,rec={},recD={},recR={};
   const read=(sel,out)=>{
     for(const i of $$(sel)){
       const raw=i.value.replace(/[,원\s]/g,'');if(raw==='')continue;
@@ -4235,12 +4250,13 @@ A.pdSave=async el=>{
     }
     return true;
   };
-  if(!read('input[data-pd="'+dt+'"]',rec)||!read('input[data-pp="'+dt+'"]',recD))return;
-  const all=JSON.parse(JSON.stringify(S.meta.purDaily||{})),allD=JSON.parse(JSON.stringify(S.meta.purPay||{}));
+  if(!read('input[data-pd="'+dt+'"]',rec)||!read('input[data-pp="'+dt+'"]',recD)||!read('input[data-pr="'+dt+'"]',recR))return;
+  const all=JSON.parse(JSON.stringify(S.meta.purDaily||{})),allD=JSON.parse(JSON.stringify(S.meta.purPay||{})),allR=JSON.parse(JSON.stringify(S.meta.purRefund||{}));
   all[dt]=rec;   /* 비어 있어도 저장 = 그날 입력 완료 */
   if(Object.keys(recD).length)allD[dt]=recD;else delete allD[dt];
-  try{await setMeta('purDaily',all);await setMeta('purPay',allD);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
-  PURED.delete(dt);route();
+  if(Object.keys(recR).length)allR[dt]=recR;else delete allR[dt];
+  try{await setMeta('purDaily',all);await setMeta('purPay',allD);await setMeta('purRefund',allR);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
+  PURED.delete(dt);PURREF.delete(dt);route();
 };
 C.pdep=async el=>{
   const m=PM.month,k=el.dataset.k,f=el.dataset.f,raw=el.value.replace(/[,원\s]/g,'');

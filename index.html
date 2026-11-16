@@ -519,6 +519,7 @@ table.tbl tbody tr:hover td{background:#f7fbfa}
 .tag.gray{background:#f0f3f6;color:#657184}
 .tag.warn{background:#fff4e5;color:#a86b20}
 .tag.ship{background:#f1edfb;color:#6952a0}
+.tag.sfix{background:#e3f2fd;color:#1565c0}
 .chips{background:#f0f3f5;border-radius:11px;padding:4px;gap:5px}
 .chip{height:32px;border-radius:8px}
 .chip.on{color:#246d67;box-shadow:0 1px 4px rgba(25,48,58,.10)}
@@ -1723,12 +1724,12 @@ function groupBy(rows,keyFn,labFn){
 function buildHome(){
   const t=localDate(),rows=homeRows();
   /* 판매관리: 주문 상태별 수량 */
-  const st={pre:0,nw:0,cf:0,sh:0};
+  const st={pre:0,nw:0,cf:0,sh:0,sf:0};
   const liveCnt=S.orders.filter(o=>!o.canceled).length;
-  S.orders.forEach(o=>{if(o.canceled)return;if(!fixedOf(o)){st.pre++;return;}const s=ordStatus(o);if(s==='shipped')st.sh++;else if(s==='confirmed')st.cf++;else st.nw++;});
-  const tile=(href,l,n,c,hint,stat)=>'<a class="htile" href="#'+href+'"'+(stat?' data-act="hstat" data-s="'+stat+'"':'')+' style="--c:'+c+'"><span>'+l+'</span><b>'+n.toLocaleString()+'<small>건</small></b><em>'+hint+'</em></a>';
+  S.orders.forEach(o=>{if(o.canceled)return;if(!fixedOf(o)){st.pre++;return;}const s=ordStatus(o);if(s==='shipfixed')st.sf++;else if(s==='shipped')st.sh++;else if(s==='confirmed')st.cf++;else st.nw++;});
+  const tile=(href,l,n,c,hint,stat,span)=>'<a class="htile" href="#'+href+'"'+(stat?' data-act="hstat" data-s="'+stat+'"':'')+' style="--c:'+c+(span?';grid-column:1/-1':'')+'"><span>'+l+'</span><b>'+n.toLocaleString()+'<small>건</small></b><em>'+hint+'</em></a>';
   const sale='<div class="card hbox hcol"><div class="row hhead"><h3 style="margin:0">판매관리</h3><span class="grow"></span><span class="mute small">전체 주문 '+liveCnt.toLocaleString()+'건 (취소 제외)</span></div><div class="htiles">'+
-    tile('/orders/confirm','주문확정 전',st.pre,'#e8890c','미매핑 · 확정 대기')+tile('/orders/check','신규주문',st.nw,'#3b5bdb','주문확인 대기','new')+tile('/orders/check','주문확인',st.cf,'#12a150','출고 대기','confirmed')+tile('/orders/check','출고완료',st.sh,'#7048e8','운송장 입력 완료','shipped')+'</div><div class="hnote">주문확정 전 = 매핑 전이거나 매핑 후 [주문확정]을 누르기 전인 주문 · 신규주문 = 주문확정 후 확인 대기 · 건수는 전체 주문 기준</div></div>';
+    tile('/orders/confirm','주문확정 전',st.pre,'#e8890c','미매핑 · 확정 대기')+tile('/orders/check','신규주문',st.nw,'#3b5bdb','주문확인 대기','new')+tile('/orders/check','주문확인',st.cf,'#12a150','출고 대기','confirmed')+tile('/orders/check','출고완료',st.sh,'#7048e8','운송장 입력 완료','shipped')+tile('/orders/check','출고확정',st.sf,'#1c7ed6','업체 운송장 송신 확인','shipfixed',1)+'</div><div class="hnote">주문확정 전 = 매핑 전이거나 매핑 후 [주문확정]을 누르기 전인 주문 · 신규주문 = 주문확정 후 확인 대기 · 건수는 전체 주문 기준</div></div>';
   /* 정산관리 */
   const sr={day:[t,t],yday:[addD(t,-1),addD(t,-1)],week:[mondayOf(t),t],month:[t.slice(0,8)+'01',t],all:[null,null]}[HD.set];
   const sa=agg(inR(rows,sr[0],sr[1])),sm=sa.margin,rate=sa.mpay?sm/sa.mpay*100:0;
@@ -3305,19 +3306,20 @@ function cellVal(o,p,s,seq,m){
 /* =====================================================================
    주문확인처리 (매핑된 주문만 조회 · 다운로드 · 주문상태 변경)
 ===================================================================== */
-const ST_NAME={new:'신규주문',confirmed:'주문확인',shipped:'출고완료'};
-const ordStatus=o=>o.shipped?'shipped':(o.confirmed?'confirmed':'new');
+const ST_NAME={new:'신규주문',confirmed:'주문확인',shipped:'출고완료',shipfixed:'출고확정'};
+const ordStatus=o=>o.shipped?(o.shipFixed?'shipfixed':'shipped'):(o.confirmed?'confirmed':'new');   /* 출고확정 = 출고완료 주문 중 [출고확정] 처리한 주문 */
 /* 주문상태 조회용: 기본 상태 외에 취소건(canceled) · 반품건(returned) */
 function stMatch(o,s){
   if(s==='canceled')return !!o.canceled;
   if(s==='returned')return !!(o.claim&&o.claim.req==='반품');
   return ordStatus(o)===s;
 }
-const CK_LBL={new:'신규주문',confirmed:'주문확인',shipped:'출고완료',canceled:'취소건',returned:'반품건'};
-function stTag(o){const s=ordStatus(o);return '<span class="tag'+(s==='confirmed'?' ok':s==='shipped'?' ship':'')+'">'+ST_NAME[s]+'</span>'+(o.canceled?' <span class="tag warn">취소</span>':'')+(o.claim&&o.claim.req==='반품'?' <span class="tag gray">반품</span>':'');}
+const CK_LBL={new:'신규주문',confirmed:'주문확인',shipped:'출고완료',shipfixed:'출고확정',canceled:'취소건',returned:'반품건'};
+function stTag(o){const s=ordStatus(o);return '<span class="tag'+(s==='confirmed'?' ok':s==='shipped'?' ship':s==='shipfixed'?' sfix':'')+'">'+ST_NAME[s]+'</span>'+(o.canceled?' <span class="tag warn">취소</span>':'')+(o.claim&&o.claim.req==='반품'?' <span class="tag gray">반품</span>':'');}
 function setOrdStatus(o,st,now){
   o.confirmed=st!=='new';o.confirmedAt=st==='new'?null:(o.confirmedAt||now);
   o.shipped=st==='shipped';o.shippedAt=st==='shipped'?now:null;
+  o.shipFixed=false;o.shipFixedAt=null;   /* 상태를 바꾸면 출고확정은 해제 */
 }
 /* 주문확인 상태인 주문에 운송장이 있으면 자동으로 출고완료로 넘깁니다. (옮겼으면 true) */
 function autoShip(o,now){
@@ -3381,7 +3383,7 @@ function pgCheck(){
   const lb=t=>'<span class="mute small" style="min-width:56px;display:inline-block">'+t+'</span>';
   return '<h1>주문확인처리</h1><p class="sub">매핑 후 [주문 확정 관리]에서 주문확정까지 끝난 주문만 조회됩니다. 조회 기준 일자는 수집일자·주문일자·출고일자 중에서 선택할 수 있습니다. (주문일자가 없는 주문은 주문일자 조회에서, 운송장이 없는 주문은 출고일자(송장등록일) 조회에서 제외됩니다) 주문을 체크해서 엑셀로 내려받거나 [주문상태변경]으로 주문확인 처리를 하세요.</p>'+
   '<div class="card">'+
-  '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value=""'+(d.status===''?' selected':'')+'>전체</option><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option><option value="canceled"'+(d.status==='canceled'?' selected':'')+'>취소건</option><option value="returned"'+(d.status==='returned'?' selected':'')+'>반품건</option></select>'+
+  '<div class="row" style="margin-bottom:10px">'+lb('주문상태')+'<select data-chg="ckf" data-k="status"><option value=""'+(d.status===''?' selected':'')+'>전체</option><option value="new"'+(d.status==='new'?' selected':'')+'>신규주문</option><option value="confirmed"'+(d.status==='confirmed'?' selected':'')+'>주문확인</option><option value="shipped"'+(d.status==='shipped'?' selected':'')+'>출고완료</option><option value="shipfixed"'+(d.status==='shipfixed'?' selected':'')+'>출고확정</option><option value="canceled"'+(d.status==='canceled'?' selected':'')+'>취소건</option><option value="returned"'+(d.status==='returned'?' selected':'')+'>반품건</option></select>'+
   '<span style="width:10px"></span>'+lb('쇼핑몰')+'<select data-chg="ckf" data-k="mall"><option value="">전체</option>'+malls.map(m=>'<option value="'+esc(m)+'"'+(d.mall===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(d.mall==='__none'?' selected':'')+'>(미지정)</option></select>'+
   '<span style="width:10px"></span>'+lb('매입처')+'<select data-chg="ckf" data-k="sup"><option value="">전체</option>'+S.suppliers.filter(x=>x.status!=='stopped').map(x=>'<option value="'+x.id+'"'+(String(d.sup)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select><span class="grow"></span><button class="btn sm" data-act="lgopen" title="사방넷에서 내려받은 이전 주문을 출고완료로 가져옵니다">사방넷 이전주문 가져오기</button></div>'+
   '<div class="row" style="margin-bottom:10px">'+lb('일자')+'<select data-chg="ckf" data-k="dtype" style="width:140px"><option value="collected"'+(d.dtype!=='order'&&d.dtype!=='shipped'?' selected':'')+'>수집일자</option><option value="order"'+(d.dtype==='order'?' selected':'')+'>주문일자</option><option value="shipped"'+(d.dtype==='shipped'?' selected':'')+'>출고일자</option></select>'+'<input type="date" id="ckfrom" data-chg="ckf" data-k="from" value="'+esc(d.from)+'"><span>~</span><input type="date" id="ckto" data-chg="ckf" data-k="to" value="'+esc(d.to)+'">'+
@@ -3415,9 +3417,9 @@ function drawCheckTable(){
   const box=$('#ktbl');if(!box)return;
   const kc=$('#kcnt');
   if(kc){
-    const cnt={new:0,confirmed:0,shipped:0,canceled:0,returned:0};
+    const cnt={new:0,confirmed:0,shipped:0,shipfixed:0,canceled:0,returned:0};
     ckList(true).forEach(o=>{if(!o.canceled)cnt[ordStatus(o)]++;if(o.canceled)cnt.canceled++;if(o.claim&&o.claim.req==='반품')cnt.returned++;});
-    kc.innerHTML='<div class="chips" style="display:inline-flex">'+['','new','confirmed','shipped','canceled','returned'].map(k=>'<button class="chip'+(CK.a.status===k?' on':'')+'" data-act="ckstat" data-s="'+k+'">'+(k?CK_LBL[k]:'전체')+' <b>'+(k?cnt[k]:cnt.new+cnt.confirmed+cnt.shipped).toLocaleString()+'</b></button>').join('')+'</div>';
+    kc.innerHTML='<div class="chips" style="display:inline-flex">'+['','new','confirmed','shipped','shipfixed','canceled','returned'].map(k=>'<button class="chip'+(CK.a.status===k?' on':'')+'" data-act="ckstat" data-s="'+k+'">'+(k?CK_LBL[k]:'전체')+' <b>'+(k?cnt[k]:cnt.new+cnt.confirmed+cnt.shipped+cnt.shipfixed).toLocaleString()+'</b></button>').join('')+'</div>';
   }
   const list=ckList();
   const pages=Math.max(1,Math.ceil(list.length/PAGE_O));if(CK.page>=pages)CK.page=pages-1;
@@ -3427,7 +3429,7 @@ function drawCheckTable(){
   const lgb=CK.a.unmapLg?'<div class="card" style="margin-bottom:8px;padding:8px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="small"><b>사방넷 이전 주문 중 미매핑 주문만 보는 중</b>'+((CK.a.lgFrom||CK.a.lgTo)?' · 주문일(없으면 수집일) '+esc(CK.a.lgFrom||'처음')+' ~ '+esc(CK.a.lgTo||'현재'):' · 전체 기간')+'</span><button class="btn sm" data-act="hlgoff">해제</button></div>':'';
   const bar=lgb+'<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(CK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="ksel">'+CK.sel.size+'</b>건</span><span class="grow"></span>'+
     (CK.a.status==='shipped'?'<button class="btn sm" data-act="dltpl">송장양식 설정</button><select class="selsm" data-chg="cktpl" title="고르면 다운로드가 그 쇼핑몰 송장업로드 양식으로 내려받아집니다"><option value="">송장업로드양식선택</option>'+Object.keys(dlTpls()).map(m=>'<option value="'+esc(m)+'"'+(CK.tpl===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select>':'')+
-    '<button class="btn sm ok" data-act="ckdl">선택 다운로드</button><button class="btn sm ok" data-act="ckdlall">전체 다운로드</button><button class="btn sm pri" data-act="ckstatus">주문상태변경</button>'+'<button class="btn sm danger" data-act="ckdel">선택 삭제</button></div>';
+    '<button class="btn sm ok" data-act="ckdl">선택 다운로드</button><button class="btn sm ok" data-act="ckdlall">전체 다운로드</button><button class="btn sm pri" data-act="ckstatus">주문상태변경</button>'+(CK.a.status==='shipfixed'?'<button class="btn sm" data-act="ckfix" title="체크한 출고확정 주문을 출고완료로 되돌립니다">출고확정 취소</button>':'<button class="btn sm" style="background:#1c7ed6;border-color:#1c7ed6;color:#fff" data-act="ckfix" title="체크한 출고완료 주문을 출고확정으로 넘깁니다">출고확정</button>')+'<button class="btn sm danger" data-act="ckdel">선택 삭제</button></div>';
   if(!list.length){box.innerHTML=bar+'<div class="card mute">조건에 맞는 매핑 주문이 없습니다. 수집일자·주문상태를 확인하거나, 아직 매핑하지 않았다면 <a href="#/orders/confirm">주문 확정 관리</a>에서 매핑해 주세요.</div>';return;}
   box.innerHTML=bar+
   checkTableHtml(cur,allSel)+
@@ -3534,8 +3536,23 @@ A.ckdel=async()=>{
   ids.forEach(id=>{CK.sel.delete(id);CF.sel.delete(id);});
   rebuild();toast(ids.length+'건을 삭제했습니다.');drawCheckTable();
 };
+/* 출고확정: 실제 운송장을 송신한 업체의 출고완료 주문을 체크하고 [출고확정]을 누르면 출고확정 주문으로 넘어갑니다. (출고확정 조회에서는 같은 버튼이 [출고확정 취소]) */
+A.ckfix=async()=>{
+  const undo=CK.a.status==='shipfixed',list=ckPicked();
+  if(!list.length){toast((undo?'출고확정을 취소할':'출고확정 처리할')+' 주문을 체크하세요.','err');return;}
+  const from=undo?'shipfixed':'shipped',todo=list.filter(o=>!o.canceled&&ordStatus(o)===from);
+  if(!todo.length){toast('선택한 주문 중 '+ST_NAME[from]+' 상태인 주문이 없습니다. '+(undo?'':'(출고완료 주문만 출고확정 처리할 수 있습니다)'),'err',5000);return;}
+  const skip=list.length-todo.length;
+  if(!confirm(todo.length.toLocaleString()+'건을 '+(undo?'출고확정 취소(→ 출고완료)':'출고확정 처리')+'할까요?'+(skip?'\n('+ST_NAME[from]+' 상태가 아닌 '+skip+'건은 제외됩니다)':'')))return;
+  const now=new Date().toISOString(),prev=todo.map(o=>[o.shipFixed,o.shipFixedAt]);
+  todo.forEach(o=>{o.shipFixed=!undo;o.shipFixedAt=undo?null:now;});
+  try{await putMany('orders',todo);}catch(e){todo.forEach((o,i)=>{o.shipFixed=prev[i][0];o.shipFixedAt=prev[i][1];});toast('저장 실패: '+e.message,'err',6000);return;}
+  CK.sel.clear();
+  toast(todo.length.toLocaleString()+'건을 '+(undo?'출고완료로 되돌렸습니다.':'출고확정 처리했습니다. [출고확정] 조회에서 확인하세요.')+(skip?' ('+ST_NAME[from]+' 상태가 아닌 '+skip+'건 제외)':''));
+  route();
+};
 A.ckstatus=()=>{
-  if(CK.a.status==='shipped'){toast('출고완료 주문은 주문상태를 변경할 수 없습니다. (주문확인 주문에 운송장이 입력되면 자동으로 출고완료가 됩니다)','err',6000);return;}
+  if(CK.a.status==='shipped'||CK.a.status==='shipfixed'){toast(ST_NAME[CK.a.status]+' 주문은 주문상태를 변경할 수 없습니다. '+(CK.a.status==='shipped'?'(주문확인 주문에 운송장이 입력되면 자동으로 출고완료가 됩니다)':'(출고확정 취소로 출고완료로 되돌릴 수 있습니다)'),'err',6000);return;}
   const all=ckList().length,sel=ckPicked().length;
   const defTo=CK.a.status==='confirmed'?'new':'confirmed';
   openModal('<h2>주문상태변경</h2>'+
@@ -3833,7 +3850,7 @@ async function ckDownload(list0,emptyMsg){
   const ct=tplName?dlTpls()[tplName]:null;
   const ss=false,esm=false;   /* 스마트스토어·ESM 양식은 [송장양식 설정]에서 등록한 뒤 선택해서 사용 */
   /* 양식을 고르지 않으면 주문목록에 보이는 모든 항목을 다 담아서 내려받습니다 */
-  const full=!ct&&(CK.a.status==='shipped'||list.some(o=>ordStatus(o)==='shipped'));
+  const full=!ct&&(CK.a.status==='shipped'||CK.a.status==='shipfixed'||list.some(o=>o.shipped));
   let rows;
   if(ct){
     rows=[ct.cols.map(c=>c.h)];
@@ -4526,11 +4543,11 @@ const CLM_FAULTS=['고객','매입처','쇼핑몰','지앤'];
 const claimBuy=o=>{const {p}=orderInfo(o);return p?homeBuyPrice(p,o,ordDayOf(o))*(nz(o.qty)||1):0;};
 /* 주문확인처리의 C/S 버튼 옆 버튼: 출고완료=클레임, 신규주문·주문확인=취소(누르면 빨간색 on/off) */
 function clmBtns(o){
-  if(ordStatus(o)==='shipped')return '<button class="btn cs clm'+(o.claim?' on':'')+'" data-act="claim" data-id="'+o.id+'" title="'+(o.claim?'클레임 접수됨 · 클릭하여 보기/수정':'클레임 접수')+'">클레임</button>';
+  if(o.shipped)return '<button class="btn cs clm'+(o.claim?' on':'')+'" data-act="claim" data-id="'+o.id+'" title="'+(o.claim?'클레임 접수됨 · 클릭하여 보기/수정':'클레임 접수')+'">클레임</button>';
   return '<button class="btn cs cancel'+(o.canceled?' on':'')+'" data-act="ocancel" data-id="'+o.id+'" title="'+(o.canceled?'취소됨 · 클릭하면 취소 해제':'클릭하면 취소 처리')+'">취소</button>';
 }
 A.ocancel=async el=>{
-  const o=M.ord.get(+el.dataset.id);if(!o||ordStatus(o)==='shipped')return;
+  const o=M.ord.get(+el.dataset.id);if(!o||o.shipped)return;
   const pv=[o.canceled,o.canceledAt];
   o.canceled=!o.canceled;o.canceledAt=o.canceled?new Date().toISOString():null;
   try{await putOne('orders',o);}
@@ -4556,7 +4573,7 @@ function clmLastShip(o,type,req,fault){
 }
 const clmBuyHtml=(req,o)=>{if(req!=='반품')return '<span class="mute">반품일 때만 표시됩니다</span>';const b=claimBuy(o);return b?'<b style="color:#e03131">-'+won(b)+'원</b>':'<b>0원</b> <span class="mute small">(매입가 없음)</span>';};
 A.claim=el=>{
-  const o=M.ord.get(+el.dataset.id);if(!o||ordStatus(o)!=='shipped')return;
+  const o=M.ord.get(+el.dataset.id);if(!o||!o.shipped)return;
   CLMO=o.id;
   const {p}=orderInfo(o),c=o.claim||{};
   CLM_AUTO=false;CLM_TOUCH=c.ship!==''&&c.ship!=null;   /* 이미 입력된 값이 있으면 자동 입력으로 덮어쓰지 않음 */
@@ -4613,7 +4630,7 @@ function csRedraw(){
   if(cur==='/cs/memos')drawMemos();else if(cur==='/cs/claims')drawClaims();else drawCheckTable();
 }
 /* ---- C/S관리 공통 ---- */
-const CS_STATUS=[['','전체'],['new','신규주문'],['confirmed','주문확인'],['shipped','출고완료'],['canceled','취소건'],['returned','반품건']];
+const CS_STATUS=[['','전체'],['new','신규주문'],['confirmed','주문확인'],['shipped','출고완료'],['shipfixed','출고확정'],['canceled','취소건'],['returned','반품건']];
 const csStatusOpts=cur=>CS_STATUS.map(x=>'<option value="'+x[0]+'"'+(cur===x[0]?' selected':'')+'>'+x[1]+'</option>').join('');
 const csMallOpts=cur=>{const ms=[...new Set([...mallList(),...S.orders.map(o=>o.mall).filter(Boolean)])];return '<option value="">전체</option>'+ms.map(m=>'<option value="'+esc(m)+'"'+(cur===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'<option value="__none"'+(cur==='__none'?' selected':'')+'>(미지정)</option>';};
 const csSupOpts=cur=>'<option value="">전체</option>'+S.suppliers.map(x=>'<option value="'+x.id+'"'+(String(cur)===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('');

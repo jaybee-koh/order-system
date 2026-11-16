@@ -813,20 +813,22 @@ function buildXlsx(rows,sheetName,opts){
   const ncol=Math.max(1,...rows.map(r=>r.length));
   const widths=new Array(ncol).fill(8);
   rows.forEach(r=>r.forEach((v,i)=>{const w=Math.min(50,strWidth(v==null?'':v)+2);if(w>widths[i])widths[i]=w;}));
+  if(opts&&opts.widths)opts.widths.forEach((w,i)=>{widths[i]=w;});
   let sd='';
   rows.forEach((r,ri)=>{
     sd+='<row r="'+(ri+1)+'">';
     for(let ci=0;ci<ncol;ci++){
-      const v=r[ci];if(v===''||v==null)continue;
-      const ref=colName(ci)+(ri+1),st=ri===0?' s="1"':'';
+      const v=r[ci],xs=opts&&opts.xf?opts.xf(ri,ci,v):0;
+      if(v===''||v==null){if(xs)sd+='<c r="'+colName(ci)+(ri+1)+'" s="'+xs+'"/>';continue;}   /* 서식만 있는 빈 칸(테두리) */
+      const ref=colName(ci)+(ri+1),st=opts&&opts.xf?(xs?' s="'+xs+'"':''):(ri===0?' s="1"':'');
       if(typeof v==='number'&&isFinite(v)&&!(opts&&opts.allText))sd+='<c r="'+ref+'"'+st+'><v>'+v+'</v></c>';
       else sd+='<c r="'+ref+'" t="inlineStr"'+st+'><is><t xml:space="preserve">'+xmlEsc(v)+'</t></is></c>';
     }
     sd+='</row>';
   });
   const cols='<cols>'+widths.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join('')+'</cols>';
-  const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0">'+(opts&&opts.noFreeze?'':'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>')+'</sheetView></sheetViews>'+cols+'<sheetData>'+sd+'</sheetData></worksheet>';
-  const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEEF2F7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView'+(opts&&opts.noGrid?' showGridLines="0"':'')+' workbookViewId="0">'+(opts&&opts.noFreeze?'':'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>')+'</sheetView></sheetViews>'+cols+'<sheetData>'+sd+'</sheetData>'+(opts&&opts.merges&&opts.merges.length?'<mergeCells count="'+opts.merges.length+'">'+opts.merges.map(m=>'<mergeCell ref="'+m+'"/>').join('')+'</mergeCells>':'')+'</worksheet>';
+  const styles=(opts&&opts.styles)||'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEEF2F7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   const sn=xmlEsc(String(sheetName||'Sheet1').replace(/[\[\]:*?\/\\]/g,'_').slice(0,31));
   const wb='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="'+sn+'" sheetId="1" r:id="rId1"/></sheets></workbook>';
   const wbrels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
@@ -4183,6 +4185,7 @@ function pgPurchase(){
   const d=purCalc(PM.month),parties=d.parties,n=d.n,c=d.c,daily=d.daily,dailyDep=d.dailyDep,dailyRef=d.dailyRef,last=d.last;
   const ms=new Set(d.months);ms.add(cur);ms.add(PM.month);
   const mo=[...ms].sort().reverse().map(m=>'<option value="'+m+'"'+(m===PM.month?' selected':'')+'>'+m.slice(0,4)+'년 '+(+m.slice(5))+'월</option>').join('');
+  const so='<option value="">업체 선택</option>'+parties.map(p=>'<option value="'+esc(p.key)+'"'+(p.key===PM.sup?' selected':'')+'>'+esc(p.name)+'</option>').join('');
   const nwk=last>=29?5:4,cell=v=>v?won(Math.round(v)):'<span class="mute">-</span>';
   const wk=[];for(let w=0;w<nwk;w++)wk.push(new Array(n).fill(0));
   daily.forEach((row,di)=>{const w=Math.min(nwk,Math.ceil((di+1)/7))-1;row.forEach((v,i)=>{wk[w][i]+=v;});});
@@ -4230,12 +4233,72 @@ function pgPurchase(){
     (gr?'<tr style="'+st+'"><td class="nw" colspan="2">CS환불 계</td>'+d.refund.map(v=>'<td class="num">'+cell(v)+'</td>').join('')+'<td class="num">'+cell(gr)+'</td><td></td><td></td></tr>':'')+
     '<tr style="'+st+'"><td class="nw" colspan="2">매입비중</td>'+tot.map(v=>'<td class="num">'+(gt?(v/gt*100).toFixed(1)+'%':'<span class="mute">-</span>')+'</td>').join('')+'<td class="num">'+(gt?'100.0%':'<span class="mute">-</span>')+'</td><td></td><td></td></tr></tbody>';
   return '<h1>매입현황</h1><p class="sub">월을 선택하면 매입처별 매입금액과 입금·잔액을 보여줍니다. 일별 매입금액은 직접 입력하며, 저장한 매입금액은 위 표의 주차별 금액·거래선 계에 반영됩니다. 누적매출·누적수익은 수집일자 기준 주문(취소 제외)에서 계산합니다. 주차는 1~7일=1주차, 8~14일=2주차, 15~21일=3주차, 22~28일=4주차, 29일~말일=5주차입니다. 입금액은 일별 매입금액 표의 입금액 줄에 입력하면 월 합계가 위 표에 반영됩니다. 반품 때 업체가 일부만 환불해 예치금으로 넣어준 금액은 일자 옆 [+]를 눌러 CS환불금액 줄에 입력하면 입금처럼 잔액에서 차감됩니다. 전월미입금액은 직접 입력할 수 있고, 비워 두면 전월 잔액이 자동으로 들어갑니다(회색 숫자).</p>'+
-  '<div class="card"><div class="row" style="margin-bottom:10px"><span class="mute small">조회 월</span><select data-chg="pmonth">'+mo+'</select><span class="mute small">잔액 = 거래선 계 − 입금액 − CS환불금액 + 전월미입금액</span></div>'+
+  '<div class="card"><div class="row" style="margin-bottom:10px"><span class="mute small">조회 월</span><select data-chg="pmonth">'+mo+'</select><select data-chg="pstlsup" title="정산서를 받을 업체">'+so+'</select><button class="btn sm pri" data-act="pStl" title="선택한 업체의 조회 월 정산서를 엑셀로 받습니다">정산서엑셀다운</button><span class="mute small">잔액 = 거래선 계 − 입금액 − CS환불금액 + 전월미입금액</span></div>'+
   '<div class="tblwrap" style="max-height:none"><table class="tbl">'+h1+b1+'</table></div></div>'+
   '<div class="card"><h3>일별 매입금액</h3><div class="tblwrap" style="max-height:none"><table class="tbl">'+h2+b2+'</table></div></div>';
 }
 ROUTES['/settle/purchase']=pgPurchase;
 C.pmonth=el=>{PM.month=el.value;PURED.clear();PURREF.clear();route();};
+/* 정산서 엑셀 — 선택한 업체 1곳의 조회 월 정산서를 내려받습니다.
+   구성: 제목 · 정산월/작성일 · 요약(전월미입금액·매입금·CS차감·입금액·잔액) · 일자별 내역(매입금/CS차감/입금액/잔액) · 합계
+   매입금 = 일별 매입금액, CS차감 = CS환불금액, 잔액 = 전월이월 + 매입금 − CS차감 − 입금액 */
+const STL_STYLES='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+  '<fonts count="5"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="18"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="맑은 고딕"/></font><font><sz val="10"/><color rgb="FF6B7280"/><name val="맑은 고딕"/></font></fonts>'+
+  '<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF3B5BDB"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF1F3F9"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF3BF"/><bgColor indexed="64"/></patternFill></fill></fills>'+
+  '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFC9CFDB"/></left><right style="thin"><color rgb="FFC9CFDB"/></right><top style="thin"><color rgb="FFC9CFDB"/></top><bottom style="thin"><color rgb="FFC9CFDB"/></bottom><diagonal/></border></borders>'+
+  '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="12">'+
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'+
+  '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'+
+  '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/>'+
+  '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'+
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'+
+  '<xf numFmtId="3" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>'+
+  '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'+
+  '<xf numFmtId="3" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>'+
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" indent="1"/></xf>'+
+  '<xf numFmtId="3" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>'+
+  '<xf numFmtId="0" fontId="1" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" indent="1"/></xf>'+
+  '<xf numFmtId="3" fontId="1" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>'+
+  '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+C.pstlsup=el=>{PM.sup=el.value;route();};
+A.pStl=el=>{
+  if(!PM.sup){toast('정산서를 받을 업체를 먼저 선택하세요.','err');return;}
+  const month=PM.month,d=purCalc(month),i=d.parties.findIndex(p=>p.key===PM.sup);
+  if(i<0){toast('선택한 업체를 찾을 수 없습니다.','err');return;}
+  const name=d.parties[i].name,ym=month.split('-').map(Number),R=v=>Math.round(v||0);
+  const rows=[],sty=[],merges=[];
+  const add=(r,s)=>{rows.push(r);sty.push(s||[]);return rows.length;};
+  /* 제목 · 정산월 · 작성일 */
+  merges.push('A'+add([name+' 정산서','','','',''],[1])+':E'+rows.length);
+  merges.push('A'+add(['정산월 : '+ym[0]+'년 '+ym[1]+'월'],[2])+':E'+rows.length);
+  merges.push('A'+add(['작성일 : '+localDate()],[2])+':E'+rows.length);
+  add([]);
+  /* 요약 */
+  add(['항목','금액(원)'],[3,3]);
+  add(['전월 미입금액',R(d.prevUn[i])],[8,9]);
+  add(['당월 매입금',R(d.c.buy[i])],[8,9]);
+  add(['CS차감',R(d.refund[i])],[8,9]);
+  add(['입금액',R(d.deposit[i])],[8,9]);
+  add(['잔액',R(d.bal[i])],[10,11]);
+  add([]);
+  /* 일자별 내역 */
+  add(['일자','매입금','CS차감','입금액','잔액'],[3,3,3,3,3]);
+  let run=d.prevUn[i];
+  add(['전월이월','','','',R(run)],[4,5,5,5,5]);
+  d.daily.forEach((row,di)=>{
+    const b=row[i],c=d.dailyRef[di][i],p=d.dailyDep[di][i];
+    if(!b&&!c&&!p)return;
+    const dt=month+'-'+pad(di+1);run+=b-c-p;
+    add([pad(ym[1])+'/'+pad(di+1)+' ('+HD_WD[pDate(dt).getDay()]+')',b?R(b):'',c?R(c):'',p?R(p):'',R(run)],[4,5,5,5,5]);
+  });
+  add(['합계',R(d.c.buy[i]),R(d.refund[i]),R(d.deposit[i]),R(d.bal[i])],[6,7,7,7,7]);
+  add([]);
+  merges.push('A'+add(['※ 잔액 = 전월이월 + 매입금 − CS차감 − 입금액'],[2])+':E'+rows.length);
+  merges.push('A'+add(['※ CS차감은 반품 등으로 업체가 환불해 주신 금액이며 입금액과 같이 잔액에서 차감됩니다.'],[2])+':E'+rows.length);
+  const blob=buildXlsx(rows,'정산서',{styles:STL_STYLES,xf:(ri,ci)=>(sty[ri]||[])[ci]||0,merges,widths:[18,18,18,18,18],noFreeze:true,noGrid:true});
+  download(blob,'정산서_'+name.replace(/[\\/:*?"<>|]/g,'_')+'_'+month.replace('-','')+'.xlsx');
+  toast(name+' '+ym[1]+'월 정산서를 다운로드했습니다.');
+};
 A.prAdd=el=>{PURREF.add(el.dataset.d);PURED.add(el.dataset.d);route();};
 A.prDel=el=>{PURREF.delete(el.dataset.d);route();};
 A.pdEdit=el=>{PURED.add(el.dataset.d);route();};

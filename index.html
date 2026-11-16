@@ -4131,10 +4131,10 @@ function purParties(){
 }
 function purCalc(month){
   const parties=purParties(),n=parties.length,ix=new Map(parties.map((p,i)=>[p.key,i]));
-  const zero=()=>({buy:new Array(n).fill(0),pay:new Array(n).fill(0),mar:new Array(n).fill(0)});
+  const zero=()=>({buy:new Array(n).fill(0),pay:new Array(n).fill(0),mar:new Array(n).fill(0),dpt:new Array(n).fill(0)});
   const bm=new Map(),dep=S.meta.purDeposit||{};
   const ym=month.split('-').map(Number),last=new Date(ym[0],ym[1],0).getDate();
-  const daily=Array.from({length:last},()=>new Array(n).fill(0));
+  const daily=Array.from({length:last},()=>new Array(n).fill(0)),dailyDep=Array.from({length:last},()=>new Array(n).fill(0));
   homeRows().forEach(r=>{
     if(!r.s)return;const i=ix.get(String(r.s.id));if(i==null)return;
     const rd=r.o.collectedDate||String(r.o.collectedAt||'').slice(0,10)||r.d,m=rd.slice(0,7);let c=bm.get(m);   /* 수집일자 기준 */if(!c){c=zero();bm.set(m,c);}
@@ -4147,6 +4147,13 @@ function purCalc(month){
     const dd=+dt.slice(8,10);if(m===month)saved.add(dt);
     Object.keys(pd[dt]||{}).forEach(k=>{const i=ix.get(k);if(i==null)return;const v=nz(pd[dt][k]);c.buy[i]+=v;if(m===month&&dd>=1&&dd<=last)daily[dd-1][i]+=v;});
   });
+  /* 입금액: 일별 매입금액 표의 입금액 줄에 직접 입력해 저장한 값 */
+  const pp=S.meta.purPay||{};
+  Object.keys(pp).forEach(dt=>{
+    const m=dt.slice(0,7);let c=bm.get(m);if(!c){c=zero();bm.set(m,c);}
+    const dd=+dt.slice(8,10);
+    Object.keys(pp[dt]||{}).forEach(k=>{const i=ix.get(k);if(i==null)return;const v=nz(pp[dt][k]);c.dpt[i]+=v;if(m===month&&dd>=1&&dd<=last)dailyDep[dd-1][i]+=v;});
+  });
   const months=[...bm.keys(),...Object.keys(dep)].filter(Boolean).sort();
   const first=months.length&&months[0]<month?months[0]:month;
   let prev=new Array(n).fill(0),info=null;
@@ -4154,18 +4161,18 @@ function purCalc(month){
     const c=bm.get(m)||zero(),dm=dep[m]||{};
     const prevUn=[],deposit=[],bal=[],ovr=[];
     parties.forEach((p,i)=>{
-      const e=dm[p.key]||{},o=e.prev!=null?Number(e.prev):null,pu=o!=null?o:prev[i],dp=nz(e.dep);   /* 전월미입금액: 직접 입력이 없으면 전월 잔액을 이어받음 */
+      const e=dm[p.key]||{},o=e.prev!=null?Number(e.prev):null,pu=o!=null?o:prev[i],dp=c.dpt[i];   /* 전월미입금액: 직접 입력이 없으면 전월 잔액을 이어받음 */
       prevUn.push(pu);deposit.push(dp);bal.push(c.buy[i]-dp+pu);ovr.push(o!=null);
     });
     prev=bal;
-    if(m===month)info={parties,n,c,daily,last,prevUn,deposit,bal,ovr,months,saved};
+    if(m===month)info={parties,n,c,daily,dailyDep,last,prevUn,deposit,bal,ovr,months,saved};
   }
   return info;
 }
 function pgPurchase(){
   const cur=localDate().slice(0,7);
   if(!PM.month)PM.month=cur;
-  const d=purCalc(PM.month),parties=d.parties,n=d.n,c=d.c,daily=d.daily,last=d.last;
+  const d=purCalc(PM.month),parties=d.parties,n=d.n,c=d.c,daily=d.daily,dailyDep=d.dailyDep,last=d.last;
   const ms=new Set(d.months);ms.add(cur);ms.add(PM.month);
   const mo=[...ms].sort().reverse().map(m=>'<option value="'+m+'"'+(m===PM.month?' selected':'')+'>'+m.slice(0,4)+'년 '+(+m.slice(5))+'월</option>').join('');
   const nwk=last>=29?5:4,cell=v=>v?won(Math.round(v)):'<span class="mute">-</span>';
@@ -4181,30 +4188,34 @@ function pgPurchase(){
   let b1='<tbody>'+parties.map((p,i)=>{
     let r='<tr><td class="nw"><b>'+esc(p.name)+'</b></td>';
     for(let w=0;w<nwk;w++)r+='<td class="num">'+cell(wk[w][i])+'</td>';
-    return r+'<td class="num"><b>'+cell(tot[i])+'</b></td><td class="num">'+cell(c.pay[i])+'</td><td class="num">'+cell(c.mar[i])+'</td><td class="num">'+inp(p.key,'dep',d.deposit[i],false)+'</td><td class="num">'+inp(p.key,'prev',d.prevUn[i],!d.ovr[i])+'</td><td class="num">'+balHtml(d.bal[i])+'</td></tr>';
+    return r+'<td class="num"><b>'+cell(tot[i])+'</b></td><td class="num">'+cell(c.pay[i])+'</td><td class="num">'+cell(c.mar[i])+'</td><td class="num">'+cell(d.deposit[i])+'</td><td class="num">'+inp(p.key,'prev',d.prevUn[i],!d.ovr[i])+'</td><td class="num">'+balHtml(d.bal[i])+'</td></tr>';
   }).join('');
   let tr='<tr style="background:#f1f3f9;font-weight:700"><td class="nw">합계</td>';
   for(let w=0;w<nwk;w++)tr+='<td class="num">'+cell(sum(wk[w]))+'</td>';
   tr+='<td class="num">'+cell(sum(tot))+'</td><td class="num">'+cell(sum(c.pay))+'</td><td class="num">'+cell(sum(c.mar))+'</td><td class="num">'+cell(sum(d.deposit))+'</td><td class="num">'+cell(sum(d.prevUn))+'</td><td class="num">'+balHtml(sum(d.bal))+'</td></tr>';
   b1+=tr+'</tbody>';
-  /* 일별 매입금액: 직접 입력 → 저장하면 입력칸이 사라지고 [수정]으로 다시 고칠 수 있음 */
+  /* 일별 매입금액: 일자마다 2줄(매입금액 / 입금액). 직접 입력 → 저장하면 입력칸이 사라지고 [수정]으로 다시 고칠 수 있음 */
   const today=localDate(),isCur=PM.month===cur,future=PM.month>cur,td=+today.slice(8,10);
-  let h2='<thead><tr><th>일자</th>'+parties.map(p=>'<th class="num">'+esc(p.name)+'</th>').join('')+'<th class="num">계</th><th class="num">누적매입</th><th></th></tr></thead>';
-  let run=0;
+  let h2='<thead><tr><th>일자</th><th>구분</th>'+parties.map(p=>'<th class="num">'+esc(p.name)+'</th>').join('')+'<th class="num">계</th><th class="num">누적</th><th></th></tr></thead>';
+  let run=0,runD=0;
+  const dash='<span class="mute">-</span>',inpD=(attr,dt,k,v)=>'<input type="text" inputmode="numeric" style="width:88px;text-align:right" '+attr+'="'+dt+'" data-k="'+esc(k)+'" value="'+(v?won(v):'')+'" placeholder="0">';
   let b2='<tbody>'+daily.map((row,di)=>{
-    const day=di+1,fut=future||(isCur&&day>td),dt=PM.month+'-'+pad(day),wd=HD_WD[pDate(dt).getDay()],sm=sum(row);
+    const day=di+1,fut=future||(isCur&&day>td),dt=PM.month+'-'+pad(day),wd=HD_WD[pDate(dt).getDay()],sm=sum(row),rowD=dailyDep[di],smD=sum(rowD);
     const isSaved=d.saved.has(dt),editing=!fut&&(!isSaved||PURED.has(dt));
-    if(isSaved)run+=sm;
-    const dash='<span class="mute">-</span>';
-    const cells=row.map((v,i)=>'<td class="num">'+(fut?dash:editing?'<input type="text" inputmode="numeric" style="width:88px;text-align:right" data-pd="'+dt+'" data-k="'+esc(parties[i].key)+'" value="'+(v?won(v):'')+'" placeholder="0">':cell(v))+'</td>').join('');
-    const act=fut?'':editing?'<button class="btn sm pri" data-act="pdSave" data-d="'+dt+'">저장</button>'+(isSaved?' <button class="btn sm" data-act="pdCancel" data-d="'+dt+'">취소</button>':''):'<button class="btn sm" data-act="pdEdit" data-d="'+dt+'">수정</button>';
-    return '<tr'+(isCur&&day===td?' style="background:#f4f7ff"':'')+'><td class="nw">'+pad(+PM.month.slice(5))+'/'+pad(day)+' <span class="mute small">('+wd+')</span></td>'+cells+
-      '<td class="num"><b>'+(isSaved?cell(sm):dash)+'</b></td><td class="num">'+(isSaved?cell(run):'')+'</td><td class="nw">'+act+'</td></tr>';
+    if(isSaved){run+=sm;runD+=smD;}
+    const bg=isCur&&day===td?' style="background:#f4f7ff"':'';
+    const cells=(arr,attr)=>arr.map((v,i)=>'<td class="num">'+(fut?dash:editing?inpD(attr,dt,parties[i].key,v):cell(v))+'</td>').join('');
+    const act=fut?'':editing?'<button class="btn sm pri" data-act="pdSave" data-d="'+dt+'">저장</button>'+(isSaved?'<br><button class="btn sm" style="margin-top:4px" data-act="pdCancel" data-d="'+dt+'">취소</button>':''):'<button class="btn sm" data-act="pdEdit" data-d="'+dt+'">수정</button>';
+    return '<tr'+bg+'><td class="nw" rowspan="2">'+pad(+PM.month.slice(5))+'/'+pad(day)+' <span class="mute small">('+wd+')</span></td><td class="nw">매입금액</td>'+cells(row,'data-pd')+
+      '<td class="num"><b>'+(isSaved?cell(sm):dash)+'</b></td><td class="num">'+(isSaved?cell(run):'')+'</td><td class="nw" rowspan="2">'+act+'</td></tr>'+
+      '<tr'+bg+'><td class="nw">입금액</td>'+cells(rowD,'data-pp')+
+      '<td class="num"><b>'+(isSaved?cell(smD):dash)+'</b></td><td class="num">'+(isSaved?cell(runD):'')+'</td></tr>';
   }).join('');
-  const gt=sum(tot),st='background:#f1f3f9;font-weight:700';
-  b2+='<tr style="'+st+'"><td class="nw">거래선 계</td>'+tot.map(v=>'<td class="num">'+cell(v)+'</td>').join('')+'<td class="num">'+cell(gt)+'</td><td></td><td></td></tr>'+
-    '<tr style="'+st+'"><td class="nw">매입비중</td>'+tot.map(v=>'<td class="num">'+(gt?(v/gt*100).toFixed(1)+'%':'<span class="mute">-</span>')+'</td>').join('')+'<td class="num">'+(gt?'100.0%':'<span class="mute">-</span>')+'</td><td></td><td></td></tr></tbody>';
-  return '<h1>매입현황</h1><p class="sub">월을 선택하면 매입처별 매입금액과 입금·잔액을 보여줍니다. 일별 매입금액은 직접 입력하며, 저장한 값이 위 표의 주차별 금액과 거래선 계에 반영됩니다. 누적매출·누적수익은 수집일자 기준 주문(취소 제외)에서 계산합니다. 주차는 1~7일=1주차, 8~14일=2주차, 15~21일=3주차, 22~28일=4주차, 29일~말일=5주차입니다. 입금액과 전월미입금액은 직접 입력하며, 전월미입금액을 비워 두면 전월 잔액이 자동으로 들어갑니다(회색 숫자).</p>'+
+  const gt=sum(tot),st='background:#f1f3f9;font-weight:700',gd=sum(d.deposit);
+  b2+='<tr style="'+st+'"><td class="nw" colspan="2">거래선 계</td>'+tot.map(v=>'<td class="num">'+cell(v)+'</td>').join('')+'<td class="num">'+cell(gt)+'</td><td></td><td></td></tr>'+
+    '<tr style="'+st+'"><td class="nw" colspan="2">입금 계</td>'+d.deposit.map(v=>'<td class="num">'+cell(v)+'</td>').join('')+'<td class="num">'+cell(gd)+'</td><td></td><td></td></tr>'+
+    '<tr style="'+st+'"><td class="nw" colspan="2">매입비중</td>'+tot.map(v=>'<td class="num">'+(gt?(v/gt*100).toFixed(1)+'%':'<span class="mute">-</span>')+'</td>').join('')+'<td class="num">'+(gt?'100.0%':'<span class="mute">-</span>')+'</td><td></td><td></td></tr></tbody>';
+  return '<h1>매입현황</h1><p class="sub">월을 선택하면 매입처별 매입금액과 입금·잔액을 보여줍니다. 일별 매입금액은 직접 입력하며, 저장한 매입금액은 위 표의 주차별 금액·거래선 계에 반영됩니다. 누적매출·누적수익은 수집일자 기준 주문(취소 제외)에서 계산합니다. 주차는 1~7일=1주차, 8~14일=2주차, 15~21일=3주차, 22~28일=4주차, 29일~말일=5주차입니다. 입금액은 일별 매입금액 표의 입금액 줄에 입력하면 월 합계가 위 표에 반영됩니다. 전월미입금액은 직접 입력할 수 있고, 비워 두면 전월 잔액이 자동으로 들어갑니다(회색 숫자).</p>'+
   '<div class="card"><div class="row" style="margin-bottom:10px"><span class="mute small">조회 월</span><select data-chg="pmonth">'+mo+'</select><span class="mute small">잔액 = 거래선 계 − 입금액 + 전월미입금액</span></div>'+
   '<div class="tblwrap" style="max-height:none"><table class="tbl">'+h1+b1+'</table></div></div>'+
   '<div class="card"><h3>일별 매입금액</h3><div class="tblwrap" style="max-height:none"><table class="tbl">'+h2+b2+'</table></div></div>';
@@ -4214,15 +4225,20 @@ C.pmonth=el=>{PM.month=el.value;PURED.clear();route();};
 A.pdEdit=el=>{PURED.add(el.dataset.d);route();};
 A.pdCancel=el=>{PURED.delete(el.dataset.d);route();};
 A.pdSave=async el=>{
-  const dt=el.dataset.d,rec={};
-  for(const i of $$('input[data-pd="'+dt+'"]')){
-    const raw=i.value.replace(/[,원\s]/g,'');if(raw==='')continue;
-    const v=Number(raw);if(!isFinite(v)||v<0){toast('매입금액은 0 이상의 숫자로 입력하세요.','err');return;}
-    if(v>0)rec[i.dataset.k]=v;
-  }
-  const all=JSON.parse(JSON.stringify(S.meta.purDaily||{}));
-  all[dt]=rec;   /* 비어 있어도 저장 = 그날 매입 없음으로 입력 완료 */
-  try{await setMeta('purDaily',all);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
+  const dt=el.dataset.d,rec={},recD={};
+  const read=(sel,out)=>{
+    for(const i of $$(sel)){
+      const raw=i.value.replace(/[,원\s]/g,'');if(raw==='')continue;
+      const v=Number(raw);if(!isFinite(v)||v<0){toast('금액은 0 이상의 숫자로 입력하세요.','err');return false;}
+      if(v>0)out[i.dataset.k]=v;
+    }
+    return true;
+  };
+  if(!read('input[data-pd="'+dt+'"]',rec)||!read('input[data-pp="'+dt+'"]',recD))return;
+  const all=JSON.parse(JSON.stringify(S.meta.purDaily||{})),allD=JSON.parse(JSON.stringify(S.meta.purPay||{}));
+  all[dt]=rec;   /* 비어 있어도 저장 = 그날 입력 완료 */
+  if(Object.keys(recD).length)allD[dt]=recD;else delete allD[dt];
+  try{await setMeta('purDaily',all);await setMeta('purPay',allD);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
   PURED.delete(dt);route();
 };
 C.pdep=async el=>{

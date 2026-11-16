@@ -4115,7 +4115,7 @@ A.btsave=async()=>{
 ===================================================================== */
 ICONS['p_정산관리']=IC('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 14.5h2"/>');
 const PUR_BASE=['아이젠트','신비인터내셔널','로움랩','더원글로벌','썬라이즈','식품백억','신흥유통','주영씨푸드','마스터유통'];
-const PM={month:''};
+const PM={month:''},PURED=new Set();   /* PURED: 수정 중인 일자 */
 const purNm=x=>norm(String(x||'').replace(/\(주\)|㈜|주식회사/g,''));
 const purMonthAdd=(m,k)=>{const a=m.split('-').map(Number),d=new Date(a[0],a[1]-1+k,1);return d.getFullYear()+'-'+pad(d.getMonth()+1);};
 function purParties(){
@@ -4138,8 +4138,14 @@ function purCalc(month){
   homeRows().forEach(r=>{
     if(!r.s)return;const i=ix.get(String(r.s.id));if(i==null)return;
     const rd=r.o.collectedDate||String(r.o.collectedAt||'').slice(0,10)||r.d,m=rd.slice(0,7);let c=bm.get(m);   /* 수집일자 기준 */if(!c){c=zero();bm.set(m,c);}
-    c.buy[i]+=r.buy;c.pay[i]+=r.pay;c.mar[i]+=r.margin;
-    if(m===month){const dd=+rd.slice(8,10);if(dd>=1&&dd<=last)daily[dd-1][i]+=r.buy;}
+    c.pay[i]+=r.pay;c.mar[i]+=r.margin;
+  });
+  /* 매입금액: 일별 매입금액에 직접 입력해 저장한 값 */
+  const pd=S.meta.purDaily||{},saved=new Set();
+  Object.keys(pd).forEach(dt=>{
+    const m=dt.slice(0,7);let c=bm.get(m);if(!c){c=zero();bm.set(m,c);}
+    const dd=+dt.slice(8,10);if(m===month)saved.add(dt);
+    Object.keys(pd[dt]||{}).forEach(k=>{const i=ix.get(k);if(i==null)return;const v=nz(pd[dt][k]);c.buy[i]+=v;if(m===month&&dd>=1&&dd<=last)daily[dd-1][i]+=v;});
   });
   const months=[...bm.keys(),...Object.keys(dep)].filter(Boolean).sort();
   const first=months.length&&months[0]<month?months[0]:month;
@@ -4152,7 +4158,7 @@ function purCalc(month){
       prevUn.push(pu);deposit.push(dp);bal.push(c.buy[i]-dp+pu);ovr.push(o!=null);
     });
     prev=bal;
-    if(m===month)info={parties,n,c,daily,last,prevUn,deposit,bal,ovr,months};
+    if(m===month)info={parties,n,c,daily,last,prevUn,deposit,bal,ovr,months,saved};
   }
   return info;
 }
@@ -4181,27 +4187,44 @@ function pgPurchase(){
   for(let w=0;w<nwk;w++)tr+='<td class="num">'+cell(sum(wk[w]))+'</td>';
   tr+='<td class="num">'+cell(sum(tot))+'</td><td class="num">'+cell(sum(c.pay))+'</td><td class="num">'+cell(sum(c.mar))+'</td><td class="num">'+cell(sum(d.deposit))+'</td><td class="num">'+cell(sum(d.prevUn))+'</td><td class="num">'+balHtml(sum(d.bal))+'</td></tr>';
   b1+=tr+'</tbody>';
-  /* 일별 매입금액 */
+  /* 일별 매입금액: 직접 입력 → 저장하면 입력칸이 사라지고 [수정]으로 다시 고칠 수 있음 */
   const today=localDate(),isCur=PM.month===cur,future=PM.month>cur,td=+today.slice(8,10);
-  let h2='<thead><tr><th>일자</th>'+parties.map(p=>'<th class="num">'+esc(p.name)+'</th>').join('')+'<th class="num">계</th><th class="num">누적매입</th></tr></thead>';
+  let h2='<thead><tr><th>일자</th>'+parties.map(p=>'<th class="num">'+esc(p.name)+'</th>').join('')+'<th class="num">계</th><th class="num">누적매입</th><th></th></tr></thead>';
   let run=0;
   let b2='<tbody>'+daily.map((row,di)=>{
     const day=di+1,fut=future||(isCur&&day>td),dt=PM.month+'-'+pad(day),wd=HD_WD[pDate(dt).getDay()],sm=sum(row);
-    if(!fut)run+=sm;
-    return '<tr'+(isCur&&day===td?' style="background:#f4f7ff"':'')+'><td class="nw">'+pad(+PM.month.slice(5))+'/'+pad(day)+' <span class="mute small">('+wd+')</span></td>'+
-      row.map(v=>'<td class="num">'+(fut?'<span class="mute">-</span>':cell(v))+'</td>').join('')+
-      '<td class="num"><b>'+(fut?'<span class="mute">-</span>':cell(sm))+'</b></td><td class="num">'+(fut?'':cell(run))+'</td></tr>';
+    const isSaved=d.saved.has(dt),editing=!fut&&(!isSaved||PURED.has(dt));
+    if(isSaved)run+=sm;
+    const dash='<span class="mute">-</span>';
+    const cells=row.map((v,i)=>'<td class="num">'+(fut?dash:editing?'<input type="text" inputmode="numeric" style="width:88px;text-align:right" data-pd="'+dt+'" data-k="'+esc(parties[i].key)+'" value="'+(v?won(v):'')+'" placeholder="0">':cell(v))+'</td>').join('');
+    const act=fut?'':editing?'<button class="btn sm pri" data-act="pdSave" data-d="'+dt+'">저장</button>'+(isSaved?' <button class="btn sm" data-act="pdCancel" data-d="'+dt+'">취소</button>':''):'<button class="btn sm" data-act="pdEdit" data-d="'+dt+'">수정</button>';
+    return '<tr'+(isCur&&day===td?' style="background:#f4f7ff"':'')+'><td class="nw">'+pad(+PM.month.slice(5))+'/'+pad(day)+' <span class="mute small">('+wd+')</span></td>'+cells+
+      '<td class="num"><b>'+(isSaved?cell(sm):dash)+'</b></td><td class="num">'+(isSaved?cell(run):'')+'</td><td class="nw">'+act+'</td></tr>';
   }).join('');
   const gt=sum(tot),st='background:#f1f3f9;font-weight:700';
-  b2+='<tr style="'+st+'"><td class="nw">거래선 계</td>'+tot.map(v=>'<td class="num">'+cell(v)+'</td>').join('')+'<td class="num">'+cell(gt)+'</td><td></td></tr>'+
-    '<tr style="'+st+'"><td class="nw">매입비중</td>'+tot.map(v=>'<td class="num">'+(gt?(v/gt*100).toFixed(1)+'%':'<span class="mute">-</span>')+'</td>').join('')+'<td class="num">'+(gt?'100.0%':'<span class="mute">-</span>')+'</td><td></td></tr></tbody>';
-  return '<h1>매입현황</h1><p class="sub">월을 선택하면 매입처별 매입금액과 입금·잔액을 보여줍니다. 집계 기준은 수집일자(취소 주문 제외)이며 매핑된 주문의 매입가×수량입니다. 주차는 1~7일=1주차, 8~14일=2주차, 15~21일=3주차, 22~28일=4주차, 29일~말일=5주차입니다. 입금액과 전월미입금액은 직접 입력하며, 전월미입금액을 비워 두면 전월 잔액이 자동으로 들어갑니다(회색 숫자).</p>'+
+  b2+='<tr style="'+st+'"><td class="nw">거래선 계</td>'+tot.map(v=>'<td class="num">'+cell(v)+'</td>').join('')+'<td class="num">'+cell(gt)+'</td><td></td><td></td></tr>'+
+    '<tr style="'+st+'"><td class="nw">매입비중</td>'+tot.map(v=>'<td class="num">'+(gt?(v/gt*100).toFixed(1)+'%':'<span class="mute">-</span>')+'</td>').join('')+'<td class="num">'+(gt?'100.0%':'<span class="mute">-</span>')+'</td><td></td><td></td></tr></tbody>';
+  return '<h1>매입현황</h1><p class="sub">월을 선택하면 매입처별 매입금액과 입금·잔액을 보여줍니다. 일별 매입금액은 직접 입력하며, 저장한 값이 위 표의 주차별 금액과 거래선 계에 반영됩니다. 누적매출·누적수익은 수집일자 기준 주문(취소 제외)에서 계산합니다. 주차는 1~7일=1주차, 8~14일=2주차, 15~21일=3주차, 22~28일=4주차, 29일~말일=5주차입니다. 입금액과 전월미입금액은 직접 입력하며, 전월미입금액을 비워 두면 전월 잔액이 자동으로 들어갑니다(회색 숫자).</p>'+
   '<div class="card"><div class="row" style="margin-bottom:10px"><span class="mute small">조회 월</span><select data-chg="pmonth">'+mo+'</select><span class="mute small">잔액 = 거래선 계 − 입금액 + 전월미입금액</span></div>'+
   '<div class="tblwrap" style="max-height:none"><table class="tbl">'+h1+b1+'</table></div></div>'+
   '<div class="card"><h3>일별 매입금액</h3><div class="tblwrap" style="max-height:none"><table class="tbl">'+h2+b2+'</table></div></div>';
 }
 ROUTES['/settle/purchase']=pgPurchase;
-C.pmonth=el=>{PM.month=el.value;route();};
+C.pmonth=el=>{PM.month=el.value;PURED.clear();route();};
+A.pdEdit=el=>{PURED.add(el.dataset.d);route();};
+A.pdCancel=el=>{PURED.delete(el.dataset.d);route();};
+A.pdSave=async el=>{
+  const dt=el.dataset.d,rec={};
+  for(const i of $$('input[data-pd="'+dt+'"]')){
+    const raw=i.value.replace(/[,원\s]/g,'');if(raw==='')continue;
+    const v=Number(raw);if(!isFinite(v)||v<0){toast('매입금액은 0 이상의 숫자로 입력하세요.','err');return;}
+    if(v>0)rec[i.dataset.k]=v;
+  }
+  const all=JSON.parse(JSON.stringify(S.meta.purDaily||{}));
+  all[dt]=rec;   /* 비어 있어도 저장 = 그날 매입 없음으로 입력 완료 */
+  try{await setMeta('purDaily',all);}catch(e){toast('저장 실패: '+e.message,'err',6000);return;}
+  PURED.delete(dt);route();
+};
 C.pdep=async el=>{
   const m=PM.month,k=el.dataset.k,f=el.dataset.f,raw=el.value.replace(/[,원\s]/g,'');
   if(raw!==''&&!isFinite(Number(raw))){toast('숫자로 입력하세요.','err');route();return;}

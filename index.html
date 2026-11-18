@@ -3498,19 +3498,20 @@ A.trkpop=(el,e)=>{
   if(!win)toast('팝업이 차단되었습니다. 브라우저에서 이 페이지의 팝업을 허용해 주세요.','err',5000);
   else win.focus();
 };
-/* 출고완료 주문의 택배사/운송장번호 수정 (택배사·운송장 옆 [수정] 버튼) */
+/* 출고완료 주문 수정 (택배사/운송장번호 옆 [수정] 버튼): 쇼핑몰 · 택배사 · 운송장번호 */
 let TRKE=null;
 A.trkedit=el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;
   TRKE=o.id;
-  const cur=o.carrier||'';
+  const cur=o.carrier||'',cm=o.mall||'';
   const opts=carrierList().slice();if(cur&&!opts.includes(cur))opts.push(cur);
-  openModal('<h2>택배사 / 운송장번호 수정</h2>'+
-    '<div class="card" style="background:#f7f8fb;box-shadow:none;margin-bottom:0;padding:14px 16px"><div class="small mute">'+esc(o.mall||'')+(o.mall?' · ':'')+esc(o.orderNo)+'</div><div style="margin-top:2px"><b>'+esc(o.receiver)+'</b></div></div>'+
-    '<label class="f">택배사</label><select id="trke-c" data-chg="trkecar"><option value="">선택</option>'+opts.map(x=>'<option value="'+esc(x)+'"'+(x===cur?' selected':'')+'>'+esc(x)+'</option>').join('')+'<option value="__add">+ 택배사 직접 추가</option></select>'+
-    '<label class="f">운송장번호</label><input id="trke-n" type="text" value="'+esc(o.trackingNo||'')+'" placeholder="운송장번호">'+
+  const malls=mallList().slice();if(cm&&!malls.includes(cm))malls.push(cm);
+  openModal('<h2>출고완료 주문 수정</h2>'+
+    '<div class="card" style="background:#f7f8fb;box-shadow:none;margin-bottom:0;padding:14px 16px"><div class="small mute">'+esc(o.orderNo)+'</div><div style="margin-top:2px"><b>'+esc(o.receiver)+'</b></div></div>'+
+    '<label class="f">쇼핑몰</label><select id="trke-m" style="width:100%"><option value=""'+(cm?'':' selected')+'>(미지정)</option>'+malls.map(x=>'<option value="'+esc(x)+'"'+(x===cm?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'+
+    '<label class="f">택배사</label><select id="trke-c" data-chg="trkecar" style="width:100%"><option value="">선택</option>'+opts.map(x=>'<option value="'+esc(x)+'"'+(x===cur?' selected':'')+'>'+esc(x)+'</option>').join('')+'<option value="__add">+ 택배사 직접 추가</option></select>'+
+    '<label class="f">운송장번호</label><input id="trke-n" type="text" value="'+esc(o.trackingNo||'')+'" placeholder="운송장번호" style="width:100%">'+
     '<div class="foot"><button class="btn" data-act="close">닫기</button><button class="btn pri" data-act="trkesave">저장</button></div>');
-  const n=$('#trke-n');if(n){n.focus();n.select();}
 };
 C.trkecar=el=>{
   if(el.value!=='__add')return;
@@ -3523,14 +3524,17 @@ C.trkecar=el=>{
 };
 A.trkesave=async()=>{
   const o=M.ord.get(TRKE);if(!o)return;
+  const mall=($('#trke-m').value||'').trim();
   const carrier=($('#trke-c').value||'').trim();
   const no=String($('#trke-n').value||'').replace(/[\s-]/g,'');
-  if(!carrier||!no){toast('택배사와 운송장번호를 모두 입력해 주세요.','err');return;}
-  const prev=[o.carrier,o.trackingNo,o.trackedAt];
-  o.carrier=carrier;o.trackingNo=no;o.trackedAt=new Date().toISOString();
+  if(!!carrier!==!!no){toast('택배사와 운송장번호는 함께 입력해 주세요.','err');return;}
+  if(!no&&o.trackingNo){toast('기존 운송장번호를 비울 수 없습니다.','err');return;}
+  const prev=[o.mall,o.carrier,o.trackingNo,o.trackedAt];
+  o.mall=mall;
+  if(no&&(carrier!==o.carrier||no!==o.trackingNo)){o.carrier=carrier;o.trackingNo=no;o.trackedAt=new Date().toISOString();}
   try{await putOne('orders',o);}
-  catch(e){[o.carrier,o.trackingNo,o.trackedAt]=prev;toast('저장 실패: '+e.message,'err',6000);return;}
-  closeModal();TRKE=null;toast('택배사/운송장번호를 수정했습니다.');drawCheckTable();
+  catch(e){[o.mall,o.carrier,o.trackingNo,o.trackedAt]=prev;toast('저장 실패: '+e.message,'err',6000);return;}
+  closeModal();TRKE=null;toast('수정했습니다.');drawCheckTable();
 };
 A.cs=el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;

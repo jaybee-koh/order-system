@@ -3433,7 +3433,7 @@ function checkTableHtml(cur,allSel){
     {i:10,t:'<span style="color:#f76707">수집옵션명</span><br><span style="color:#1c7ed6">확정옵션명</span>',cell:(o,x)=>'<td><div style="color:#f76707;font-weight:600;min-height:1.3em">'+(v('itemOption')?esc(o.itemOption||''):'')+'</div><div style="color:#1c7ed6;font-weight:600;min-height:1.3em">'+(x.p?esc(x.p.option||''):'')+'</div>'+lgMapBtn(o,x)+'</td>'},
     {i:11,show:v('qty'),t:'수량',c:'num',cell:o=>'<td class="num">'+o.qty+'</td>'},
     {i:12,t:'거래선',cell:(o,x)=>'<td>'+(x.s?'<b>'+esc(x.s.name)+'</b>':'<b style="color:#868e96" title="사방넷 거래선 (상품 매핑 전)">'+esc(o.legacySup||'')+'</b>')+'</td>'},
-    {i:13,t:'택배사 / 운송장번호',cell:o=>'<td>'+(o.trackingNo?'<b>'+esc(o.carrier||'')+'</b><div class="sm2 brk">'+(o.shipped?'<a class="trk" data-act="trkpop" data-id="'+o.id+'" title="클릭하면 '+esc(o.carrier||'택배사')+' 배송조회 팝업이 열립니다">'+esc(o.trackingNo)+'</a>':esc(o.trackingNo))+'</div>':'')+'</td>'}
+    {i:13,t:'택배사 / 운송장번호',cell:o=>'<td>'+(o.trackingNo?'<b>'+esc(o.carrier||'')+'</b><div class="sm2 brk">'+(o.shipped?'<a class="trk" data-act="trkpop" data-id="'+o.id+'" title="클릭하면 '+esc(o.carrier||'택배사')+' 배송조회 팝업이 열립니다">'+esc(o.trackingNo)+'</a>':esc(o.trackingNo))+'</div>':'')+(o.shipped?'<div style="margin-top:3px"><button class="btn sm" data-act="trkedit" data-id="'+o.id+'" title="택배사·운송장번호 수정">수정</button></div>':'')+'</td>'}
   ];
   return fitCols('check',cols,cur,o=>{const {p,s}=orderInfo(o);return {p,s,cls:p?'m':''};});
 }
@@ -3497,6 +3497,40 @@ A.trkpop=(el,e)=>{
   const win=window.open(trackUrl(o.carrier,o.trackingNo),'trk_'+o.id,'width='+w+',height='+h+',left='+l+',top='+t+',scrollbars=yes,resizable=yes');
   if(!win)toast('팝업이 차단되었습니다. 브라우저에서 이 페이지의 팝업을 허용해 주세요.','err',5000);
   else win.focus();
+};
+/* 출고완료 주문의 택배사/운송장번호 수정 (택배사·운송장 옆 [수정] 버튼) */
+let TRKE=null;
+A.trkedit=el=>{
+  const o=M.ord.get(+el.dataset.id);if(!o)return;
+  TRKE=o.id;
+  const cur=o.carrier||'';
+  const opts=carrierList().slice();if(cur&&!opts.includes(cur))opts.push(cur);
+  openModal('<h2>택배사 / 운송장번호 수정</h2>'+
+    '<div class="card" style="background:#f7f8fb;box-shadow:none;margin-bottom:0;padding:14px 16px"><div class="small mute">'+esc(o.mall||'')+(o.mall?' · ':'')+esc(o.orderNo)+'</div><div style="margin-top:2px"><b>'+esc(o.receiver)+'</b></div></div>'+
+    '<label class="f">택배사</label><select id="trke-c" data-chg="trkecar"><option value="">선택</option>'+opts.map(x=>'<option value="'+esc(x)+'"'+(x===cur?' selected':'')+'>'+esc(x)+'</option>').join('')+'<option value="__add">+ 택배사 직접 추가</option></select>'+
+    '<label class="f">운송장번호</label><input id="trke-n" type="text" value="'+esc(o.trackingNo||'')+'" placeholder="운송장번호">'+
+    '<div class="foot"><button class="btn" data-act="close">닫기</button><button class="btn pri" data-act="trkesave">저장</button></div>');
+  const n=$('#trke-n');if(n){n.focus();n.select();}
+};
+C.trkecar=el=>{
+  if(el.value!=='__add')return;
+  const n=(prompt('추가할 택배사 이름을 입력하세요.')||'').trim();
+  if(!n){el.value='';return;}
+  const cur=Array.isArray(S.meta.carriers)?S.meta.carriers.slice():[];
+  if(!DEFAULT_CARRIERS.includes(n)&&!cur.includes(n)){cur.push(n);setMeta('carriers',cur);}
+  const op=document.createElement('option');op.value=n;op.textContent=n;
+  el.insertBefore(op,el.querySelector('option[value="__add"]'));el.value=n;
+};
+A.trkesave=async()=>{
+  const o=M.ord.get(TRKE);if(!o)return;
+  const carrier=($('#trke-c').value||'').trim();
+  const no=String($('#trke-n').value||'').replace(/[\s-]/g,'');
+  if(!carrier||!no){toast('택배사와 운송장번호를 모두 입력해 주세요.','err');return;}
+  const prev=[o.carrier,o.trackingNo,o.trackedAt];
+  o.carrier=carrier;o.trackingNo=no;o.trackedAt=new Date().toISOString();
+  try{await putOne('orders',o);}
+  catch(e){[o.carrier,o.trackingNo,o.trackedAt]=prev;toast('저장 실패: '+e.message,'err',6000);return;}
+  closeModal();TRKE=null;toast('택배사/운송장번호를 수정했습니다.');drawCheckTable();
 };
 A.cs=el=>{
   const o=M.ord.get(+el.dataset.id);if(!o)return;

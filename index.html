@@ -2909,7 +2909,19 @@ A.freset=async()=>{
 };
 C.cfile=async el=>{
   const f=el.files[0];if(!f)return;
-  try{CL.sheets=await parseAny(await readFileBuf(f));CL.fileName=f.name;CL.sheetIdx=firstNonEmptySheet(CL.sheets);clRecalc(true);}
+  try{CL.sheets=await parseAny(await readFileBuf(f));CL.fileName=f.name;CL.sheetIdx=firstNonEmptySheet(CL.sheets);clRecalc(true);
+    /* 파일명으로 스마트스토어 쇼핑몰 자동 선택: 올곧은건강 → 스마트스토어(올곧은건강), 에이시즈 → 스마트스토어(에이시즈) (둘 다 들어 있으면 자동 선택 안 함) */
+    const fn=String(f.name||'').normalize('NFC'),h1=fn.includes('올곧은건강'),h2=fn.includes('에이시즈');
+    const auto=(h1&&!h2)?'스마트스토어(올곧은건강)':(h2&&!h1)?'스마트스토어(에이시즈)':'';
+    if(auto&&CL.mall!==auto){
+      const oldKeys=new Set(curFields(CL.mall).map(x=>x.key));
+      CL.mall=auto;
+      const g=guessOrderCols(clHeaders());
+      curFields(CL.mall).forEach(x=>{if(!x.custom&&!oldKeys.has(x.key)&&g[x.key]&&!(CL.map[x.key]||[]).length)CL.map[x.key]=g[x.key];});
+      applyMallCols();
+    }
+    if(auto)toast('파일명을 보고 쇼핑몰을 '+auto+'(으)로 자동 선택했습니다.','ok',4000);
+  }
   catch(e){toast(e.message,'err',8000);}
   route();
 };

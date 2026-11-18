@@ -1659,8 +1659,8 @@ function homeRows(){
     const d=ordDayOf(o);if(!d)return;
     const {p,s}=orderInfo(o),pay=nz(o.payAmount),qty=nz(o.qty)||1;
     const dv=ldf&&o.ex&&mallBase(o.mall)==='롯데온'?Number(String(o.ex[ldf.key]==null?'':o.ex[ldf.key]).replace(/[,원\s]/g,'')):0,disc=isFinite(dv)?dv:0;
-    const adj=pay+disc;   /* 마진 계산용 결제금액 = 결제금액 + 롯데온부담 할인금액 */
-    const unitBuy=p?homeBuyPrice(p,o,d):0,buy=unitBuy*qty,ship=p&&p.shipFee==='미포함'?nz(p.shipAmount):0,fee=Math.round(adj*HD_FEE);
+    const ls=o.lotteSettle&&mallBase(o.mall)==='롯데온'?o.lotteSettle:null,adj=ls?ls.adj:pay+disc;   /* 롯데온 정산내역을 가져온 주문은 정산대상판매금액+당사부담 할인, 수수료=그 금액-지급대상금액 */   /* 마진 계산용 결제금액 = 결제금액 + 롯데온부담 할인금액 */
+    const unitBuy=p?homeBuyPrice(p,o,d):0,buy=unitBuy*qty,ship=p&&p.shipFee==='미포함'?nz(p.shipAmount):0,fee=ls?adj-ls.payout:Math.round(adj*HD_FEE);
     out.push({o,p,s,d,pay,disc,adj,qty,buy,ship,fee,mapped:!!p,nobuy:!!p&&!(unitBuy>0),margin:p?adj-fee-buy-ship:0});
   });
   return out;
@@ -1766,7 +1766,7 @@ function buildHome(){
     '<div class="hset"><span>매출액</span><b>'+won(sa.pay)+'<small>원</small></b><em>결제금액 합계 · '+sa.cnt.toLocaleString()+'건</em></div>'+
     '<div class="hset"><span>매입액</span><b>'+won(sa.buy)+'<small>원</small></b><em>매입가 × 수량</em></div>'+
     '<div class="hset mg"><span>마진</span><b class="'+(sm<0?'neg':'')+'">'+won(sm)+'<small>원</small></b><em>마진율 '+rate.toFixed(1)+'% · 수수료 −'+won(sa.fee)+' · 배송비 −'+won(sa.ship)+'</em></div></div>'+
-    '<div class="hnote">마진 = 결제금액(롯데온은 롯데온부담 할인금액 포함) − 수수료(15%) − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.lgun?' · <a href="#/orders/check" data-act="hlg" data-f="'+(sr[0]||'')+'" data-t="'+(sr[1]||'')+'">사방넷 이전 주문 미매핑 '+sa.lgun.toLocaleString()+'건</a> 마진 제외 (매출액에는 포함)':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nobuy?' · <b style="color:#e03131">매입가가 비어 있는 상품 주문 '+sa.nobuy.toLocaleString()+'건 포함 (매입액 0원으로 계산되어 마진이 크게 나올 수 있음)</b>':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
+    '<div class="hnote">마진 = 결제금액(롯데온은 롯데온부담 할인금액 포함) − 수수료(15%) − 매입액 − 배송비 · 롯데온 정산내역을 가져온 주문은 지급대상금액 − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.lgun?' · <a href="#/orders/check" data-act="hlg" data-f="'+(sr[0]||'')+'" data-t="'+(sr[1]||'')+'">사방넷 이전 주문 미매핑 '+sa.lgun.toLocaleString()+'건</a> 마진 제외 (매출액에는 포함)':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nobuy?' · <b style="color:#e03131">매입가가 비어 있는 상품 주문 '+sa.nobuy.toLocaleString()+'건 포함 (매입액 0원으로 계산되어 마진이 크게 나올 수 있음)</b>':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
   /* 판매성과 */
   const rg=perfRanges(HD.perf,t),cur=agg(inR(rows,rg.cur[0],rg.cur[1])),prv=agg(inR(rows,rg.prev[0],rg.prev[1]));
   const cu=cur.qty?cur.pay/cur.qty:0,pu=prv.qty?prv.pay/prv.qty:0;
@@ -3392,6 +3392,7 @@ function ckList(skipStatus){
     const {p,s}=orderInfo(o);
     /* 주문확정 전 주문은 아래 fixedOf에서 걸러지므로, 확정·출고된 주문은 상품/매입처가 삭제돼 매핑이 끊겨도 조회합니다 (대시보드 건수와 일치) */
     if(!fixedOf(o))return false;     /* 매핑만 하고 아직 [주문확정]을 누르지 않은 주문은 조회되지 않음 */
+    if(!skipStatus&&a.unmapAll)return !o.canceled&&!p;   /* [미매핑] 칩: 상태·기간·쇼핑몰 조건과 상관없이 전체 주문 중 매핑 안 된 주문 */
     if(!skipStatus&&a.status&&!stMatch(o,a.status))return false;
     if(!skipStatus&&o.canceled&&a.status!=='canceled'&&a.status!=='returned')return false;   /* 취소 주문은 [취소건]에서만 조회 (전체·신규주문·주문확인·출고완료에서는 숨김) */
     if(a.unmapLg){   /* 홈 대시보드 [사방넷 이전 주문 미매핑] : 매핑 안 된 사방넷 이전 주문만, 대시보드와 같은 기준(취소 제외·주문일 또는 수집일·선택 기간) */
@@ -3459,14 +3460,14 @@ function drawCheckTable(){
   if(kc){
     const cnt={new:0,confirmed:0,shipped:0,shipfixed:0,canceled:0,returned:0};
     ckList(true).forEach(o=>{if(!o.canceled)cnt[ordStatus(o)]++;if(o.canceled)cnt.canceled++;if(o.claim&&o.claim.req==='반품')cnt.returned++;});
-    kc.innerHTML='<div class="chips" style="display:inline-flex">'+['','new','confirmed','shipped','shipfixed','canceled','returned'].map(k=>'<button class="chip'+(CK.a.status===k?' on':'')+'" data-act="ckstat" data-s="'+k+'">'+(k?CK_LBL[k]:'전체')+' <b>'+(k?cnt[k]:cnt.new+cnt.confirmed+cnt.shipped+cnt.shipfixed).toLocaleString()+'</b></button>').join('')+'</div>';
+    kc.innerHTML='<div class="chips" style="display:inline-flex">'+['','new','confirmed','shipped','shipfixed','canceled','returned'].map(k=>'<button class="chip'+(CK.a.status===k?' on':'')+'" data-act="ckstat" data-s="'+k+'">'+(k?CK_LBL[k]:'전체')+' <b>'+(k?cnt[k]:cnt.new+cnt.confirmed+cnt.shipped+cnt.shipfixed).toLocaleString()+'</b></button>').join('')+(()=>{const un=ckUnmapCount();return '<button class="chip'+(CK.a.unmapAll?' on':'')+'" data-act="ckunmap" style="margin-left:14px'+(un&&!CK.a.unmapAll?';color:#e8890c;border-color:#e8890c':'')+'" title="전체 주문 중 상품 매핑이 안 된 주문 (조회 조건과 상관없음)">미매핑 <b>'+un.toLocaleString()+'</b></button>';})()+'</div>';
   }
   const list=ckList();
   const pages=Math.max(1,Math.ceil(list.length/PAGE_O));if(CK.page>=pages)CK.page=pages-1;
   const cur=list.slice(CK.page*PAGE_O,(CK.page+1)*PAGE_O);
   const allSel=list.length&&list.every(o=>CK.sel.has(o.id));
   const isConf=CK.a.status==='confirmed';
-  const lgb=CK.a.unmapLg?'<div class="card" style="margin-bottom:8px;padding:8px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="small"><b>사방넷 이전 주문 중 미매핑 주문만 보는 중</b>'+((CK.a.lgFrom||CK.a.lgTo)?' · 주문일(없으면 수집일) '+esc(CK.a.lgFrom||'처음')+' ~ '+esc(CK.a.lgTo||'현재'):' · 전체 기간')+'</span><button class="btn sm" data-act="hlgoff">해제</button></div>':'';
+  const lgb=(CK.a.unmapAll?'<div class="card" style="margin-bottom:8px;padding:8px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="small"><b>미매핑 주문만 보는 중</b> · 상태·기간·쇼핑몰 조건과 상관없이 전체 주문 기준</span><button class="btn sm" data-act="ckunmapoff">해제</button></div>':'')+(CK.a.unmapLg?'<div class="card" style="margin-bottom:8px;padding:8px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="small"><b>사방넷 이전 주문 중 미매핑 주문만 보는 중</b>'+((CK.a.lgFrom||CK.a.lgTo)?' · 주문일(없으면 수집일) '+esc(CK.a.lgFrom||'처음')+' ~ '+esc(CK.a.lgTo||'현재'):' · 전체 기간')+'</span><button class="btn sm" data-act="hlgoff">해제</button></div>':'');
   const bar=lgb+'<div class="row" style="margin-bottom:8px"><span class="small"><b>'+list.length.toLocaleString()+'건</b>'+(pages>1?' · '+(CK.page+1)+'/'+pages+' 페이지':'')+' · 선택 <b id="ksel">'+CK.sel.size+'</b>건</span><span class="grow"></span>'+
     (CK.a.status==='shipped'?'<button class="btn sm" data-act="dltpl">송장양식 설정</button><select class="selsm" data-chg="cktpl" title="고르면 다운로드가 그 쇼핑몰 송장업로드 양식으로 내려받아집니다"><option value="">송장업로드양식선택</option>'+Object.keys(dlTpls()).map(m=>'<option value="'+esc(m)+'"'+(CK.tpl===m?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select>':'')+
     '<button class="btn sm ok" data-act="ckdl">선택 다운로드</button><button class="btn sm ok" data-act="ckdlall">전체 다운로드</button><button class="btn sm pri" data-act="ckstatus">주문상태변경</button>'+(CK.a.status==='shipfixed'?'<button class="btn sm" data-act="ckfix" title="체크한 출고확정 주문을 출고완료로 되돌립니다">출고확정 취소</button>':'<button class="btn sm" style="background:#1c7ed6;border-color:#1c7ed6;color:#fff" data-act="ckfix" title="체크한 출고완료 주문을 출고확정으로 넘깁니다">출고확정</button>')+'<button class="btn sm danger" data-act="ckdel">선택 삭제</button></div>';
@@ -3597,9 +3598,16 @@ A.hlg=(el,e)=>{
   CK.a=Object.assign({},CK.d,{unmapLg:true,lgFrom:el.dataset.f||'',lgTo:el.dataset.t||''});CK.page=0;CK.sel.clear();
   if((location.hash||'')==='#/orders/check')route();else location.hash='#/orders/check';
 };
+const ckUnmapCount=()=>S.orders.filter(o=>fixedOf(o)&&!o.canceled&&!orderInfo(o).p).length;   /* 주문확인처리에서 조회되는 전체 주문 중 미매핑 건수 */
+A.ckunmap=()=>{
+  if(CK.a.unmapAll){delete CK.a.unmapAll;}else{delete CK.a.unmapLg;CK.a.unmapAll=true;}
+  CK.page=0;CK.sel.clear();drawCheckTable();
+};
+A.ckunmapoff=()=>{delete CK.a.unmapAll;CK.page=0;CK.sel.clear();drawCheckTable();};
 A.hlgoff=()=>{delete CK.a.unmapLg;delete CK.a.lgFrom;delete CK.a.lgTo;CK.page=0;CK.sel.clear();drawCheckTable();};
 A.ckstat=el=>{
   const s=el.dataset.s;if(s&&!CK_LBL[s])return;
+  delete CK.a.unmapAll;
   CK.a.status=s;CK.d.status=s;CK.page=0;CK.sel.clear();
   const sel=$('[data-chg="ckf"][data-k="status"]');if(sel)sel.value=s;
   drawCheckTable();
@@ -3793,6 +3801,88 @@ A.lgrun=async()=>{
   CK.a=Object.assign({},CK.d);CK.page=0;CK.sel.clear();
   LG.info=null;closeModal();
   toast(I.adds.length.toLocaleString()+'건을 출고완료로 가져왔습니다.'+(I.dup?' (이미 있는 주문 '+I.dup.toLocaleString()+'건 제외)':'')+(I.adds.length>I.auto?' · 미매핑 '+(I.adds.length-I.auto).toLocaleString()+'건은 옵션명 옆 [매핑] 버튼으로 연결하세요.':''),'ok',8000);
+  route();
+};
+/* =====================================================================
+   롯데온 정산내역 가져오기 — 롯데ON 중개 매출내역(구매확정) 엑셀의 지급대상금액으로 마진 계산
+   · 주문번호 = 쇼핑몰주문번호로 연결 · 같은 파일/이미 반영한 내역은 중복으로 건너뜀 · 값이 달라졌으면 갱신
+===================================================================== */
+const LS={info:null};
+function lsBuild(rows,fname){
+  let hi=-1;
+  for(let r=0;r<Math.min(rows.length,10)&&hi<0;r++){if((rows[r]||[]).some(c=>String(c==null?'':c).trim()==='지급대상금액'))hi=r;}
+  if(hi<0)throw new Error('롯데ON 중개 매출내역 파일이 아닌 것 같습니다. (지급대상금액 열을 찾지 못했습니다)');
+  const h=rows[hi].map(x=>String(x==null?'':x).trim()),ix=k=>h.indexOf(k);
+  const miss=['주문번호','정산대상판매금액','상품할인(당사부담)','지급대상금액'].filter(k=>ix(k)<0);
+  if(miss.length)throw new Error('필요한 열을 찾지 못했습니다: '+miss.join(', '));
+  const num=v=>{const c=String(v==null?'':v).replace(/[,원\s]/g,'');return c!==''&&!isNaN(Number(c))?Number(c):null;};
+  const iNo=ix('주문번호'),iSeq=ix('주문순번'),iSt=ix('정산대상판매금액'),iCo=ix('상품할인(당사부담)'),iPo=ix('지급대상금액');
+  const byNo=new Map(),seen=new Set();let total=0,dupFile=0;
+  rows.slice(hi+1).forEach(r=>{
+    const no=String(r[iNo]==null?'':r[iNo]).trim();if(!no)return;
+    const st=num(r[iSt]),po=num(r[iPo]);if(st==null||po==null)return;
+    const seq=iSeq>=0?String(r[iSeq]==null?'':r[iSeq]).trim():'',key=no+'|'+seq;
+    if(seen.has(key)){dupFile++;return;}
+    seen.add(key);total++;
+    if(!byNo.has(no))byNo.set(no,[]);
+    byNo.get(no).push({seq:Number(seq)||0,adj:st+(num(r[iCo])||0),payout:po});
+  });
+  const appMap=new Map();
+  S.orders.forEach(o=>{if(mallBase(o.mall)!=='롯데온')return;const k=String(o.orderNo==null?'':o.orderNo).trim();if(!k)return;if(!appMap.has(k))appMap.set(k,[]);appMap.get(k).push(o);});
+  const info={fname,total,dupFile,add:0,upd:0,same:0,noOrder:0,mismatch:0,todo:[]};
+  const at=new Date().toISOString();
+  byNo.forEach((list,no)=>{
+    const apps=(appMap.get(no)||[]).slice().sort((a,b)=>(+a.id||0)-(+b.id||0));
+    if(!apps.length){info.noOrder+=list.length;return;}
+    if(apps.length!==list.length){info.mismatch+=list.length;return;}   /* 한 주문번호에 상품이 여러 줄인데 앱과 줄 수가 다르면 잘못 연결할 수 있어 건너뜀 */
+    list.sort((a,b)=>a.seq-b.seq);
+    apps.forEach((o,i)=>{
+      const x=list[i],p=o.lotteSettle;
+      if(p&&p.payout===x.payout&&p.adj===x.adj){info.same++;return;}
+      p?info.upd++:info.add++;
+      info.todo.push({o,ls:{payout:x.payout,adj:x.adj,at}});
+    });
+  });
+  return info;
+}
+function lsPreview(I){
+  const row=(l,v,c)=>'<div style="display:flex;justify-content:space-between;padding:3px 0"><span>'+l+'</span><b'+(c?' style="color:'+c+'"':'')+'>'+v.toLocaleString()+'건</b></div>';
+  return '<div class="card" style="background:#f7f8fb;box-shadow:none;margin:12px 0 0"><div class="small mute" style="margin-bottom:6px">'+esc(I.fname)+'</div>'+
+    row('파일 내역 (같은 주문번호·순번 중복 제외)',I.total)+(I.dupFile?row('파일 안에서 중복이라 뺀 건',I.dupFile,'#868e96'):'')+
+    '<hr style="border:0;border-top:1px solid #e3e6ee;margin:6px 0">'+
+    row('새로 반영',I.add,'#12a150')+row('값이 달라 갱신',I.upd,'#e8890c')+row('이미 반영돼 있어 건너뜀 (중복)',I.same,'#868e96')+
+    (I.noOrder?row('앱에 롯데온 주문이 없어 건너뜀',I.noOrder,'#868e96'):'')+
+    (I.mismatch?row('여러 상품 주문인데 줄 수가 달라 건너뜀',I.mismatch,'#e03131'):'')+'</div>';
+}
+A.lsopen=()=>{
+  LS.info=null;
+  openModal('<h2>롯데온 정산내역 가져오기</h2>'+
+    '<div class="small mute" style="margin-bottom:10px">롯데ON에서 내려받은 <b>중개 매출내역(구매확정)</b> 엑셀을 올리면 주문번호(쇼핑몰주문번호)로 롯데온 주문을 찾아 <b>지급대상금액</b>을 저장하고, 그 주문의 마진을 <b>지급대상금액 − 매입액 − 배송비</b>로 계산합니다. 정기적으로 새 파일을 올리면 되고, 이미 반영한 내역은 중복으로 건너뜁니다.</div>'+
+    '<input type="file" accept=".xlsx,.csv,.txt" data-chg="lsfile"><div id="lsprev"></div>'+
+    '<div class="foot"><button class="btn" data-act="close">닫기</button><button class="btn pri" id="lsrun" data-act="lsrun" disabled>반영하기</button></div>');
+};
+C.lsfile=async el=>{
+  const f=el.files[0];if(!f)return;
+  const box=$('#lsprev'),btn=$('#lsrun');
+  LS.info=null;if(btn)btn.disabled=true;
+  if(box)box.innerHTML='<div class="mute small" style="margin-top:10px">파일을 읽는 중…</div>';
+  try{
+    const sheets=await parseAny(await readFileBuf(f));
+    const sh=sheets[firstNonEmptySheet(sheets)];
+    LS.info=lsBuild(sh.rows,f.name);
+    if(box)box.innerHTML=lsPreview(LS.info);
+    if(btn)btn.disabled=!LS.info.todo.length;
+  }catch(e){if(box)box.innerHTML='<div class="card err" style="margin-top:10px">'+esc(e.message)+'</div>';}
+};
+A.lsrun=async()=>{
+  const I=LS.info;if(!I||!I.todo.length)return;
+  const btn=$('#lsrun');if(btn)btn.disabled=true;
+  const prev=I.todo.map(x=>x.o.lotteSettle);
+  I.todo.forEach(x=>{x.o.lotteSettle=x.ls;});
+  try{await putMany('orders',I.todo.map(x=>x.o));}
+  catch(e){I.todo.forEach((x,i)=>{if(prev[i])x.o.lotteSettle=prev[i];else delete x.o.lotteSettle;});toast('저장 실패: '+e.message,'err',6000);if(btn)btn.disabled=false;return;}
+  LS.info=null;closeModal();rebuild();
+  toast('롯데온 정산내역 '+I.todo.length.toLocaleString()+'건을 반영했습니다.'+(I.same?' (이미 반영된 '+I.same.toLocaleString()+'건 제외)':''),'ok',6000);
   route();
 };
 A.lgmap=el=>{
@@ -4599,7 +4689,7 @@ function stInsights(c){
 }
 /* ---------- 1) 요약 ---------- */
 function pgStSummary(){
-  const h=stHead('통계 요약','판매 · 수익 · 고객 · 취소의 핵심 지표를 직전 기간과 비교하고, 지금 확인해야 할 포인트를 자동으로 짚어 줍니다.'),c=ST.c,k=c.k,p=c.p,bk=stBk(c);
+  const h=stHead('통계 요약','판매 · 수익 · 고객 · 취소의 핵심 지표를 직전 기간과 비교하고, 지금 확인해야 할 포인트를 자동으로 짚어 줍니다.').replace('<h1>통계 요약</h1>','<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><h1 style="margin:0">통계 요약</h1><button class="btn sm" data-act="lsopen" title="롯데ON 중개 매출내역(구매확정) 엑셀의 지급대상금액으로 롯데온 마진을 정확하게 맞춥니다">롯데온정산내역 가져오기</button></div>'),c=ST.c,k=c.k,p=c.p,bk=stBk(c);
   const kp=[
     stKpi('판매금액',stN(k.pay),'원',stDl(k.pay,p.pay),'#3b5bdb','직전 '+stW(p.pay)),
     stKpi('예상 마진',stN(k.margin),'원',stDl(k.margin,p.margin),k.margin<0?'#e03131':'#0b7a3b','상품이 매핑된 주문 기준'),

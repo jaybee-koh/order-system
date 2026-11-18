@@ -4568,7 +4568,24 @@ C.pdep=async el=>{
 ICONS['p_통계']=IC('<path d="M4 20V11"/><path d="M10 20V5"/><path d="M16 20v-6"/><path d="M21 20H3"/>');
 const ST={mall:'',sup:'',from:'',to:'',q:'',sort:{},more:{},tb:{},c:null};
 const STC={bad:'#e03131',warn:'#e8890c',good:'#12a150',info:'#3b5bdb'},STL={bad:'주의',warn:'점검',good:'좋음',info:'참고'};
-const stCust=o=>{const n=norm(o.orderer||o.receiver||''),t=String(o.tel1||o.tel2||'').replace(/\D/g,'');return (n||t)?n+'|'+t:'o:'+(o.orderNo||o.id||'');};
+/* 고객 구분: 이름이 같고 (연락처가 같거나 주소가 같으면) 같은 고객. 이름만 같고 연락처·주소가 모두 다르면 동명이인으로 따로 셈 (안심번호처럼 연락처가 달라도 주소가 같으면 같은 고객) */
+const _scC={m:null};
+const stCustOld=o=>{const n=norm(o.orderer||o.receiver||''),t=String(o.tel1||o.tel2||'').replace(/\D/g,'');return (n||t)?n+'|'+t:'o:'+(o.orderNo||o.id||'');};
+function stCustBuild(){
+  const m=new Map(),g=new Map();
+  S.orders.forEach(o=>{if(o.canceled)return;const n=norm(o.orderer||o.receiver||'');if(!n)return;if(!g.has(n))g.set(n,[]);g.get(n).push(o);});
+  g.forEach((list,n)=>{
+    const par=list.map((_,i)=>i),f=i=>{while(par[i]!==i){par[i]=par[par[i]];i=par[i];}return i;};
+    const tm=new Map(),am=new Map();
+    list.forEach((o,i)=>{
+      const t=String(o.tel1||o.tel2||'').replace(/\D/g,''),a=norm(o.addr||'');
+      [[tm,t],[am,a]].forEach(([mp,k])=>{if(!k)return;if(mp.has(k))par[f(i)]=f(mp.get(k));else mp.set(k,i);});
+    });
+    list.forEach((o,i)=>m.set(o,n+'#'+f(i)));
+  });
+  return m;
+}
+const stCust=o=>{if(!_scC.m)_scC.m=stCustBuild();return _scC.m.get(o)||stCustOld(o);};
 const stPct=(c,p)=>p?(c-p)/Math.abs(p)*100:null;
 const stSg=v=>v==null?'-':(v>0?'+':v<0?'−':'')+Math.abs(v).toFixed(1)+'%';
 const stN=v=>Number(Math.round(v)).toLocaleString();
@@ -4601,7 +4618,7 @@ function stCtx(){
   if(!ST.from||!ST.to||ST.from>ST.to){ST.to=addD(localDate(),-1);ST.from=addD(ST.to,-29);}
   const n=Math.round((pDate(ST.to)-pDate(ST.from))/864e5)+1,pf=addD(ST.from,-n),pt=addD(ST.from,-1);
   const ok=o=>{if(ST.mall&&(ST.mall==='__none'?o.mall:o.mall!==ST.mall))return false;if(ST.sup){const s=orderInfo(o).s;if(!s||String(s.id)!==String(ST.sup))return false;}return true;};
-  const all=homeRows(),first=new Map();
+  _scC.m=null;const all=homeRows(),first=new Map();   /* 통계를 다시 계산할 때마다 고객 묶음도 새로 만듦 */
   all.forEach(r=>{const k=stCust(r.o),f=first.get(k);if(!f||r.d<f)first.set(k,r.d);});
   const rows=all.filter(r=>ok(r.o)),cur=rows.filter(r=>r.d>=ST.from&&r.d<=ST.to),prv=rows.filter(r=>r.d>=pf&&r.d<=pt);
   const inD=(o,a,b)=>{const d=ordDayOf(o);return !!d&&d>=a&&d<=b;},ods=S.orders.filter(ok);

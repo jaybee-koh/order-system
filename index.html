@@ -661,6 +661,19 @@ table.tbl tr.chdone td b,table.tbl tr.chdone td span{opacity:.75}
 .hset{align-content:center}
 .hkpi b{font-size:22px}
 .hbox h3{font-size:14.5px}
+.hx4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}.hx2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:16px}.hx2 .hbox{margin-bottom:0}
+@media(max-width:1100px){.hx4{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.hx2{grid-template-columns:1fr}}
+.hhero{position:relative;overflow:hidden;padding:16px 18px;border:1px solid var(--line);border-radius:14px;background:#fff;border-top:3px solid var(--c)}
+.hhero>span{font-size:12.5px;font-weight:600;color:var(--ink2)}.hhero>b{display:block;font-size:26px;font-weight:700;letter-spacing:-.03em;margin:6px 0 3px;font-variant-numeric:tabular-nums}.hhero>b small{font-size:13px;font-weight:600;margin-left:3px;color:var(--mute)}
+.hhero svg{position:absolute;right:12px;top:18px;opacity:.85}.hhero em{display:block;font-size:11.5px;font-style:normal;color:var(--mute);margin-top:2px}
+.hact{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.hact>b{font-size:13px;margin-right:4px}.hact a{display:inline-flex;gap:6px;align-items:center;padding:4px 11px;border-radius:999px;font-size:12.5px;font-weight:600;text-decoration:none;color:var(--c);background:color-mix(in srgb,var(--c) 10%,#fff);border:1px solid color-mix(in srgb,var(--c) 28%,#fff)}.hact a i{font-style:normal;font-weight:700}
+.hpipe{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:14px}
+.hpipe a{position:relative;display:block;padding:12px 14px;border-radius:12px;background:#fff;border:1px solid var(--line);text-decoration:none;color:inherit;border-left:4px solid var(--c)}
+.hpipe a:hover{box-shadow:0 2px 10px rgba(30,40,80,.08)}.hpipe a span{font-size:12.5px;font-weight:600;color:var(--ink2)}.hpipe a b{display:block;font-size:22px;letter-spacing:-.03em;margin-top:2px;color:var(--c)}.hpipe a b small{font-size:12px;color:var(--mute);margin-left:2px}
+.hpipe a:not(:last-child):after{content:'›';position:absolute;right:-9px;top:50%;transform:translateY(-50%);color:#adb5bd;font-size:18px;z-index:1}
+@media(max-width:900px){.hpipe{grid-template-columns:repeat(2,minmax(0,1fr))}.hpipe a:after{display:none}}
+
 
 /* ---------- 열어 본 페이지 탭 ---------- */
 #mainwrap{flex:1;min-width:0}
@@ -1784,11 +1797,39 @@ function buildHome(){
     ptile('/products','판매중 상품',stN['판매중'],'#12a150','누르면 매입 상품 조회에서 판매중만 보기','판매중')+
     ptile('/products','품절 상품',stN['품절'],'#e8590c','누르면 매입 상품 조회에서 품절만 보기','품절')+
     ptile('/products/changes','수정요청 상품',reqSet.size,'#3b5bdb','상품변경사항 · 반영여부 미체크 '+reqRec.length.toLocaleString()+'건')+'</div><div class="hnote">판매상태가 비어 있는 상품은 판매중으로 계산 · 단종 상품은 제외 · 수정요청 = 상품변경사항에서 [반영여부]를 아직 체크하지 않은 상품</div></div>';
-  return '<div class="hgrid3">'+sale+prodBox+settle+'</div>'+perf;
+  /* ---- 리뉴얼: 오늘 할 일 · 핵심 지표(스파크라인) · 주문 진행 흐름 · TOP ---- */
+  const byD=new Map();rows.forEach(r=>{const x=byD.get(r.d)||{pay:0,mg:0};x.pay+=r.pay;x.mg+=r.margin;byD.set(r.d,x);});
+  const days=Array.from({length:14},(_,i)=>byD.get(addD(t,i-13))||{pay:0,mg:0});
+  const spk=(a,c)=>{const mx=Math.max(1,...a),n=a.length,pts=a.map((v,i)=>(i/(n-1)*104+3).toFixed(1)+','+(31-Math.max(0,v)/mx*28).toFixed(1)).join(' ');return '<svg width="110" height="34" viewBox="0 0 110 34" aria-hidden="true"><polyline points="'+pts+'" fill="none" stroke="'+c+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';};
+  const hero=(l,v,u,d,sub,sp,c)=>'<div class="hhero" style="--c:'+c+'"><span>'+l+'</span><b>'+v+'<small>'+u+'</small></b>'+d+(sub?'<em>'+sub+'</em>':'')+(sp||'')+'</div>';
+  const td=agg(inR(rows,t,t)),pw=agg(inR(rows,addD(t,-7),addD(t,-7))),mr=perfRanges('month',t),mc=agg(inR(rows,mr.cur[0],mr.cur[1])),mp=agg(inR(rows,mr.prev[0],mr.prev[1]));
+  const mRate=mc.mpay?mc.margin/mc.mpay*100:0,pRate=mp.mpay?mp.margin/mp.mpay*100:0;
+  const heroes='<div class="hx4">'+
+    hero('오늘 판매금액',won(td.pay),'원',dlt(td.pay,pw.pay,'',1),'전주 동일요일 대비 · '+td.cnt.toLocaleString()+'건',spk(days.map(x=>x.pay),'#3b5bdb'),'#3b5bdb')+
+    hero('오늘 마진',won(td.margin),'원',dlt(td.margin,pw.margin,'',1),'마진율 '+(td.mpay?(td.margin/td.mpay*100).toFixed(1):'0.0')+'%',spk(days.map(x=>x.mg),'#12a150'),'#12a150')+
+    hero('이번 달 판매금액',won(mc.pay),'원',dlt(mc.pay,mp.pay,'',1),'전월 동일기간 대비 · '+mc.cnt.toLocaleString()+'건',spk(trendSeries(rows,'day',t).map(x=>x.pay),'#7048e8'),'#7048e8')+
+    hero('이번 달 마진율',mRate.toFixed(1),'%','<div class="hd '+(mRate>pRate?'up':mRate<pRate?'dn':'')+'">'+(mRate>pRate?'▲ +':mRate<pRate?'▼ −':'')+Math.abs(mRate-pRate).toFixed(1)+'%p</div>','마진 '+won(mc.margin)+'원 · 전월 '+pRate.toFixed(1)+'%','','#e8890c')+'</div>';
+  const unm=ckUnmapCount(),nobuy=rows.filter(x=>x.nobuy).length;
+  const pill=(l,n,c,href,attr)=>n?'<a href="#'+href+'" '+(attr||'')+' style="--c:'+c+'">'+l+' <i>'+n.toLocaleString()+'건</i></a>':'';
+  const pills=pill('주문확정 대기',st.pre,'#e8890c','/orders/confirm')+pill('신규주문 확인',st.nw,'#3b5bdb','/orders/check','data-act="hstat" data-s="new"')+pill('미매핑 주문',unm,'#e03131','/orders/check','data-act="hunmap"')+pill('매입가 비어 있음',nobuy,'#e03131','/orders/check')+pill('상품 수정요청',reqSet.size,'#1c7ed6','/products/changes');
+  const act='<div class="hact"><b>오늘 처리할 일</b>'+(pills||'<span class="mute small">처리할 일이 없습니다. 👍</span>')+'</div>';
+  const step=(l,n,c,href,s)=>'<a href="#'+href+'"'+(s?' data-act="hstat" data-s="'+s+'"':'')+' style="--c:'+c+'"><span>'+l+'</span><b>'+n.toLocaleString()+'<small>건</small></b></a>';
+  const pipe='<div class="hpipe">'+step('주문확정 전',st.pre,'#e8890c','/orders/confirm')+step('신규주문',st.nw,'#3b5bdb','/orders/check','new')+step('주문확인',st.cf,'#12a150','/orders/check','confirmed')+step('출고완료',st.sh,'#7048e8','/orders/check','shipped')+step('출고확정',st.sf,'#1c7ed6','/orders/check','shipfixed')+'</div>';
+  const r30=inR(rows,addD(t,-29),t);
+  const top=(arr,n)=>arr.sort((a,b)=>b.pay-a.pay).slice(0,n).map(g=>({l:g.l,v:g.pay,t:fmtCompact(g.pay),s:g.cnt+'건 · 마진 '+(g.margin<0?'−':'')+fmtCompact(Math.abs(g.margin))}));
+  const topMall='<div class="card hbox"><div class="row" style="margin-bottom:8px"><h3 style="margin:0">쇼핑몰별 판매 TOP</h3><span class="grow"></span><span class="mute small">최근 30일</span></div>'+hbars(top(groupBy(r30,r=>r.o.mall||'미지정'),6),'#3b5bdb')+'</div>';
+  const topProd='<div class="card hbox"><div class="row" style="margin-bottom:8px"><h3 style="margin:0">상품별 판매 TOP</h3><span class="grow"></span><span class="mute small">최근 30일 · 매핑된 상품</span></div>'+hbars(top(groupBy(r30,r=>r.p?r.p.id:null,r=>r.p.name+(r.p.option?' '+r.p.option:'')),6),'#7048e8')+'</div>';
+  return act+heroes+pipe+perf+'<div class="hx2">'+topMall+topProd+'</div><div class="hx2">'+settle+prodBox+'</div>';
 }
+A.hunmap=(el,e)=>{
+  if(e)e.preventDefault();
+  ckInit();CK.d=Object.assign({},CK.d,{status:'',mall:'',sup:'',q:''});
+  CK.a=Object.assign({},CK.d,{unmapAll:true});CK.page=0;CK.sel.clear();
+  if((location.hash||'')==='#/orders/check')route();else location.hash='#/orders/check';
+};
 function pgHome(){
   const nod=S.orders.filter(o=>!ordDateOnly(o)).length;
-  return '<h1>홈 대시보드</h1><p class="sub">판매 · 정산 · 성과를 한눈에 확인합니다. 집계 기준일은 <b>주문일자</b>입니다.'+(nod?' 주문일자가 없는 주문 '+nod.toLocaleString()+'건은 수집일로 집계합니다.':'')+' 데이터는 로그인한 계정의 서버에 저장됩니다.</p><div id="hdash">'+buildHome()+'</div>';
+  return '<h1>홈 대시보드</h1><p class="sub">오늘 처리할 일, 핵심 지표, 주문 진행 흐름, 판매 TOP, 정산을 한눈에 확인합니다. 집계 기준일은 <b>주문일자</b>입니다.'+(nod?' 주문일자가 없는 주문 '+nod.toLocaleString()+'건은 수집일로 집계합니다.':'')+' 데이터는 로그인한 계정의 서버에 저장됩니다.</p><div id="hdash">'+buildHome()+'</div>';
 }
 function fitWd(){
   const bx=$('#hwdbox'),sv=$('#hwdsvg');if(!bx||!sv||!HD.wdFn)return;

@@ -1763,7 +1763,7 @@ function groupBy(rows,keyFn,labFn){
   return [...m.values()];
 }
 function buildHome(){
-  const t=localDate(),rows=homeRows();
+  const t=localDate(),rows=homeRows(),y=addD(t,-1);   /* 핵심 지표·판매성과는 어제 기준 (오늘 오전 발주 이후 매출은 아직 포함 안 됨) */
   /* 판매관리: 주문 상태별 수량 */
   const st={pre:0,nw:0,cf:0,sh:0,sf:0};
   const liveCnt=S.orders.filter(o=>!o.canceled).length;
@@ -1781,13 +1781,13 @@ function buildHome(){
     '<div class="hset mg"><span>마진</span><b class="'+(sm<0?'neg':'')+'">'+won(sm)+'<small>원</small></b><em>마진율 '+rate.toFixed(1)+'% · 수수료 −'+won(sa.fee)+' · 배송비 −'+won(sa.ship)+'</em></div></div>'+
     '<div class="hnote">마진 = 결제금액(롯데온은 롯데온부담 할인금액 포함) − 수수료(15%) − 매입액 − 배송비 · 롯데온 정산내역을 가져온 주문은 지급대상금액 − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.lgun?' · <a href="#/orders/check" data-act="hlg" data-f="'+(sr[0]||'')+'" data-t="'+(sr[1]||'')+'">사방넷 이전 주문 미매핑 '+sa.lgun.toLocaleString()+'건</a> 마진 제외 (매출액에는 포함)':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nobuy?' · <b style="color:#e03131">매입가가 비어 있는 상품 주문 '+sa.nobuy.toLocaleString()+'건 포함 (매입액 0원으로 계산되어 마진이 크게 나올 수 있음)</b>':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
   /* 판매성과 */
-  const rg=perfRanges(HD.perf,t),cur=agg(inR(rows,rg.cur[0],rg.cur[1])),prv=agg(inR(rows,rg.prev[0],rg.prev[1]));
+  const rg=perfRanges(HD.perf,y),cur=agg(inR(rows,rg.cur[0],rg.cur[1])),prv=agg(inR(rows,rg.prev[0],rg.prev[1]));
   const cu=cur.qty?cur.pay/cur.qty:0,pu=prv.qty?prv.pay/prv.qty:0;
   const kpi=(l,v,u,d)=>'<div class="hkpi"><span>'+l+'</span><b>'+v+'<small>'+u+'</small></b>'+d+'</div>';
-  const perf='<div class="card hbox"><div class="row" style="margin-bottom:4px"><h3 style="margin:0">판매성과</h3><span class="mute small">'+rg.cl+' '+(rg.cur[0]===rg.cur[1]?rg.cur[0]:rg.cur[0]+' ~ '+rg.cur[1])+' · '+rg.lab+'</span><span class="grow"></span>'+chip('hperf',HD.perf,[['day','일간'],['week','주간'],['month','월간']])+'</div>'+
+  const perf='<div class="card hbox"><div class="row" style="margin-bottom:4px"><h3 style="margin:0">판매성과</h3><span class="mute small">'+(HD.perf==='day'?'어제':rg.cl+'(어제까지)')+' '+(rg.cur[0]===rg.cur[1]?rg.cur[0]:rg.cur[0]+' ~ '+rg.cur[1])+' · '+rg.lab+'</span><span class="grow"></span>'+chip('hperf',HD.perf,[['day','일간'],['week','주간'],['month','월간']])+'</div>'+
     '<div class="hkpis">'+kpi('상품결제건수',cur.cnt.toLocaleString(),'건',dlt(cur.cnt,prv.cnt,'건'))+kpi('상품결제수량',cur.qty.toLocaleString(),'개',dlt(cur.qty,prv.qty,'개'))+kpi('상품결제단가',won(Math.round(cu)),'원',dlt(Math.round(cu),Math.round(pu),'',1))+kpi('판매금액(총)',won(cur.pay),'원',dlt(cur.pay,prv.pay,'',1))+'</div>'+
     '<div class="row" style="margin:14px 0 2px"><b style="font-size:13px">'+(HD.perf==='day'?'최근 14일':HD.perf==='week'?'최근 8주 (월요일 시작)':'최근 12개월')+' '+HD_TM[HD.tm].l+' 추이</b><span class="grow"></span>'+chip('htm',HD.tm,[['pay','판매금액'],['buy','매입금액'],['cnt','주문건수']])+'</div>'+
-    trendSvg(trendSeries(rows,HD.perf,t),hcw(false),HD.tm)+'<div class="mute small" style="margin-top:4px">주문일자 기준(없으면 수집일) · 상품결제단가 = 판매금액 ÷ 수량 · 매입금액은 매핑된 주문만 집계</div></div>';
+    trendSvg(trendSeries(rows,HD.perf,y),hcw(false),HD.tm)+'<div class="mute small" style="margin-top:4px">주문일자 기준(없으면 수집일) · 상품결제단가 = 판매금액 ÷ 수량 · 매입금액은 매핑된 주문만 집계</div></div>';
   /* 상품관리: 판매중 · 품절 · 수정요청(상품변경사항에서 반영여부를 아직 체크하지 않은 상품) */
   const stN={'판매중':0,'품절':0};
   S.products.forEach(p=>{const v=saleOf(p);if(v in stN)stN[v]++;});
@@ -1799,16 +1799,16 @@ function buildHome(){
     ptile('/products/changes','수정요청 상품',reqSet.size,'#3b5bdb','상품변경사항 · 반영여부 미체크 '+reqRec.length.toLocaleString()+'건')+'</div><div class="hnote">판매상태가 비어 있는 상품은 판매중으로 계산 · 단종 상품은 제외 · 수정요청 = 상품변경사항에서 [반영여부]를 아직 체크하지 않은 상품</div></div>';
   /* ---- 리뉴얼: 오늘 할 일 · 핵심 지표(스파크라인) · 주문 진행 흐름 · TOP ---- */
   const byD=new Map();rows.forEach(r=>{const x=byD.get(r.d)||{pay:0,mg:0};x.pay+=r.pay;x.mg+=r.margin;byD.set(r.d,x);});
-  const days=Array.from({length:14},(_,i)=>byD.get(addD(t,i-13))||{pay:0,mg:0});
+  const days=Array.from({length:14},(_,i)=>byD.get(addD(y,i-13))||{pay:0,mg:0});
   const spk=(a,c)=>{const mx=Math.max(1,...a),n=a.length,pts=a.map((v,i)=>(i/(n-1)*104+3).toFixed(1)+','+(31-Math.max(0,v)/mx*28).toFixed(1)).join(' ');return '<svg width="110" height="34" viewBox="0 0 110 34" aria-hidden="true"><polyline points="'+pts+'" fill="none" stroke="'+c+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';};
   const hero=(l,v,u,d,sub,sp,c)=>'<div class="hhero" style="--c:'+c+'"><span>'+l+'</span><b>'+v+'<small>'+u+'</small></b>'+d+(sub?'<em>'+sub+'</em>':'')+(sp||'')+'</div>';
-  const td=agg(inR(rows,t,t)),pw=agg(inR(rows,addD(t,-7),addD(t,-7))),mr=perfRanges('month',t),mc=agg(inR(rows,mr.cur[0],mr.cur[1])),mp=agg(inR(rows,mr.prev[0],mr.prev[1]));
+  const td=agg(inR(rows,y,y)),pw=agg(inR(rows,addD(y,-7),addD(y,-7))),mr=perfRanges('month',y),mc=agg(inR(rows,mr.cur[0],mr.cur[1])),mp=agg(inR(rows,mr.prev[0],mr.prev[1]));
   const mRate=mc.mpay?mc.margin/mc.mpay*100:0,pRate=mp.mpay?mp.margin/mp.mpay*100:0;
   const heroes='<div class="hx4">'+
-    hero('오늘 판매금액',won(td.pay),'원',dlt(td.pay,pw.pay,'',1),'전주 동일요일 대비 · '+td.cnt.toLocaleString()+'건',spk(days.map(x=>x.pay),'#3b5bdb'),'#3b5bdb')+
-    hero('오늘 마진',won(td.margin),'원',dlt(td.margin,pw.margin,'',1),'마진율 '+(td.mpay?(td.margin/td.mpay*100).toFixed(1):'0.0')+'%',spk(days.map(x=>x.mg),'#12a150'),'#12a150')+
-    hero('이번 달 판매금액',won(mc.pay),'원',dlt(mc.pay,mp.pay,'',1),'전월 동일기간 대비 · '+mc.cnt.toLocaleString()+'건',spk(trendSeries(rows,'day',t).map(x=>x.pay),'#7048e8'),'#7048e8')+
-    hero('이번 달 마진율',mRate.toFixed(1),'%','<div class="hd '+(mRate>pRate?'up':mRate<pRate?'dn':'')+'">'+(mRate>pRate?'▲ +':mRate<pRate?'▼ −':'')+Math.abs(mRate-pRate).toFixed(1)+'%p</div>','마진 '+won(mc.margin)+'원 · 전월 '+pRate.toFixed(1)+'%','','#e8890c')+'</div>';
+    hero('어제 판매금액',won(td.pay),'원',dlt(td.pay,pw.pay,'',1),y+' · 전주 동일요일 대비 · '+td.cnt.toLocaleString()+'건',spk(days.map(x=>x.pay),'#3b5bdb'),'#3b5bdb')+
+    hero('어제 마진',won(td.margin),'원',dlt(td.margin,pw.margin,'',1),y+' · 마진율 '+(td.mpay?(td.margin/td.mpay*100).toFixed(1):'0.0')+'%',spk(days.map(x=>x.mg),'#12a150'),'#12a150')+
+    hero('이번 달 판매금액',won(mc.pay),'원',dlt(mc.pay,mp.pay,'',1),'어제까지 · 전월 동일기간 대비 · '+mc.cnt.toLocaleString()+'건',spk(trendSeries(rows,'day',y).map(x=>x.pay),'#7048e8'),'#7048e8')+
+    hero('이번 달 마진율',mRate.toFixed(1),'%','<div class="hd '+(mRate>pRate?'up':mRate<pRate?'dn':'')+'">'+(mRate>pRate?'▲ +':mRate<pRate?'▼ −':'')+Math.abs(mRate-pRate).toFixed(1)+'%p</div>','어제까지 · 마진 '+won(mc.margin)+'원 · 전월 '+pRate.toFixed(1)+'%','','#e8890c')+'</div>';
   const unm=ckUnmapCount(),nobuy=rows.filter(x=>x.nobuy).length;
   const pill=(l,n,c,href,attr)=>n?'<a href="#'+href+'" '+(attr||'')+' style="--c:'+c+'">'+l+' <i>'+n.toLocaleString()+'건</i></a>':'';
   const pills=pill('주문확정 대기',st.pre,'#e8890c','/orders/confirm')+pill('신규주문 확인',st.nw,'#3b5bdb','/orders/check','data-act="hstat" data-s="new"')+pill('미매핑 주문',unm,'#e03131','/orders/check','data-act="hunmap"')+pill('매입가 비어 있음',nobuy,'#e03131','/orders/check')+pill('상품 수정요청',reqSet.size,'#1c7ed6','/products/changes');

@@ -1664,6 +1664,9 @@ function homeBuyPrice(p,o,d){
 }
 /* 주문 1건의 금액 계산: 매출=결제금액, 마진=결제금액-수수료(15%)-주문일 당시 매입액-배송비 */
 /* 롯데온 주문: 주문수집에 직접 추가한 '롯데온부담 할인금액' 항목 값을 결제금액에 더해서 마진 계산 (결제금액엔 롯데온 부담 할인이 빠져 있음) */
+/* 쇼핑몰별 마진 계산 방식: settle=정산예정금액 기준, vat=정산예정금액(VAT별도)×1.1 기준, lotte=결제금액+롯데온부담 할인, pay=결제금액 기준 */
+const MG_SET=new Set(['11번가','ESM','GS홈쇼핑','롯데아이몰','스마트스토어']),MG_VAT=new Set(['홈앤쇼핑','신세계','CJ오쇼핑']);
+function mgType(mall){const b=mallBase(mall).replace(/\s/g,'').toUpperCase();return b==='롯데온'?'lotte':MG_SET.has(b)?'settle':MG_VAT.has(b)?'vat':'pay';}
 function lotteDiscField(){return (fcfg().custom||[]).find(f=>/롯데온부담/.test(String(f.label||'').replace(/\s/g,'')))||null;}
 function homeRows(){
   const out=[],ldf=lotteDiscField();
@@ -1672,18 +1675,20 @@ function homeRows(){
     const d=ordDayOf(o);if(!d)return;
     const {p,s}=orderInfo(o),pay=nz(o.payAmount),qty=nz(o.qty)||1;
     const dv=ldf&&o.ex&&mallBase(o.mall)==='롯데온'?Number(String(o.ex[ldf.key]==null?'':o.ex[ldf.key]).replace(/[,원\s]/g,'')):0,disc=isFinite(dv)?dv:0;
-    const ls=o.lotteSettle&&mallBase(o.mall)==='롯데온'?o.lotteSettle:null,adj=ls?ls.adj:pay+disc;   /* 롯데온 정산내역을 가져온 주문은 정산대상판매금액+당사부담 할인, 수수료=그 금액-지급대상금액 */   /* 마진 계산용 결제금액 = 결제금액 + 롯데온부담 할인금액 */
-    const unitBuy=p?homeBuyPrice(p,o,d):0,buy=unitBuy*qty,ship=p&&p.shipFee==='미포함'?nz(p.shipAmount):0,fee=ls?adj-ls.payout:Math.round(adj*HD_FEE);
-    out.push({o,p,s,d,pay,disc,adj,qty,buy,ship,fee,mapped:!!p,nobuy:!!p&&!(unitBuy>0),margin:p?adj-fee-buy-ship:0});
+    const ls=o.lotteSettle&&mallBase(o.mall)==='롯데온'?o.lotteSettle:null,mt=mgType(o.mall),st=nz(o.settleAmount),useSt=(mt==='settle'||mt==='vat')&&st>0;
+    /* 마진 계산 기준금액: 롯데온=결제금액+롯데온부담 할인(정산내역 있으면 그 금액) / 정산예정금액 쇼핑몰=정산예정금액 / VAT별도 쇼핑몰=정산예정금액×1.1 / 그 외=결제금액 */
+    const adj=ls?ls.adj:mt==='lotte'?pay+disc:useSt?(mt==='vat'?Math.round(st*1.1):st):pay;   /* 롯데온 정산내역을 가져온 주문은 정산대상판매금액+당사부담 할인, 수수료=그 금액-지급대상금액 */   /* 마진 계산용 결제금액 = 결제금액 + 롯데온부담 할인금액 */
+    const unitBuy=p?homeBuyPrice(p,o,d):0,buy=unitBuy*qty,ship=p&&p.shipFee==='미포함'?nz(p.shipAmount):0,fee=ls?adj-ls.payout:useSt?0:Math.round(adj*HD_FEE);   /* 정산예정금액은 이미 수수료를 뺀 금액 → 수수료 따로 차감 안 함 */
+    out.push({o,p,s,d,pay,disc,adj,qty,buy,ship,fee,mapped:!!p,nobuy:!!p&&!(unitBuy>0),nostl:(mt==='settle'||mt==='vat')&&!useSt,margin:p?adj-fee-buy-ship:0});
   });
   return out;
 }
 const inR=(rows,a,b)=>rows.filter(x=>(!a||x.d>=a)&&(!b||x.d<=b));
 function agg(rows){
-  const r={cnt:0,qty:0,pay:0,buy:0,ship:0,fee:0,margin:0,mpay:0,unm:0,orph:0,lgun:0,nopay:0,nobuy:0};
+  const r={cnt:0,qty:0,pay:0,buy:0,ship:0,fee:0,margin:0,mpay:0,unm:0,orph:0,lgun:0,nopay:0,nobuy:0,nostl:0};
   rows.forEach(x=>{
     r.cnt++;r.qty+=x.qty;r.pay+=x.pay;if(!x.pay)r.nopay++;
-    if(x.mapped){r.buy+=x.buy;r.ship+=x.ship;r.fee+=x.fee;r.margin+=x.margin;r.mpay+=x.adj;if(x.nobuy)r.nobuy++;}else if(x.o.legacy)r.lgun++;else if(x.o.confirmed)r.orph++;else r.unm++;
+    if(x.mapped){r.buy+=x.buy;r.ship+=x.ship;r.fee+=x.fee;r.margin+=x.margin;r.mpay+=x.adj;if(x.nobuy)r.nobuy++;if(x.nostl)r.nostl++;}else if(x.o.legacy)r.lgun++;else if(x.o.confirmed)r.orph++;else r.unm++;
   });
   return r;
 }
@@ -1779,7 +1784,7 @@ function buildHome(){
     '<div class="hset"><span>매출액</span><b>'+won(sa.pay)+'<small>원</small></b><em>결제금액 합계 · '+sa.cnt.toLocaleString()+'건</em></div>'+
     '<div class="hset"><span>매입액</span><b>'+won(sa.buy)+'<small>원</small></b><em>매입가 × 수량</em></div>'+
     '<div class="hset mg"><span>마진</span><b class="'+(sm<0?'neg':'')+'">'+won(sm)+'<small>원</small></b><em>마진율 '+rate.toFixed(1)+'% · 수수료 −'+won(sa.fee)+' · 배송비 −'+won(sa.ship)+'</em></div></div>'+
-    '<div class="hnote">마진 = 결제금액(롯데온은 롯데온부담 할인금액 포함) − 수수료(15%) − 매입액 − 배송비 · 롯데온 정산내역을 가져온 주문은 지급대상금액 − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.lgun?' · <a href="#/orders/check" data-act="hlg" data-f="'+(sr[0]||'')+'" data-t="'+(sr[1]||'')+'">사방넷 이전 주문 미매핑 '+sa.lgun.toLocaleString()+'건</a> 마진 제외 (매출액에는 포함)':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nobuy?' · <b style="color:#e03131">매입가가 비어 있는 상품 주문 '+sa.nobuy.toLocaleString()+'건 포함 (매입액 0원으로 계산되어 마진이 크게 나올 수 있음)</b>':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
+    '<div class="hnote">마진 = 기준금액 − 수수료(15%) − 매입액 − 배송비 · 기준금액: 롯데온=결제금액+롯데온부담 할인금액, 그 외 쇼핑몰(쿠팡·쇼핑엔티·카카오·토스쇼핑 등)=결제금액 · 11번가·ESM·GS홈쇼핑·롯데아이몰·스마트스토어는 정산예정금액 − 매입액 − 배송비 (수수료 이미 제외), 홈앤쇼핑·신세계·CJ오쇼핑은 정산예정금액×1.1(VAT 포함) − 매입액 − 배송비 · 롯데온 정산내역을 가져온 주문은 지급대상금액 − 매입액 − 배송비 · 상품이 매핑된 주문만 계산'+(sa.nostl?' · <b style="color:#e03131">정산예정금액이 비어 있어 결제금액으로 계산한 주문 '+sa.nostl.toLocaleString()+'건</b>':'')+(sa.unm?' · <a href="#/orders/confirm">미매핑 '+sa.unm.toLocaleString()+'건</a> 제외':'')+(sa.lgun?' · <a href="#/orders/check" data-act="hlg" data-f="'+(sr[0]||'')+'" data-t="'+(sr[1]||'')+'">사방넷 이전 주문 미매핑 '+sa.lgun.toLocaleString()+'건</a> 마진 제외 (매출액에는 포함)':'')+(sa.orph?' · 상품 연결이 끊긴 확인/출고 주문 '+sa.orph.toLocaleString()+'건 제외':'')+(sa.nobuy?' · <b style="color:#e03131">매입가가 비어 있는 상품 주문 '+sa.nobuy.toLocaleString()+'건 포함 (매입액 0원으로 계산되어 마진이 크게 나올 수 있음)</b>':'')+(sa.nopay?' · 결제금액 없는 주문 '+sa.nopay.toLocaleString()+'건':'')+'</div></div>';
   /* 판매성과 */
   const rg=perfRanges(HD.perf,y),cur=agg(inR(rows,rg.cur[0],rg.cur[1])),prv=agg(inR(rows,rg.prev[0],rg.prev[1]));
   const cu=cur.qty?cur.pay/cur.qty:0,pu=prv.qty?prv.pay/prv.qty:0;
@@ -3173,7 +3178,7 @@ function drawConfirmTableInner(){
   confirmTableHtml(cur,allSel)+
   (pages>1?'<div class="pager"><button class="btn sm" data-act="cpage" data-d="-1"'+(CF.page===0?' disabled':'')+'>이전</button><button class="btn sm" data-act="cpage" data-d="1"'+(CF.page>=pages-1?' disabled':'')+'>다음</button></div>':'');
 }
-A.cstat=el=>{CF.d.status=el.dataset.s;drawConfirmChips();};   /* 고르기만 하고, [검색]을 눌러야 적용 */
+A.cstat=el=>{CF.d.status=CF.status=el.dataset.s;CF.page=0;CF.keep.clear();drawConfirmChips();drawConfirmTable();};   /* 전체·미매핑·매핑완료는 누르면 바로 조회 (나머지 조건은 [검색]을 눌러야 적용) */
 A.csearch=()=>{
   if(CF.d.from&&CF.d.to&&CF.d.from>CF.d.to){toast('시작일자가 종료일자보다 늦습니다.','err');return;}
   CF.status=CF.d.status;CF.q=CF.d.q;CF.field=CF.d.field;CF.from=CF.d.from;CF.to=CF.d.to;CF.page=0;CF.keep.clear();drawConfirmTable();
@@ -4774,7 +4779,7 @@ function pgStProfit(){
   const wd=stWd(c).map(x=>({l:x.w+'요일',v:x.avg,s:'기간 내 '+x.n+'일 · 합계 '+stW(x.pay)}));
   const cols=[{k:'k',l:c.n>45?'주(월요일 시작)':'일자',v:b=>b.k,f:b=>esc(b.t)},{k:'cnt',l:'주문건수',n:1,v:b=>b.cnt,f:b=>stN(b.cnt)},{k:'pay',l:'판매금액',n:1,v:b=>b.pay,f:b=>'<b>'+stN(b.pay)+'</b>'},{k:'buy',l:'매입액',n:1,v:b=>b.a.buy,f:b=>stN(b.a.buy)},{k:'fee',l:'수수료',n:1,v:b=>b.a.fee,f:b=>stN(b.a.fee)},{k:'ship',l:'배송비',n:1,v:b=>b.a.ship,f:b=>stN(b.a.ship)},
     {k:'margin',l:'예상 마진',n:1,v:b=>b.margin,f:b=>'<b style="color:'+(b.margin<0?'#e03131':'#0b7a3b')+'">'+stN(b.margin)+'</b>'},{k:'mr',l:'마진율',n:1,v:b=>b.mr,f:b=>b.mr==null?'<span class="mute">-</span>':b.mr.toFixed(1)+'%'}];
-  return h+stBox('손익 구조 (매핑된 주문 '+stN(c.cur.filter(r=>r.mapped).length)+'건 · 판매금액 '+stW(base)+' 기준)',sp,'판매금액 − 매입액 − 수수료 − 배송비 = 예상 마진입니다. 매입액은 주문일 당시의 매입가로 계산하고, 수수료율은 '+Math.round(HD_FEE*100)+'%로 일괄 적용합니다. 상품이 매핑되지 않은 주문은 제외됩니다.')+
+  return h+stBox('손익 구조 (매핑된 주문 '+stN(c.cur.filter(r=>r.mapped).length)+'건 · 판매금액 '+stW(base)+' 기준)',sp,'기준금액(쇼핑몰별: 결제금액 / 정산예정금액 / 정산예정금액×1.1 / 결제금액+롯데온부담 할인) − 매입액 − 수수료 − 배송비 = 예상 마진입니다. 정산예정금액 쇼핑몰은 이미 수수료가 빠진 금액이라 수수료를 따로 차감하지 않습니다. 매입액은 주문일 당시의 매입가로 계산하고, 수수료율은 '+Math.round(HD_FEE*100)+'%로 일괄 적용합니다. 상품이 매핑되지 않은 주문은 제외됩니다.')+
     stGrid(stBox('판매금액 · 마진 추이','<div class="row" style="margin-bottom:6px">'+stLeg('판매금액','예상 마진')+'</div>'+stChart(bk)),stBox('요일별 일평균 판매금액',stBars(wd,'#7048e8',g=>stW(g.v)),'조회기간 안에서 해당 요일이 몇 번 있었는지로 나눈 평균입니다.'))+
     stBox(c.n>45?'주별 상세':'일별 상세',stTbl('pf',cols,bk,{def:'k',lim:31,name:'매출마진_'+(c.n>45?'주별':'일별')}));
 }

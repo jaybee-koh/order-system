@@ -4617,7 +4617,7 @@ function stGroup(c,keyFn,labFn){
   add(c.cur,'a');add(c.prv,'pa');
   return [...m.values()].map(g=>{
     const a=agg(g.a),b=agg(g.pa),cu=new Set(g.a.map(r=>stCust(r.o))),rs=g.a.find(r=>r.s)||g.pa.find(r=>r.s);
-    return {key:g.key,l:g.l,sn:rs?rs.s.name:'',pay:a.pay,pp:b.pay,cnt:a.cnt,qty:a.qty,margin:a.margin,mp:a.mpay,mr:a.mpay?a.margin/a.mpay*100:null,share:c.k.pay?a.pay/c.k.pay*100:0,chg:stPct(a.pay,b.pay),cust:cu.size,aov:cu.size?Math.round(a.pay/cu.size):0,nobuy:a.nobuy};
+    return {key:g.key,l:g.l,sn:rs?rs.s.name:'',pay:a.pay,pp:b.pay,cnt:a.cnt,qty:a.qty,margin:a.margin,mp:a.mpay,mr:a.mpay?a.margin/a.mpay*100:null,share:c.k.pay?a.pay/c.k.pay*100:0,chg:stPct(a.pay,b.pay),cust:cu.size,aov:cu.size?Math.round(a.pay/cu.size):0,nobuy:a.nobuy,rows:g.a};
   }).filter(g=>g.pay>0||g.pp>0).sort((x,y)=>y.pay-x.pay);
 }
 function stCtx(){
@@ -4791,7 +4791,7 @@ function pgStProducts(){
   const loss=all.filter(g=>g.mp>0&&g.margin<0),fall=all.filter(g=>g.pp>0&&g.chg<=-30),nb=all.filter(g=>g.nobuy);
   const kp=[stKpi('판매 상품 수',stN(all.filter(g=>g.pay>0).length),'개','','#3b5bdb','주문이 있었던 상품·옵션'),stKpi('상위 20% 상품 매출비중',s20.toFixed(0),'%','','#7048e8','상위 '+t20+'개 상품 (비중이 클수록 쏠림)'),stKpi('적자 상품',stN(loss.length),'개','',loss.length?'#e03131':'#12a150','마진이 마이너스'),stKpi('직전 대비 급하락',stN(fall.length),'개','',fall.length?'#e8890c':'#12a150','판매금액 30% 이상 감소')];
   ['sold','','loss','fall'].forEach((f,i)=>{if(f)kp[i]=kp[i].replace('<div class="k"','<div class="k stclk'+(ST.pf===f?' on':'')+'" data-act="stpf" data-f="'+f+'" title="클릭하면 아래 표에서 조회합니다"');});
-  const cols=[{k:'l',l:'상품 / 매입처',v:g=>g.l,f:g=>'<b>'+esc(g.l)+'</b>'+(g.sn?'<div class="small mute">'+esc(g.sn)+'</div>':'<div class="small" style="color:#e8890c">미매핑</div>')},
+  const cols=[{k:'l',l:'상품 / 매입처',v:g=>g.l,f:g=>'<b><a href="javascript:void(0)" data-act="stpord" data-k="'+esc(g.key)+'" title="클릭하면 주문 내역을 팝업으로 봅니다" style="color:inherit;text-decoration:underline dotted;text-underline-offset:3px">'+esc(g.l)+'</a></b>'+(g.sn?'<div class="small mute">'+esc(g.sn)+'</div>':'<div class="small" style="color:#e8890c">미매핑</div>')},
     {k:'qty',l:'판매수량',n:1,v:g=>g.qty,f:g=>stN(g.qty)},{k:'pay',l:'판매금액',n:1,v:g=>g.pay,f:g=>'<b>'+stN(g.pay)+'</b>'},{k:'share',l:'비중',n:1,v:g=>g.share,f:stShare},
     {k:'margin',l:'예상 마진',n:1,v:g=>g.mp?g.margin:null,f:stMg},{k:'mr',l:'마진율',n:1,v:g=>g.mr,f:stMr},{k:'chg',l:'직전 대비',n:1,v:g=>g.chg,f:g=>stDl(g.pay,g.pp)},
     {k:'tag',l:'상태',v:g=>stTags(g).length,f:g=>stTags(g).join('')||'<span class="mute">-</span>',x:g=>stTags(g).map(t=>t.replace(/<[^>]+>/g,'').trim()).join(', ')}];
@@ -4857,6 +4857,22 @@ A.strange=el=>{const r=stRg(el.dataset.m);ST.from=r[0];ST.to=r[1];stRe();};
 A.streset=()=>{Object.assign(ST,{mall:'',sup:'',from:'',to:'',q:'',pf:'',sort:{},more:{}});stRe();};
 A.stsort=el=>{const id=el.dataset.id,k=el.dataset.k,t=ST.tb[id],col=t&&t.cols.find(x=>x.k===k),o=ST.sort[id];ST.sort[id]=o&&o.k===k?{k,d:-o.d}:{k,d:col&&col.n?-1:1};stRe();};
 A.stpf=el=>{const f=el.dataset.f;ST.pf=(ST.pf===f)?'':f;ST.more.pd=false;stRe();const t=document.getElementById('pdtop');if(t)t.scrollIntoView({block:'start',behavior:'smooth'});};
+A.stpord=el=>{
+  const g=(ST.c&&ST.c.prod||[]).find(x=>String(x.key)===el.dataset.k);if(!g)return;
+  const rows=(g.rows||[]).slice().sort((a,b)=>(b.d||'').localeCompare(a.d||'')||(b.margin-a.margin));
+  const T={pay:0,adj:0,buy:0,fee:0,ship:0,mg:0,qty:0},cl=v=>v<0?' style="color:#e03131;font-weight:700"':'';
+  const body=rows.map(r=>{
+    T.pay+=r.pay;T.qty+=r.qty;if(r.mapped){T.adj+=r.adj;T.buy+=r.buy;T.fee+=r.fee;T.ship+=r.ship;T.mg+=r.margin;}
+    return '<tr><td>'+esc(r.d||'')+'</td><td>'+esc(r.o.mall||'')+'</td><td>'+esc(r.o.orderNo||'')+(r.o.ownNo?'<div class="small mute">'+esc(r.o.ownNo)+'</div>':'')+'</td><td>'+esc(r.o.receiver||'')+'</td>'+
+      '<td class="num">'+stN(r.qty)+'</td><td class="num">'+stN(r.pay)+'</td><td class="num">'+(r.mapped?stN(r.adj):'-')+'</td><td class="num">'+(r.mapped?stN(r.buy):'-')+'</td><td class="num">'+(r.mapped?stN(r.fee):'-')+'</td><td class="num">'+(r.mapped?stN(r.ship):'-')+'</td>'+
+      '<td class="num"'+(r.mapped?cl(r.margin):'')+'>'+(r.mapped?stN(r.margin):'-')+'</td></tr>';
+  }).join('');
+  const lossCnt=rows.filter(r=>r.mapped&&r.margin<0).length;
+  openModal('<h2>'+esc(g.l)+' 주문 내역</h2><div class="mute small" style="margin:-8px 0 12px">조회기간 '+esc(stRng(ST.from,ST.to))+' · 주문 '+rows.length.toLocaleString()+'건'+(lossCnt?' · <b style="color:#e03131">적자 주문 '+lossCnt.toLocaleString()+'건</b>':'')+' · 마진 = 기준금액 − 매입액 − 수수료 − 배송비</div>'+
+    '<div class="tblwrap" style="max-height:60vh"><table class="tbl"><thead><tr><th>주문일</th><th>쇼핑몰</th><th>주문번호</th><th>수취인</th><th class="num">수량</th><th class="num">결제금액</th><th class="num">기준금액</th><th class="num">매입액</th><th class="num">수수료</th><th class="num">배송비</th><th class="num">마진</th></tr></thead><tbody>'+body+
+    '<tr style="font-weight:700;background:#f7f8fb"><td colspan="4">합계</td><td class="num">'+stN(T.qty)+'</td><td class="num">'+stN(T.pay)+'</td><td class="num">'+stN(T.adj)+'</td><td class="num">'+stN(T.buy)+'</td><td class="num">'+stN(T.fee)+'</td><td class="num">'+stN(T.ship)+'</td><td class="num"'+cl(T.mg)+'>'+stN(T.mg)+'</td></tr></tbody></table></div>'+
+    '<div class="foot"><button class="btn pri" data-act="close">닫기</button></div>','wide');
+};
 A.stmore=el=>{ST.more[el.dataset.id]=!ST.more[el.dataset.id];stRe();};
 A.stxls=el=>{
   const t=ST.tb[el.dataset.id];if(!t)return;

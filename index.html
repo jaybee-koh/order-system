@@ -1225,6 +1225,24 @@ async function pullFromServer(){
   for(const s of STORE_NAMES)await replaceLocal(s,data[s]);
 }
 
+/* 서버의 최신 데이터로 다시 불러오기 — 다른 PC·브라우저에서 바뀐 내용까지 F5 없이 반영 */
+async function refreshFromServer(){
+  if(!await SYNC.drain())throw new Error('서버에 저장되지 않은 변경이 남아 있습니다');
+  const data={};
+  for(const st of ['suppliers','products','orders','rules']){
+    const rows=[];let after=0;
+    for(;;){
+      const r=await api('/api/data?store='+st+'&after='+after);
+      for(const o of r.rows)rows.push(wireIn(st,o));
+      if(r.done)break;after=r.last;
+    }
+    data[st]=rows;
+  }
+  if(SYNC.q.length||SYNC.busy)throw new Error('불러오는 중에 저장할 변경이 생겼습니다');   /* 방금 한 작업을 덮어쓰지 않기 위함 */
+  for(const st of Object.keys(data))await replaceLocal(st,data[st]);
+  await loadAll();
+}
+
 async function loadAll(){
   S.suppliers=await getAll('suppliers');
   S.products=await getAll('products');
@@ -3532,9 +3550,22 @@ C.cktpl=el=>{CK.tpl=el.value;};
 I.ckq=el=>{CK.d.q=el.value;};
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.matches&&e.target.matches('[data-inp="ckq"]'))A.cksearch();});
 A.ckrange=el=>{const r=ckRange(el.dataset.r);CK.d.from=r[0];CK.d.to=r[1];const f=$('#ckfrom'),t=$('#ckto');if(f)f.value=r[0];if(t)t.value=r[1];};
-A.cksearch=()=>{
+let ckBusy=false;
+A.cksearch=async()=>{
   if(CK.d.from&&CK.d.to&&CK.d.from>CK.d.to){toast('시작일이 종료일보다 늦습니다.','err');return;}
-  CK.a=Object.assign({},CK.d);CK.page=0;CK.sel.clear();drawCheckTable();
+  if(ckBusy)return;
+  ckBusy=true;
+  const btns=[...document.querySelectorAll('[data-act="cksearch"]')],old=btns.map(b=>b.textContent);
+  btns.forEach(b=>{b.disabled=true;b.textContent='조회 중…';});
+  const sig=()=>S.suppliers.map(x=>x.id+':'+x.name+':'+x.status).join('|')+'#'+[...new Set(S.orders.map(o=>o.mall||''))].sort().join('|');
+  const before=sig();
+  try{await refreshFromServer();}
+  catch(e){toast('최신 데이터를 불러오지 못해 현재 화면의 데이터로 조회합니다. ('+e.message+')','err',6000);}
+  ckBusy=false;
+  if(ROUTES[(location.hash||'#/home').slice(1)]!==pgCheck)return;   /* 불러오는 동안 다른 메뉴로 이동했으면 화면은 건드리지 않음 */
+  CK.a=Object.assign({},CK.d);CK.page=0;CK.sel.clear();
+  if(sig()!==before)route();   /* 매입처·쇼핑몰 목록이 바뀌었으면 선택박스까지 다시 그림 */
+  else{btns.forEach((b,i)=>{b.disabled=false;b.textContent=old[i];});drawCheckTable();}
 };
 A.ckpage=el=>{CK.page+=+el.dataset.d;drawCheckTable();$('#ktbl').scrollIntoView({block:'start'});};
 C.ckrow=el=>{const id=+el.dataset.id;el.checked?CK.sel.add(id):CK.sel.delete(id);const n=$('#ksel');if(n)n.textContent=CK.sel.size;};
@@ -3663,15 +3694,24 @@ A.ckstat=el=>{
   const sel=$('[data-chg="ckf"][data-k="status"]');if(sel)sel.value=s;
   drawCheckTable();
 };
-A.ckdel=async()=>{
+A.ckdel=()=>{
   const list=ckPicked();
   if(!list.length){toast('삭제할 주문을 체크하세요.','err');return;}
-  if(!confirm('선택한 주문 '+list.length+'건을 삭제할까요?\n삭제하면 되돌릴 수 없습니다. (C/S 메모도 함께 삭제됩니다)'))return;
-  const ids=list.map(o=>o.id),set=new Set(ids);
+  CK.delIds=list.map(o=>o.id);
+  openModal('<h2>선택 삭제</h2>'+
+    '<div style="font-size:15px;line-height:1.7"><b style="font-size:18px">'+list.length.toLocaleString()+'건</b>을 삭제하시겠습니까?</div>'+
+    '<div class="mute small" style="margin-top:8px">삭제하면 되돌릴 수 없습니다. (C/S 메모도 함께 삭제됩니다)</div>'+
+    '<div class="foot"><button class="btn" data-act="close">취소</button><button class="btn danger" data-act="ckdelGo">삭제</button></div>');
+};
+A.ckdelGo=async()=>{
+  const set=new Set(CK.delIds||[]),ids=S.orders.filter(o=>set.has(o.id)).map(o=>o.id);
+  closeModal();CK.delIds=null;
+  if(!ids.length)return;
+  const del=new Set(ids);
   try{await delMany('orders',ids);}catch(e){toast('삭제 실패: '+e.message,'err',6000);return;}
-  S.orders=S.orders.filter(o=>!set.has(o.id));
+  S.orders=S.orders.filter(o=>!del.has(o.id));
   ids.forEach(id=>{CK.sel.delete(id);CF.sel.delete(id);});
-  rebuild();toast(ids.length+'건을 삭제했습니다.');drawCheckTable();
+  rebuild();toast(ids.length.toLocaleString()+'건을 삭제했습니다.');drawCheckTable();
 };
 /* 출고확정: 실제 운송장을 송신한 업체의 출고완료 주문을 체크하고 [출고확정]을 누르면 출고확정 주문으로 넘어갑니다. (출고확정 조회에서는 같은 버튼이 [출고확정 취소]) */
 A.ckfix=async()=>{

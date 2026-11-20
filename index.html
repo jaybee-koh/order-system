@@ -3694,24 +3694,15 @@ A.ckstat=el=>{
   const sel=$('[data-chg="ckf"][data-k="status"]');if(sel)sel.value=s;
   drawCheckTable();
 };
-A.ckdel=()=>{
+A.ckdel=async()=>{
   const list=ckPicked();
   if(!list.length){toast('삭제할 주문을 체크하세요.','err');return;}
-  CK.delIds=list.map(o=>o.id);
-  openModal('<h2>선택 삭제</h2>'+
-    '<div style="font-size:15px;line-height:1.7"><b style="font-size:18px">'+list.length.toLocaleString()+'건</b>을 삭제하시겠습니까?</div>'+
-    '<div class="mute small" style="margin-top:8px">삭제하면 되돌릴 수 없습니다. (C/S 메모도 함께 삭제됩니다)</div>'+
-    '<div class="foot"><button class="btn" data-act="close">취소</button><button class="btn danger" data-act="ckdelGo">삭제</button></div>');
-};
-A.ckdelGo=async()=>{
-  const set=new Set(CK.delIds||[]),ids=S.orders.filter(o=>set.has(o.id)).map(o=>o.id);
-  closeModal();CK.delIds=null;
-  if(!ids.length)return;
-  const del=new Set(ids);
+  if(!confirm('선택한 주문 '+list.length+'건을 삭제할까요?\n삭제하면 되돌릴 수 없습니다. (C/S 메모도 함께 삭제됩니다)'))return;
+  const ids=list.map(o=>o.id),set=new Set(ids);
   try{await delMany('orders',ids);}catch(e){toast('삭제 실패: '+e.message,'err',6000);return;}
-  S.orders=S.orders.filter(o=>!del.has(o.id));
+  S.orders=S.orders.filter(o=>!set.has(o.id));
   ids.forEach(id=>{CK.sel.delete(id);CF.sel.delete(id);});
-  rebuild();toast(ids.length.toLocaleString()+'건을 삭제했습니다.');drawCheckTable();
+  rebuild();toast(ids.length+'건을 삭제했습니다.');drawCheckTable();
 };
 /* 출고확정: 실제 운송장을 송신한 업체의 출고완료 주문을 체크하고 [출고확정]을 누르면 출고확정 주문으로 넘어갑니다. (출고확정 조회에서는 같은 버튼이 [출고확정 취소]) */
 A.ckfix=async()=>{
